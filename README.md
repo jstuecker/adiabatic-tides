@@ -10,6 +10,7 @@ Code for evaluating the tidal stripping of dark matter (sub)haloes in the adiaba
     - notebooks/paper: Notebooks that contain many of the plots presented in the paper. Here is a good place to look for examples!
     - notebooks/verification: Some very specific notebooks to test numerical validity of the code. Not recommended for most users
 * caches: Contains some .hdf5 files to store precalculated results. In principle, you can delete this at the cost of needing to recalculate results
+* img: Just an image for enhancing the presentation
 
 # Usage:
 Easiest would be inside python...
