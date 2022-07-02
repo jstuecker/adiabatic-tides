@@ -14,7 +14,7 @@ Code for evaluating the tidal stripping of dark matter (sub)haloes in the adiaba
 * [img](img): Just an image for enhancing the presentation
 
 ## Usage:
-Easiest would be inside python...
+Inside of python:
 
 ```
 import sys
