@@ -789,7 +789,7 @@ class RadialProfile():
                   
         returns : rtid, the tidal radius and possibly its potential value
         """
-        return find_tidal_boundary(self, getphi=getphi, warning=warning, eps=eps, maxiter=maxiter)
+        return find_boundary(self, getphi=getphi, warning=warning, eps=eps, maxiter=maxiter)
     
     def tidal_lmax_radius(self, getphi=False, getl=False, warning=True, eps=1e-12, maxiter=200):
         """The radius of maximum circular angular momentum
@@ -808,7 +808,7 @@ class RadialProfile():
                   
         returns : rlmax,  and possibly phimax and lmax
         """
-        res = find_tidal_boundary(self, getphi=getphi, warning=warning, eps=eps, mode="lmax", maxiter=maxiter)
+        res = find_boundary(self, getphi=getphi, warning=warning, eps=eps, mode="lmax", maxiter=maxiter)
         if getl:
             rlmax = np.atleast_1d(res)[0]
             if rlmax < self.scale("rmax"):
@@ -818,6 +818,35 @@ class RadialProfile():
             return list(np.atleast_1d(res)) + [lmax]
         else:
             return res
+        
+    def rmax_vmax(self, mode="self", warning=True, eps=1e-12, maxiter=200):
+        """The radius and the circular velocity where vcirc is maximual
+        
+        This is the maximum in vcirc(r)*r. This is the radius where the bound
+        orbit with highest energy and highest angular momentum is possible.
+        Will be infty for monothonic profiles
+        
+        mode : if "self" will only consider self-gravity,
+               if "full" will also consider the tidal field (if exists)
+        warning : if True, prints warnings if rtid-> infty. I.e. if the
+                  potential has no tidal radius
+        eps : desired relative accuracy
+        maxiter : when to stop iterating, if the desired rel. accuracy is never
+                  reached
+                  
+        returns : rlmax,  and possibly phimax and lmax
+        """
+        
+        if mode == "self":
+            rmax = find_boundary(self, warning=warning, eps=eps, mode="vmaxself", maxiter=maxiter)
+            vmax = self.self_vcirc(rmax)
+        elif mode == "full":
+            rmax = find_boundary(self, warning=warning, eps=eps, mode="vmax", maxiter=maxiter)
+            vmax = self.vcirc(rmax)
+        else:
+            raise ValueError("Unknown mode %s" % mode)
+        return rmax,vmax
+        
         
     def rcirc_eta_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the radius where a circular orbit
@@ -869,7 +898,22 @@ class RadialProfile():
             return ri, res
         else:
             return res[-1]
-        
+    
+    def self_density(self, r):
+        """Self-Density in Msol/Mpc**3, does not include tidal field contributions"""
+        return self.density(r)
+    def self_m_of_r(self, r):
+        """The mass contained inside radius r, does not include tidal field contributions"""
+        return self.m_of_r(r)
+    def self_accr(self, r):
+        """Radial Acceleration (negative means pull towards center)"""
+        return -self.G * self.self_m_of_r(r) / r**2
+    def self_potential(self, r, zero_at_zero=False):
+        """Self-Potential, does not include tidal field contributions"""
+        return self.potential(r, zero_at_zero=zero_at_zero)
+    def self_vcirc(self, r):
+        """Circular velocity at radius r, does not include tidal field contributions"""
+        return np.sqrt(np.clip(-self.self_accr(r) * r, 0., None))
     
     def to_string(self):
         raise NotImplementedError("to_string not implemented for this profile, need this for caching etc...")
@@ -1386,8 +1430,8 @@ class CompositeProfile(RadialProfile):
         """The radial derivative of the acceleration"""
         return np.sum([prof.daccdr(r) for prof in self.profiles], axis=0)
 
-def find_tidal_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, warning=True, mode="phimax"):
-    """Calculates the tidal radius of a RadialProfile
+def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, warning=True, mode="phimax"):
+    """Finds a special boundary (e.g. tidal radius or vmax radius) of a RadialProfile
     
     The tidal radius is a saddle point in the potential or the zero-point of
     the radial acceleartion. This function assumes that the profile has
@@ -1401,7 +1445,7 @@ def find_tidal_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-
     maxiter : maximum number of iterations of the binary earch
     eps : relative accuracy of the radius when to stop
     warning : if True, throws a warning if rtid->infty
-    mode : can be "phimax" (for tidal radius) or "lmax"
+    mode : can be "phimax" (for tidal radius) or "lmax", "vmaxself" for getting rmax
     
     returns : rtid or (rtid, phitid) if getphi is set
     """
@@ -1414,7 +1458,6 @@ def find_tidal_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-
         #dv/dr = 0.5 (G*M(r)/r)^{3/2} * (G*dMdr/r - G*M(r)/r**2)
         # dMdr*r - M(r)
         # dMdr = 4 pi rho(r) * r**2
-        
         def acc(r):
             return -4.*np.pi*profile.density(r)*r**3 + profile.m_of_r(r)
     elif mode == "vmaxself":
@@ -1901,9 +1944,6 @@ class AdiabaticProfile(RadialProfile):
         mofr = self._ip_mofr(r)
         assert np.min(mofr) > 0.
         return mofr
-    def self_accr(self, r):
-        """Radial Acceleration (negative means pull towards center)"""
-        return  -self.G * self.self_m_of_r(r) / r**2
     def self_potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
         r = np.array(r)
