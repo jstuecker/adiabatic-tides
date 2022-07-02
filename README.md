@@ -1,6 +1,8 @@
 # adiabatic-tides
 Code for evaluating the tidal stripping of dark matter (sub)haloes in the adiabatic limit
 
+![alt text](https://github.com/jstuecker/adiabatic-tides/blob/main/img/tidal_experiment.png)
+
 ## Directories:
 
 * adiabatic_tides: Contains all the important python module files. This is the main part of this repository
