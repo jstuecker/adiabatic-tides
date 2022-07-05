@@ -24,7 +24,7 @@ import adiabatic_tides
 ```
 
 ## Getting Started:
-I'd recommend to start with the jupyter notebook under [notebooks/tutorials/introduction.ipynb](notebooks/tutorials/introduction.ipynb)
+I'd recommend to start with the jupyter notebook under [notebooks/tutorials/introduction.ipynb](notebooks/tutorials/introduction.ipynb).
 Afterwards you might have a look at the notebooks under [notebooks/paper](notebooks/paper) for some additional examples!
 
 Also don't forget to read [the paper](https://arxiv.org/abs/2207.00604)!
