@@ -1,5 +1,5 @@
 # adiabatic-tides
-Code for evaluating the tidal stripping of dark matter (sub)haloes in the adiabatic limit
+Code for evaluating the tidal stripping of dark matter (sub)haloes in the adiabatic limit. For details please read the paper [arXiv:2207.00604](https://arxiv.org/abs/2207.00604)
 
 ![alt text](https://github.com/jstuecker/adiabatic-tides/blob/main/img/tidal_experiment.png)
 
@@ -24,10 +24,10 @@ import adiabatic_tides
 ```
 
 ## Getting Started:
-I'd recommend to start with the jupyter notebook under [notebooks/tutorials/inroduction.ipynb](notebooks/tutorials/inroduction.ipynb)
+I'd recommend to start with the jupyter notebook under [notebooks/tutorials/introduction.ipynb](notebooks/tutorials/introduction.ipynb)
 Afterwards you might have a look at the notebooks under [notebooks/paper](notebooks/paper) for some additional examples!
 
-Also don't for get to read the paper!
+Also don't forget to read [the paper](https://arxiv.org/abs/2207.00604)!
 
 ## Requirements:
 * numpy
@@ -35,4 +35,4 @@ Also don't for get to read the paper!
 * matplotlib
 
 ## Acknowledgement:
-If you use this code, please cite the paper
+If you use this code, please cite the paper as [Stücker et al. (2022)](https://arxiv.org/abs/2207.00604)
