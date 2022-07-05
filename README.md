@@ -34,5 +34,10 @@ Also don't forget to read [the paper](https://arxiv.org/abs/2207.00604)!
 * scipy
 * matplotlib
 
+## More:
+For some intuition you might want to watch these videos, showing the potential landscapes and the massloss of subhaloes on a circular and a non-circular orbit:
+* https://youtu.be/RK1cRlplO0k
+* https://youtu.be/3MUma-22yr4
+
 ## Acknowledgement:
 If you use this code, please cite the paper as [Stücker et al. (2022)](https://arxiv.org/abs/2207.00604)
