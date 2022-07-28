@@ -290,7 +290,7 @@ def flexible_interpolator(xi, yi, logx=False, logy=False, eps_for_logx=0., eps_f
     logy : whether to interpolate in logarithmic y-space
     eps_for_logx : will interpolate in log(x + eps). Setting this is
            useful to exactly represent x=0
-    eps_for_logy : same for y
+    eps_for_logy : same for x
     kind : interpolation method. Can be same as scipy.interpolate.interp1d
     bounds_error : whether to throw errors when out of bounds
     fill_value : Two values that should be return for x out of bounds. Defaults

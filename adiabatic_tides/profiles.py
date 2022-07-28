@@ -14,6 +14,7 @@ class RadialProfile():
         
         # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
         self.G = 43.0071057317063e-10
+        self.is_disrupted = False
         
         self.reset_interpolators()
 
@@ -634,6 +635,12 @@ class RadialProfile():
     def _initialize_tidal_radius(self, reinit=False):
         """Calcualtes the maximum of the potential and of the angular momentum"""
         if (not self._tidal_radius_initialized) | reinit:
+            if self.is_disrupted:
+                self._rlmax, self._philmax, self._lmax = 0.,0.,0.
+                self._rtid, self._phitid, self._elmax, self._philmax, self._lscale  = 0., 0., 0., 0., 0.
+                self._tidal_radius_initialized = True
+                return
+
             self._rlmax, self._philmax, self._lmax = self.tidal_lmax_radius(warning=False, getphi=True, getl=True)
             self._rtid, self._phitid = self.tidal_boundary(warning=False, getphi=True)
             self._has_tidal_radius = self._rtid < self.scale("rmax")
@@ -657,11 +664,11 @@ class RadialProfile():
                 vcirc = self.vcirc(rcirc)
                 Lcirc = vcirc*rcirc
                 Ecirc = self.potential(rcirc) + 0.5*vcirc**2
-
+                
                 if log:
                     ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale)
                     ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"))
-                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"))
+                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), logx=True, eps_for_logx=1e-20*self._lscale)
                 else:
                     ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]))
                     ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=False)
@@ -774,6 +781,8 @@ class RadialProfile():
             rmax =  self.ip_rcirc_of_l_desc(l)
         else:
             rmax = np.infty * np.ones_like(l)
+        
+        rmin = np.clip(rmin, 0., None)
 
         return rmin, rmax
     
@@ -1220,27 +1229,27 @@ class IsothermalSphere(RadialProfile):
         super().__init__()
         
         self.rho0 = rho0
-        self.r0 = r0
-        self.v0 = 4.*np.pi*self.rho0*self.r0**2
+        self.rad0 = r0
+        self.v0 = np.sqrt(4.*np.pi*self.rho0*self.rad0**2*self.G)
 
     def density(self, r):
-        return self.rho0 * (r/self.r0)**-2
+        return self.rho0 * (r/self.rad0)**-2
     
     def m_of_r(self, r):
         """The mass contained inside radius r"""
-        return 4.*np.pi*self.rho0*self.r0**2 * r
+        return 4.*np.pi*self.rho0*self.rad0**2 * r
     
     def potential(self, r, zero_at_zero=False):
-        return self.v0**2 * np.log(r/self.r0)
+        return self.v0**2 * np.log(r/self.rad0)
     
     def r0(self):
         """The scale radius"""
-        return self.r0
+        return self.rad0
     
     def daccdr(self, r):
         """Radial derivative of the acceleration"""
 
-        return - self.v0**2 /r**2
+        return self.v0**2 /r**2
 
     
 class MonteCarloProfile(RadialProfile):
@@ -1521,7 +1530,7 @@ def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, war
     
     
 class AdiabaticProfile(RadialProfile):
-    def __init__(self, prof_initial=None, prof_pert=None, tidfac_rvir=None, tidfac_rs=None, norm_at_zero=False, rmin=None, rmax=None, nbins=150, ri=None, niter=0, h5cache=None, resetcache=False, verbose=False, store_every_step=False):
+    def __init__(self, prof_initial=None, prof_pert=None, tide=None, tidfac_rvir=None, tidfac_rs=None, norm_at_zero=False, rmin=None, rmax=None, nbins=150, ri=None, niter=0, h5cache=None, resetcache=False, verbose=False, store_every_step=False):
         """Adiabatically transformed profile
         
         Calculates the adiabatic transformation of an initial profile when
@@ -1543,6 +1552,8 @@ class AdiabaticProfile(RadialProfile):
         
         prof_initial : initial RadialProfile, for example and NFWProfile
         prof_pert : perturbation that should be added adiabatically
+        tide : if prof_pert is None, add a tidal profile with this amplitude
+               of the tidal field as the adiabatic perturbation
         tidfac_rvir : if prof_pert is None, add a tidal profile as the 
                       adiabatic perturbation. The tidal field will be
                       tidfac_rvir*Tvir where Tvir=acc(rvir)/rvir is the
@@ -1579,9 +1590,13 @@ class AdiabaticProfile(RadialProfile):
         self.h5cache = h5cache
         self.verbose = verbose
         self.norm_at_zero = norm_at_zero
+        self.is_disrupted = False
+        self.iter_disrupted = 0
         
         if prof_pert is None:
-            if tidfac_rvir is not None:
+            if tide is not None:
+                alpha = tide
+            elif tidfac_rvir is not None:
                 assert tidfac_rs is None, "Can't proved tidfac_rs and tidfac_rvir"
                 tid_rvir = np.abs(prof_initial.accr(prof_initial.r0()) / prof_initial.r0())
                 alpha = tid_rvir * tidfac_rvir
@@ -1705,13 +1720,23 @@ class AdiabaticProfile(RadialProfile):
         for i in range(0, niter):
             t0 = time.time()
             self._iteration += 1
-            self._initialize_tidal_radius()
-            # Parameterize the new profile only up to the tidal radius, since rho(r > tid) = 0:
-            rinew = np.logspace(np.log10(self.rmin), np.log10(np.min([self._rtid*(1+1e-8), self.rmax])), self.nbins)
-            # calculate the new density given the current distribution function f(J,L):
-            rhonew = self.rho_from_f(rinew)
+            if not self.is_disrupted:
+                self._initialize_tidal_radius()
+                # Parameterize the new profile only up to the tidal radius, since rho(r > tid) = 0:
+                rinew = np.logspace(np.log10(self.rmin), np.log10(np.min([self._rtid*(1+1e-8), self.rmax])), self.nbins)
+                # calculate the new density given the current distribution function f(J,L):
+                if self._rtid < self.rmin: # We have been disrupted
+                    rhonew = np.zeros_like(rinew)
+                else:
+                    rhonew = self.rho_from_f(rinew)
+
+                if np.max(rhonew) == 0.:
+                    self.is_disrupted = True
+                    self.iter_disrupted = self._iteration
+                    if verbose:
+                        print("This profile has been disrupted after %d iterations!" % self._iteration)
             # update the profile and solve poisson's equation etc...
-            self._update_profile(rinew, rhonew)
+                self._update_profile(rinew, rhonew)
             if verbose:
                 print("i=%d, mfrac=%g, dt=%.1fs" % (self._iteration, self.self_m_of_r(self.r0()) / self.prof_initial.m_of_r(self.r0()), time.time()-t0))
                 
@@ -1733,13 +1758,26 @@ class AdiabaticProfile(RadialProfile):
         
         self.ri = ri
         self.q["rho"] = rhoi
+        
+        if self.is_disrupted: # This probably means we are disrupted
+            def zero(x):
+                return 0.
+            
+            self._ip_rhofr = zero
+            self._ip_mofr = zero
+            self._ip_mphi= zero
+            
+            self._initialize_tidal_radius()
+            
+            return
+            
         self._ip_rhofr = mathtools.flexible_interpolator(self.ri, self.q["rho"], logx=True, logy=True, 
                                                          eps_for_logx=0., 
                                                          eps_for_logy=np.min(rhoi[rhoi>0.]))
 
-        
         def dmdr(r):
             return 4.*np.pi*self.self_density(r)*r**2
+        
         self.q["mofr"] = self.prof_initial.m_of_r(self.ri[0]) + mathtools.cum_simpson(dmdr, self.ri)
         self._ip_mofr = mathtools.flexible_interpolator(self.ri, self.q["mofr"], logx=True, logy=True, 
                                                         eps_for_logx=0.,
@@ -1849,6 +1887,16 @@ class AdiabaticProfile(RadialProfile):
         assert (np.min(r) >= self.rmin * 0.999) & (np.max(r) <= self.rmax * 1.001)
    
         self._initialize_tidal_radius()
+        if self._has_tidal_radius: # Test for disruption
+            rtest = np.logspace(np.log10(self.rmin), np.log10(self.rmax), 100)
+            if np.max(self.density(rtest)) <= 0:
+                # we have nowhere an attractive force!
+                # this means that we are disrupted!
+                # Better to stop here, to avoid all kinds of errors based
+                # on unfullfilled assumptions
+                return np.zeros_like(r)
+            
+    
         rho = np.zeros_like(r)
         valid_r = r < self._rtid * (1.-1e-8)
         r = r[valid_r]
@@ -1942,7 +1990,7 @@ class AdiabaticProfile(RadialProfile):
     def self_m_of_r(self, r):
         """The mass contained inside radius r"""
         mofr = self._ip_mofr(r)
-        assert np.min(mofr) > 0.
+        #assert np.min(mofr) >= 0.
         return mofr
     def self_potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
@@ -1978,7 +2026,7 @@ class AdiabaticProfile(RadialProfile):
         d["iteration"] = self._iteration
         d["nbins"] = self.nbins
         d["rmin"] = self.rmin
-        d["rmax"] = self.rmin
+        d["rmax"] = self.rmax
         d["base_radius"] = self.base_radius
         
         d["numerical_scales"] = dict(self.scaledict())
@@ -1986,6 +2034,9 @@ class AdiabaticProfile(RadialProfile):
         
         d["ri"] = self.ri
         d["rhoi"] = self.q["rho"]
+        
+        d["is_disrupted"] = self.is_disrupted
+        d["iter_disrupted"] = self.iter_disrupted
 
         return d
     
@@ -1995,6 +2046,17 @@ class AdiabaticProfile(RadialProfile):
         self.rmin = d["rmin"]
         self.rmax = d["rmax"]
         self.base_radius = d["base_radius"]
+        if self.rmin == self.rmax:
+            print("Warning, I am using a dirty fix to a broken old cache, better regenerate")
+            self.rmax = self.base_radius * 1e5
+
+        if "is_disrupted" in d: # This keyword is new, but old files should still be fine
+            self.is_disrupted = d["is_disrupted"]
+            self.iter_disrupted  = d["iter_disrupted"]
+        else:
+            self.is_disrupted = False
+            self.iter_disrupted = 0
+        
 
         # Check whether none of the numerical scales have been changed. These are implicit parameters
         for kw in d["numerical_scales"]:

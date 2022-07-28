@@ -35,11 +35,11 @@ def h5py_write_dict(file, datadict, path="", overwrite=False, verbose=True):
             h5py_write_dict(file[key], datadict[dictkey], overwrite=overwrite, verbose=verbose)
         else:
             if (key in file) and not overwrite:
-                if verbose >= 0:
+                if verbose > 0:
                     print("Ignoring existing %s (overwrite=False) " % (file[key].name, ))
             else:
                 if key in file:
-                    if verbose >= 0:
+                    if verbose > 0:
                         print("Overwriting %s " % (file[key].name,))
                     del file[key]
                 file.create_dataset(key, data=datadict[dictkey])
