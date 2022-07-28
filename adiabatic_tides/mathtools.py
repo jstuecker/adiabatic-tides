@@ -196,8 +196,8 @@ def remove_zero_intervals(xi):
     dx = xi[...,1:] - xi[...,:-1]
 
     mindx = np.min(dx[dx>0.])
-    dx[dx == 0.] = mindx + xi[...,1:][dx == 0.]*1e-12 #1e-1*np.min(dx[dx>=0.]) #xi[...,1:][x == 0.] * 1e-7 # this is the smallest shift we can do
-
+    dx[dx == 0.] = mindx + np.abs(xi[...,1:][dx == 0.])*1e-12 
+    
     newx = np.concatenate([xi[...,0:1]*0., np.cumsum(dx, axis=-1)], axis=-1)
 
     assert np.min(newx[...,1:] - newx[...,:-1]) > 0.
