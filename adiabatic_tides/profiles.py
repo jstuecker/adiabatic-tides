@@ -1067,7 +1067,6 @@ class NFWProfile(RadialProfile):
         
         d["conc"] = self.conc
         d["r200c"] = self.r200c
-        d["h"] = self.h
         
         return d
 
@@ -1375,6 +1374,17 @@ class MonteCarloProfile(RadialProfile):
         self.base_radius = d["base_radius"]
         self.set_particles(d["ri"], d["mi"], update=False)
         self.set_bins(rbins=d["rbins"], update=True)
+        
+    def to_string(self):
+        # We just create a hash here which allows comparison
+        # whether two MCProfiles are identical
+        import zlib
+        mystr = "baseradius%.5e" % self.base_radius
+        mystr += "_rbinshash" + str(zlib.adler32(self.rbins.data.tobytes()))
+        mystr +=  "_rihash" + str(zlib.adler32(self.ri.data.tobytes()))
+        mystr +=  "_mihash" + str(zlib.adler32(self.mi.data.tobytes()))
+        
+        return mystr
         
 class RadialTidalProfile(RadialProfile):
     def __init__(self, alpha=0.):
@@ -2010,7 +2020,7 @@ class AdiabaticProfile(RadialProfile):
     
     def to_string(self, iteration=None):
         #assert isinstance(self.prof_initial, NFWProfile), "Caching only works with NFW so far"
-        assert isinstance(self.prof_pert, RadialTidalProfile), "Caching only works with Tidal profiles so far"
+        #assert isinstance(self.prof_pert, RadialTidalProfile), "Caching only works with Tidal profiles so far"
         
         if iteration is None:
             iteration = self._iteration
