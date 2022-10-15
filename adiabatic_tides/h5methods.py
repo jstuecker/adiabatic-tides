@@ -60,7 +60,7 @@ def h5py_read_dict(file, path="", datadict=None, verbose=True):
 
     if type(file) is str: # Filename was provided -> open as hdf5 file
         with h5py.File(file, "r") as myfile:
-            return h5py_read_dict(myfile, datadict, verbose=verbose)
+            return h5py_read_dict(myfile, path=path, datadict=datadict, verbose=verbose)
         
     if path != "":
         file = file[path]
