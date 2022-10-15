@@ -338,3 +338,30 @@ def flexible_interpolator(xi, yi, logx=False, logy=False, eps_for_logx=0., eps_f
         return yinvmod(ip(xmod(x)))
     
     return f
+
+def sample_metropolis_hastings(f, x0, stepsize=1., nsteps=1000):
+    """Does an mcmc sampling of a probability distribution function
+    only returns the last step of each chain.
+    
+    f : a pdf to sample
+    x0 : start locations
+    sig : standard deviation(s) for step sizes
+    nsteps : total number of steps to perform
+    """
+    
+    x = np.copy(x0)
+    f0 = f(x)
+
+    for i in range(0, nsteps):
+        dx = np.random.normal(loc=0., scale=stepsize, size=x.shape)
+
+        f1 = f(x + dx)
+
+        alpha = f1 / f0
+        u = np.random.uniform(0., 1., size=x.shape[0])
+        accept = u <= alpha
+
+        x[accept] = (x+dx)[accept]
+        f0[accept] = f1[accept]
+        
+    return x

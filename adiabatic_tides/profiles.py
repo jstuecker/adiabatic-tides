@@ -2079,9 +2079,88 @@ class AdiabaticProfile(RadialProfile):
 
         self._update_profile(d["ri"], d["rhoi"])
         
+    def sample_particles_uniform(self, ntot=1e4, rmax=None, seed=None, nsteps_chain=300):
+        """Samples particles so that their masses are uniform
+        This is done by using a Metropolis Hastings algorithm and is
+        therefore rather time-consuming
+        
+        ntot : number of particles to sample
+        rmax : maximum radius to sample to
+        seed : random seed
+        nsteps_chain : number of steps to use. Higher is better, but takes longer. 
+               I recommend to use n >~ 300 to be sure the chain is well converged
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        
+        if rmax is None:
+            rmax = self.rmax
+        
+        def sample_r(ntot):
+            mmax = self.m_of_r(rmax)
+
+            fsamp = np.random.uniform(0., 1., ntot)
+            rsamp = np.interp(fsamp, self.q["mofr"]/mmax, self.ri)
+
+            return rsamp
+        
+        rsamp = sample_r(ntot)
+        phi = self.potential(rsamp)
+        emax = self.potential(100.*rmax)
+        
+        def likelihood_of_el_given_r(el):
+            r = rsamp
+            e,l = el[...,0], el[...,1]
+            
+            valid = (e >= phi) & (e <= emax) & (l >= 0.) & (l**2 <= r**2*(2.*(e-phi)))
+
+            u = np.sqrt(2.*(e[valid]-phi[valid] - 0.5*l[valid]**2/r[valid]**2))
+            
+            res = np.zeros_like(e)
+            res[valid] = l[valid]*self.f_of_el(e[valid],l[valid]) / (r[valid]**2 * u)
+            return res
+
+        #e0 = np.random.uniform(phi, self.potential(rmax*10.), rsamp.shape)
+        e0 = phi + np.random.uniform(0., 0.5, rsamp.shape) * self.vcirc(rsamp)**2
+        lmax = rsamp*np.sqrt(2.*(e0-phi))
+        lcirc = self.vcirc(rsamp) * rsamp
+        l0 = np.random.uniform(0., lmax, e0.shape)
+        
+        el = np.stack([e0,l0], axis=-1)
+        #stepsize = np.stack([0.2*(emax-phi), 0.2*lcirc], axis=-1)
+        stepsize = np.stack([0.2*self.vcirc(rsamp)**2, 0.2*lcirc], axis=-1)
+        
+        el = mathtools.sample_metropolis_hastings(likelihood_of_el_given_r, el, stepsize=stepsize, nsteps=nsteps_chain)
+        
+        e, l = el[...,0], el[...,1]
+        
+        uvpos = mathtools.random_direction(rsamp.shape, 3)
+        pos = uvpos * rsamp[...,np.newaxis]
+        
+        # radial vector
+        uvvr = uvpos 
+        # random non-radial vector
+        uvvl = mathtools.random_direction(rsamp.shape, 3) 
+        uvvl = uvvl - np.sum(uvvr*uvvl, axis=-1)[...,np.newaxis] * uvvr
+        uvvl = uvvl / np.linalg.norm(uvvl, axis=-1)[...,np.newaxis]
+        
+        vr = np.sqrt(2.*(e - phi - 0.5*l**2/rsamp**2))
+        
+        vel = uvvr * vr[...,np.newaxis] + uvvl*(l/rsamp)[...,np.newaxis]
+        
+        mass = np.ones(ntot) * (self.m_of_r(rmax) / ntot)
+        
+        return pos, vel, mass #, rsamp, e, l
+        
     def sample_particles(self, ntot=1e4, rmax=None, seed=None, extra_outputs=False):
         """Samples particles, by sampling the initial profile and reweighting their
-        masses so that they match the final profile"""
+        masses so that they match the final profile
+        
+        ntot : number of particles to sample
+        rmax : maximum radius to sample to
+        seed : a random seed
+        extra_outputs : if True, will output pos,vel,mass, r,efinal,eself,eini,L, otherwise just pos,vel,mass
+        """
         
         self._initialize_tidal_radius()
         if rmax is None:
