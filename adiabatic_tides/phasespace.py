@@ -6,7 +6,7 @@ from scipy.interpolate import interp1d, NearestNDInterpolator, LinearNDInterpola
         
 
 class IsotropicPhaseSpaceSolver():
-    def __init__(self, profile, rbins=1000, rnorm=None, rmax=None, rmin=None, sample_profile_f=False, nbinsE=100, dlog_emin=-5):
+    def __init__(self, profile, rbins=1000, rnorm=None, rmax=None, rmin=None, sample_profile_f=False, nbinsE=100, dlog_emin=-5, force_profile_f=False):
         """This is a utility class that enables numerically calculating 
         distribution functions in arbitrary spherical profiles. It has only
         been tested for NFW models. On startup this class precomputes the 
@@ -29,10 +29,13 @@ class IsotropicPhaseSpaceSolver():
         sample_profile_f : if True, when sampling particles the phase space distriubtion
                will use the function p.f_of_e(e) of the profile when sampling particles
                instead of the own estimate of f_of_e
+        force_profile_f : if True, will always consider the function p.f_of_e(e). This is
+               useful if using a profile with analytically known f_of_e
         """
         
         self.profile = profile
         self.sample_profile_f = sample_profile_f
+        self.force_profile_f = force_profile_f
         
         if rnorm is None:
             self.rnorm = self.profile.r0()
@@ -81,7 +84,7 @@ class IsotropicPhaseSpaceSolver():
         
         self._setup_interpolators()
         
-    def sample_particles(self, ntot=10000, rmax=None, seed=None):
+    def sample_particles(self, ntot=10000, rmax=None, seed=None, verbose=False):
         """Samples particles consistent with the phasespace distribution
         
         ntot : number of particles to sample
@@ -101,7 +104,7 @@ class IsotropicPhaseSpaceSolver():
             rmax = self.rnorm
             
         ri = self._sample_r(ntot, rmax=rmax)
-        ei = self._sample_e_given_r(ri)
+        ei = self._sample_e_given_r(ri, verbose=verbose)
         
         pos = mathtools.random_direction(ri.shape, 3) * ri[...,np.newaxis]
         
@@ -179,7 +182,7 @@ class IsotropicPhaseSpaceSolver():
              has an implemented analytic solution or modifies the behavior of this
              function
         """
-        if use_profile_f:
+        if use_profile_f or self.force_profile_f:
             return self.profile.f_of_e(e)
         
         if interpolate:
@@ -193,6 +196,7 @@ class IsotropicPhaseSpaceSolver():
         
         def integral(ei):
             return quad(integrand, 0, ei,  epsrel=self.eps, args=(ei,), full_output=True)[0]
+
         return 1./(np.sqrt(8.) * np.pi**2) * np.vectorize(integral)(-e)
         
         #assert np.min(e[1:] >= e[:-1]) == True
@@ -272,6 +276,7 @@ class IsotropicPhaseSpaceSolver():
             norm = 1.
         
         de = np.clip(e - self.profile.potential(r), 0., None)
+        
         return r**2 * np.sqrt(2.*de)  * self.f_of_e(e, use_profile_f=use_profile_f) / norm
     
     def _sample_r(self, ntot=100, rmax=None):
@@ -295,16 +300,18 @@ class IsotropicPhaseSpaceSolver():
         fpow : take a power of the likelihood. Should be None or 1, unless
                you know what you are doing
         """
+        phimax = self.profile.potential(self.rmax)
+
         phii = self.profile.potential(ri)
         
         ei = np.zeros_like(phii)
         ileft = np.arange(len(ri))
         for i in range(0,maxiter):
-            esamp = np.random.uniform(phii[ileft], 0., ileft.shape)
+            esamp = np.random.uniform(phii[ileft], phimax, ileft.shape)
             Lsamp = self._likelihood_of_e_given_r(esamp, ri[ileft], use_profile_f=self.sample_profile_f)
             if fpow is not None:
                 Lsamp = Lsamp**fpow
-            
+                
             ysamp = np.random.uniform(0., 1.1, ileft.shape) # 10 % buffer
             sel_pass =  ysamp <= Lsamp
             
