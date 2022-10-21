@@ -907,6 +907,124 @@ class RadialProfile():
             return ri, res
         else:
             return res[-1]
+        
+    def radius_of_f(self, f, rmin=None, rmax=None):
+        """Approximates the radius where the phase space density reaches a given value
+        
+        This function is useful to find a radius where a primordial phase space 
+        density constrained starts getting violated by the profile.
+        At the given radius it holds f_of_e(potential(r)) = f. Typically this is the
+        highest phase space density that is reached at that radius and states with
+        non-zero angular momentum will have lower phase space densities. Therefore
+        r will be the largest radius where the phase space density f can be reached
+        by any particles.
+               
+        f : phase space density in Msol / (km/s)**3 / Mpc**3
+        rmin : Minimum radius for the binary search
+        rmax : Maximum radius for the binary search
+        
+        returns : radius in Mpc
+        """
+        def func(r):
+            return self.f_of_e(self.potential(r)) - np.array(f)
+        if rmin is None:
+            rmin = self.scale("rmin") #* 1e-8
+        if rmax is None:
+            rmax = self.scale("rmax") #* 1e8
+        emin, emax = self.potential(np.array((rmin, rmax)))
+        
+        rres = mathtools.vectorized_binary_search(func, rmin, rmax, niter=100, mode="sqrt")
+        
+        return rres
+    
+    def radius_phase_space_core(self, dmtype="WDM", h=0.68, omega_dm=0.26, verbose=True, **kwargs):
+        """Estimates the size of the core given by the phase space density constraint
+        as explained in arxiv:2207.05082 (Delos & White 2022)
+        
+        dmtype :   can be "WDM" or "WIMP"
+        h :        reduced hubble parameter
+        omega_dm : dark matter (not full matter) density parameter
+        verbose : set to False to suppress warning messages
+        
+        other kwargs vary depending in "WDM" or "WIMP":
+        "WDM":
+          mx : mass in keV (1 default)
+          gx : degeneracy (1.5 default), see Bode (2001), arXiv:astro-ph/0010389
+        "WIMP":
+          mx : mass in GeV (100 default)
+          Td : decoupling temperature in MeV (30 default)
+          Tcm: CMB temperature in Kelvin (2.725)
+        Note: For the WIMP case I could only reproduce the numbers in arxiv:2207.05082
+              up to a few percent accuracy. Therefore, I print a warning here.
+        """
+        
+        c = 299792458.0
+        kb = 8.617333262e-5 # eV/kelvin
+        
+        def fmax_wdm(h=0.68, omega_dm=0.26, gx=1.5, mx=1.):
+            """Following https://arxiv.org/pdf/2207.05082.pdf
+
+            the phase space density of a thermal relic WDM
+            """
+            def v0_wdm(omega_dm=0.28, h=0.678, gx=1.5, mx=1., a=1.):
+                """omgega_dm: dark matter (not full matter) density paramater, mx in kev
+                result : velocity in km/s
+                """
+                # Bode (2001), arXiv:astro-ph/0010389
+                v0 = 0.012 * a**(-1) * (omega_dm / 0.3)**(1./3.) * (h/0.65)**(2./3.) * (1.5/gx)**(1./3.) * (1./mx)**(4./3.)
+                return v0
+
+            #G = 43.0071057317063 * 1e-10
+
+            rho_dm = 3. * (h * 100.)**2 / (8.*np.pi*self.G) * omega_dm
+
+            v0 = v0_wdm(mx=mx, omega_dm=omega_dm, gx=gx, h=h)
+
+            #print("v0", v0 / const.c * 1000.)
+            return 0.0221 * v0**-3 * rho_dm
+        def fmax_wimp(h=0.68, omega_dm=0.26,  mx=100, Td=30., Tcmb=2.725):
+            """Following https://arxiv.org/pdf/2207.05082.pdf
+
+            mx : WIMP mass in GeV
+            Td : Decoupling Temperature in MeV
+            omgega_dm: dark matter (not full matter) density paramater, mx in kev
+            Tcmb : CMB temperature in Kelvin
+
+
+            the phase space density of WIMP's
+            """
+            G = 43.0071057317063 * 1e-10
+            
+
+            Tx = Tcmb*(4./11.)**(1./3.) * kb   # in eV
+
+            mev, Tdev = mx*1e9, Td*1e6
+
+            # To get the same values as https://arxiv.org/pdf/2207.05082.pdf
+            # I have to put the following:
+            # However, this does not seem right ?
+            #Tx = Tcmb*(4./(11.+7./4.))**(1./3.) * kb 
+
+            ad = (Tx/Tdev)
+            v0 =  np.sqrt(Tdev * mev)*ad / mev * c / 1e3  # velocity today in km/s
+            #print("v0", v0 / const.c * 1000., "ratio:", v0 / const.c * 1000/9.2e-14)
+            if verbose:
+                print("Warning I have a 5% inconsistency with arxiv:2207.05082 in v0 and 13% in f. \nHave to be careful if need high accuracy")
+
+            rho_dm = 3. * (h * 100.)**2 / (8.*np.pi*self.G) * omega_dm
+
+            return (2.*np.pi)**(-3./2.) * v0**-3 * rho_dm
+        
+        
+        if dmtype == "WDM":
+            fmax = fmax_wdm(h=h, omega_dm=omega_dm, **kwargs)
+        elif dmtype == "WIMP":
+            fmax = fmax_wimp(h=h, omega_dm=omega_dm, **kwargs)
+        else:
+            raise ValueError("Unknown dmtype=%s, so far can only handle WDM or WIMP" % dmtype)
+            
+        return self.radius_of_f(fmax)
+        
     
     def self_density(self, r):
         """Self-Density in Msol/Mpc**3, does not include tidal field contributions"""
