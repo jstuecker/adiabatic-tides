@@ -202,7 +202,7 @@ class RadialProfile():
         return lam
 
 
-    def two_body_relaxation_time(self, r, N, modeN="Ntot", lam=None, rsoft=None, rmax=None):
+    def two_body_relaxation_time(self, r, N, modeN="Ntot", lam=None, rsoft=None, rmax=None, rnorm=None):
         """An estimate of the two-body relaxation at a given radius
         
         r : radius
@@ -212,12 +212,17 @@ class RadialProfile():
         lam : ratio between maximal and minimal radius (can be None if rsoft and rmax are given)
         rsoft : softening (can be None if lam is given)
         rmax : maximal radius (can be None if lam is given)
+        rnorm : radius where the particle number is normalized
         """
+        if rnorm is None:
+            rnorm = self.r0()
+        if rmax is None:
+            rmax = rnorm
         if lam is None:
             lam = rmax/rsoft
         
         if modeN == "Ntot":
-            Nr = self.m_of_r(r) / self.Mnorm() * N
+            Nr = self.m_of_r(r) / self.m_of_r(rnorm) * N
         elif modeN == "Nr":
             Nr = N
         else:
@@ -953,13 +958,12 @@ class RadialProfile():
         "WIMP":
           mx : mass in GeV (100 default)
           Td : decoupling temperature in MeV (30 default)
-          Tcm: CMB temperature in Kelvin (2.725)
+          ad : scale factor of decoupling. Put to None to approximate from Td
         Note: For the WIMP case I could only reproduce the numbers in arxiv:2207.05082
               up to a few percent accuracy. Therefore, I print a warning here.
         """
         
         c = 299792458.0
-        kb = 8.617333262e-5 # eV/kelvin
         
         def fmax_wdm(h=0.68, omega_dm=0.26, gx=1.5, mx=1.):
             """Following https://arxiv.org/pdf/2207.05082.pdf
@@ -974,42 +978,36 @@ class RadialProfile():
                 v0 = 0.012 * a**(-1) * (omega_dm / 0.3)**(1./3.) * (h/0.65)**(2./3.) * (1.5/gx)**(1./3.) * (1./mx)**(4./3.)
                 return v0
 
-            #G = 43.0071057317063 * 1e-10
-
             rho_dm = 3. * (h * 100.)**2 / (8.*np.pi*self.G) * omega_dm
 
             v0 = v0_wdm(mx=mx, omega_dm=omega_dm, gx=gx, h=h)
 
-            #print("v0", v0 / const.c * 1000.)
             return 0.0221 * v0**-3 * rho_dm
-        def fmax_wimp(h=0.68, omega_dm=0.26,  mx=100, Td=30., Tcmb=2.725):
+        
+        def fmax_wimp(h=0.68, omega_dm=0.26,  mx=100, Td=30., ad=5.332e-12):
             """Following https://arxiv.org/pdf/2207.05082.pdf
 
             mx : WIMP mass in GeV
             Td : Decoupling Temperature in MeV
             omgega_dm: dark matter (not full matter) density paramater, mx in kev
-            Tcmb : CMB temperature in Kelvin
-
-
+            ad : scale factor of decoupling (where the temperature of the universe is Td)
+                 This can be put to None to use an approximation by the neutrino temperature
+                 which may have errors of order 10% if the wimp decoupled a bit before the
+                 neutrinos
+            
             the phase space density of WIMP's
             """
-            G = 43.0071057317063 * 1e-10
-            
-
-            Tx = Tcmb*(4./11.)**(1./3.) * kb   # in eV
-
             mev, Tdev = mx*1e9, Td*1e6
 
-            # To get the same values as https://arxiv.org/pdf/2207.05082.pdf
-            # I have to put the following:
-            # However, this does not seem right ?
-            #Tx = Tcmb*(4./(11.+7./4.))**(1./3.) * kb 
-
-            ad = (Tx/Tdev)
+            if ad is None:
+                print("Approximating ad by assuming evaluating T(a_d)=Td while using the temperature T(a) of the Neutrino background.\n"
+                      "This may give inaccurate results by 10-20%. For full accuracy use a full thermal history and determine ad")
+                Tcmb = 2.725 #K
+                kb = 8.617333262e-5 # eV/kelvin
+                Tnu = Tcmb*(4./11.)**(1./3.) * kb   # in eV
+                ad = (Tnu/Tdev)
+            
             v0 =  np.sqrt(Tdev * mev)*ad / mev * c / 1e3  # velocity today in km/s
-            #print("v0", v0 / const.c * 1000., "ratio:", v0 / const.c * 1000/9.2e-14)
-            if verbose:
-                print("Warning I have a 5% inconsistency with arxiv:2207.05082 in v0 and 13% in f. \nHave to be careful if need high accuracy")
 
             rho_dm = 3. * (h * 100.)**2 / (8.*np.pi*self.G) * omega_dm
 
