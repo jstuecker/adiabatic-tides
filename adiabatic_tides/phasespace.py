@@ -191,11 +191,15 @@ class IsotropicPhaseSpaceSolver():
         # arxiv:1906.01642 eq 3
         ip = self._interpolator(self.psi[::-1], self.d2nd2p[::-1])
         def integrand(p, ei):
-            #return np.interp(p, self.psi[::-1], self.d2nd2p[::-1])  / np.sqrt(ei-p)
             return ip(p)  / np.sqrt(ei-p)
         
+        if self.profile.potential_zero_at_infty:
+            emax = 0.
+        else:
+            emax = self.profile.potential(self.profile.scale("rmax"))
+        
         def integral(ei):
-            return quad(integrand, 0, ei,  epsrel=self.eps, args=(ei,), full_output=True)[0]
+            return quad(integrand, -emax, ei,  epsrel=self.eps, args=(ei,), full_output=True)[0]
 
         return 1./(np.sqrt(8.) * np.pi**2) * np.vectorize(integral)(-e)
         

@@ -15,6 +15,7 @@ class RadialProfile():
         # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
         self.G = 43.0071057317063e-10
         self.is_disrupted = False
+        self.potential_zero_at_infty = True
         
         self.reset_interpolators()
 
@@ -995,7 +996,7 @@ class RadialProfile():
                  which may have errors of order 10% if the wimp decoupled a bit before the
                  neutrinos
             
-            the phase space density of WIMP's
+            the phase space density of WIMP's in Msol (km/s)**3 Mpc**3
             """
             mev, Tdev = mx*1e9, Td*1e6
 
@@ -1318,7 +1319,7 @@ class PowerlawProfile(RadialProfile):
         beta = -(6+self.slope)/(4.+2.*self.slope)
         
         val = self.f0 * energy**beta
-        assert(np.max(np.isnan(val)) == False)
+        assert(np.all(~np.isnan(val)))
 
         return self.f0 * energy**beta
     
@@ -1447,13 +1448,19 @@ class MonteCarloProfile(RadialProfile):
         
         if update:
             self._update()
+            
+    def _set_mass_profile(self, rho, m):
+        assert (len(rho) == len(self.rbins)-1) & (len(m) == len(self.rbins))
+        self.q["rho"], self.q["mofr"] = rho, m
+        
+        accr = - self.G * self.q["mofr"] / self.rbins**2
+        self.q["phi"] = - mathtools.trapez_integral_cumulative(self.rbins, accr)
 
     def _update(self):
         """Recalculate the density/mass/gravity profiles"""
-        self.q["rho"], self.q["mofr"] = mathtools.get_mass_profile(self.ri, self.mi, self.rbins)
-    
-        accr = - self.G * self.q["mofr"] / self.rbins**2
-        self.q["phi"] = - mathtools.trapez_integral_cumulative(self.rbins, accr)
+        #self.q["rho"], self.q["mofr"] = mathtools.get_mass_profile(self.ri, self.mi, self.rbins)
+        rho, m = mathtools.get_mass_profile(self.ri, self.mi, self.rbins)
+        self._set_mass_profile(rho, m)
 
     def density(self, r):
         """Density in Msol/Mpc**3"""

@@ -114,7 +114,7 @@ def trapez_integral_lastax(xi, fi):
     
     return Ii
 
-def vectorized_binary_search(f, xlow, xhigh, niter=100, mode="mean", return_err=False, exceptions=True, xfallback=None, **kwargs):
+def vectorized_binary_search(f, xlow, xhigh, niter=100, mode="sqrt", return_err=False, exceptions=True, xfallback=None, **kwargs):
     """A vectorized binary search which searches the zero-point of f
     
     f : function with signature f(x, **kwargs)
@@ -151,7 +151,7 @@ def vectorized_binary_search(f, xlow, xhigh, niter=100, mode="mean", return_err=
     
     for i in range(niter):
         if mode == "mean":
-            xnew = np.sqrt(xlow * xhigh)
+            xnew = 0.5*(xlow + xhigh)
         elif mode == "sqrt":
             xnew = np.sqrt(xlow * xhigh)
         else:
