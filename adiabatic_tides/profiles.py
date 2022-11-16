@@ -2202,7 +2202,7 @@ class AdiabaticProfile(RadialProfile):
 
         self._update_profile(d["ri"], d["rhoi"])
         
-    def sample_particles_uniform(self, ntot=1e4, rmax=None, seed=None, nsteps_chain=300):
+    def sample_particles_uniform(self, ntot=1e4, rmax=None, seed=None, nsteps_chain=300, res_of_r=None):
         """Samples particles so that their masses are uniform
         This is done by using a Metropolis Hastings algorithm and is
         therefore rather time-consuming
@@ -2212,6 +2212,9 @@ class AdiabaticProfile(RadialProfile):
         seed : random seed
         nsteps_chain : number of steps to use. Higher is better, but takes longer. 
                I recommend to use n >~ 300 to be sure the chain is well converged
+        res_of_r: (optional) a function that returns a resolution weight as a 
+               function of r. The number of particles at radius r will be 
+               proportional to this weight and the mass will be inversely proportional
         """
         if seed is not None:
             np.random.seed(seed)
@@ -2220,14 +2223,26 @@ class AdiabaticProfile(RadialProfile):
             rmax = self.rmax
         
         def sample_r(ntot):
-            mmax = self.m_of_r(rmax)
+            if res_of_r is None:
+                mmax = self.m_of_r(rmax)
+                fsamp = np.random.uniform(0., 1., ntot)
+                rsamp = np.interp(fsamp, self.q["mofr"]/mmax, self.ri)
+                mass = np.ones(ntot) * (mmax / ntot)
+            else:
+                def dmdr(r):
+                    return 4.*np.pi*self.self_density(r)*r**2 * res_of_r(r)
+                
+                meff = self.prof_initial.m_of_r(self.ri[0]) + mathtools.cum_simpson(dmdr, self.ri)
+                mmax = np.interp(rmax, self.ri, meff)
+                
+                fsamp = np.random.uniform(0., 1., ntot)
+                rsamp = np.interp(fsamp, meff/mmax, self.ri)
+                
+                mass = mmax / ntot / res_of_r(rsamp)
 
-            fsamp = np.random.uniform(0., 1., ntot)
-            rsamp = np.interp(fsamp, self.q["mofr"]/mmax, self.ri)
-
-            return rsamp
+            return rsamp, mass
         
-        rsamp = sample_r(ntot)
+        rsamp, mass = sample_r(ntot)
         phi = self.potential(rsamp)
         emax = self.potential(100.*rmax)
         
@@ -2270,8 +2285,6 @@ class AdiabaticProfile(RadialProfile):
         vr = np.sqrt(2.*(e - phi - 0.5*l**2/rsamp**2))
         
         vel = uvvr * vr[...,np.newaxis] + uvvl*(l/rsamp)[...,np.newaxis]
-        
-        mass = np.ones(ntot) * (self.m_of_r(rmax) / ntot)
         
         return pos, vel, mass #, rsamp, e, l
         
