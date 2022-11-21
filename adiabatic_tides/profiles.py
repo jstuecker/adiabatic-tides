@@ -65,6 +65,8 @@ class RadialProfile():
         self._sc["log_emin_up"] = -4
         self._sc["fintegration_nstepsL"] = 101
         self._sc["fintegration_nstepsE"] = 201
+        
+        self._sc["rel_interpolation_kind"] = "cubic"
     
     def set_numerical_scales(self, **kwargs):
         """Sets numerical scales
@@ -514,11 +516,11 @@ class RadialProfile():
             emin = self.potential(self.scale("rmin"))
             emax = self.potential(self.scale("rmax"))
 
-
         if not self._has_tidal_radius:
             de = emax-emin
             E = mathtools.bins_log_lin_log(emin, emin+0.1*de, emax-0.1*de, emax, n1=nbinsE//3, n2=nbinsE//3, n3=nbinsE//3, dlogmin=self.scale("log_emin"), dlogmin_up=self.scale("log_emin_up"))
         else:
+            assert self._elmax > emin
             E = mathtools.bins_log_both_ends(emin, self._elmax, nbinsE//2, nbinsE//2, dlogmin=self.scale("log_emin"))
         E = np.unique(E)
         assert np.min(E[1:] > E[:-1]) == True, E
@@ -698,20 +700,20 @@ class RadialProfile():
         if (not self._rel_circ_initialized) | reinit:
             self._initialize_tidal_radius(reinit=reinit)
             
-            def _rel_circ_interpolator(ri, log=True):
+            def _rel_circ_interpolator(ri, log=True, kind=self.scale("rel_interpolation_kind")):
                 rcirc = ri
                 vcirc = self.vcirc(rcirc)
                 Lcirc = vcirc*rcirc
                 Ecirc = self.potential(rcirc) + 0.5*vcirc**2
                 
                 if log:
-                    ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale)
-                    ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"))
-                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), logx=True, eps_for_logx=1e-20*self._lscale)
+                    ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale, kind=kind)
+                    ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), kind=kind)
+                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), logx=True, eps_for_logx=1e-20*self._lscale, kind=kind)
                 else:
-                    ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]))
-                    ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=False)
-                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=False)
+                    ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]), kind=kind)
+                    ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=False, kind=kind)
+                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=False, kind=kind)
 
                 return ip_l_of_e, ip_r_of_e, ip_r_of_l, (rcirc, Ecirc, Lcirc)
 
@@ -822,6 +824,8 @@ class RadialProfile():
             rmax = np.infty * np.ones_like(l)
         
         rmin = np.clip(rmin, 0., None)
+        
+        assert np.all(rmin <= rmax)
 
         return rmin, rmax
     
@@ -1641,7 +1645,7 @@ class MonteCarloProfile(RadialProfile):
         # We just create a hash here which allows comparison
         # whether two MCProfiles are identical
         import zlib
-        mystr = "baseradius%.5e" % self.base_radius
+        mystr = "baseradius%.5e" % self.r0()
         mystr += "_rbinshash" + str(zlib.adler32(self.rbins.data.tobytes()))
         mystr +=  "_rihash" + str(zlib.adler32(self.ri.data.tobytes()))
         mystr +=  "_mihash" + str(zlib.adler32(self.mi.data.tobytes()))
