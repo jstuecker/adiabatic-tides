@@ -330,7 +330,7 @@ class RadialProfile():
 
         return mathtools.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), E=E, L=L, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
     
-    def radial_action(self, particles, nbins=None, rlow=None, rup=None, exceptions=False, dlog_rmin=None):
+    def radial_action(self, particles, nbins=None, rlow=None, rup=None, exceptions=False, dlog_rmin=None, rpow=0):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224
         
         particles : Tuple defining the particles either given by 
@@ -354,6 +354,10 @@ class RadialProfile():
                rapo or rperi
         dlog_rmin : a parameter used for deciding placement of the integration points. Defaults to
                self.scale("log_rmin"). 
+        rpow : if given, weight the integrand by r**pow. The action integral has pow=0.
+               However, since other quantities (like the denisty of states) use an almost
+               equivalent integral but with pow=2, we can evaluate them with this routine
+               as well, by modifying pow.
         
         returns : the radial action jr
         """
@@ -372,10 +376,16 @@ class RadialProfile():
         else:
             r, E, L = particles
         
-        def Jr_integrand(r, E, L):
-            SQ = 2*E - 2*self.potential(r) - L**2 / r**2
+        if rpow == 0.:
+            def Jr_integrand(r, E, L):
+                SQ = 2*E - 2*self.potential(r) - L**2 / r**2
 
-            return 1./np.pi * np.sqrt(np.clip(SQ, 0., None))
+                return 1./np.pi * np.sqrt(np.clip(SQ, 0., None))
+        else:
+            def Jr_integrand(r, E, L):
+                SQ = 2*E - 2*self.potential(r) - L**2 / r**2
+
+                return 1./np.pi * np.sqrt(np.clip(SQ, 0., None)) * r**rpow
 
         rperi = self.rperi((r, E, L), exceptions=exceptions, rlow=rlow)
         rapo = self.rapo((r, E, L), exceptions=exceptions, rup=rup)
@@ -410,6 +420,29 @@ class RadialProfile():
         #assert np.max(np.isnan(Jr)) == False
         
         return Jr
+    
+    def density_of_states(self, energy):
+        """Returns the density of states g(E) associated with some energy.
+        
+        This is normalized so that for an isotropic profile, the actual
+        number of particles with energy level E will be proportional to
+        f(e) * g(e) where f(e) is the phase space density.
+        
+        This is fiven by 
+        (4 pi)**2 integral( r**2 sqrt(2(E-phi)))
+        The integral that has to be evaluated is very similar to the action
+        integral for L = 0: 
+        J(E, L=0) = integral(sqrt(2(E-phi)) / pi)  
+        (which doesn't have the factor r**2), so that we use  the same routine
+        for evaluating it, just with a slight modification
+        """
+        
+        L = np.zeros_like(energy)
+        
+        integral = self.radial_action((energy, L), rpow=2)
+        
+        return (integral*np.pi) * (4.*np.pi)**2
+        
     
     def radial_period(self, particle, exceptions="warning"):
         """Infers the time needed for a radial period of the orbit of a single particle
@@ -1387,12 +1420,12 @@ class MonteCarloProfile(RadialProfile):
         
         self.q = {}
         
+        assert ancorphi in ("rmax", "rmin", "infty"), "Invalid value for ancorphi=%s" % ancorphi
+        self.ancorphi = ancorphi
+        
         if from_dict:
             self.from_dict(from_dict)
             return
-
-        assert ancorphi in ("rmax", "rmin", "infty"), "Invalid value for ancorphi=%s" % ancorphi
-        self.ancorphi = ancorphi
     
         if ri is not None:
             self.set_particles(ri,mi, update=False)
