@@ -1400,6 +1400,112 @@ class IsothermalSphere(RadialProfile):
 
         return self.v0**2 /r**2
 
+
+class NumericalProfile(RadialProfile):
+    def __init__(self, ri=None, rhoi=None, r0=None, ancorphi="rmax", from_dict=None):
+        """A radial profile of which only the density form is known
+        
+        ri : radius sampling points
+        rhoi : densities
+        r0 : base radius, will be maximum radius of the profile if not provided
+        ancorphi : where to set the potential to zero? Can be 'rmax', 'rmin' or "infty"
+        
+        from_dict : load a previous profile from a dict created by .to_dict()
+        """
+        super().__init__()
+        
+        self.q = {}
+        
+        assert ancorphi in ("rmax", "rmin", "infty"), "Invalid value for ancorphi=%s" % ancorphi
+        self.ancorphi = ancorphi
+        
+        if from_dict:
+            self.from_dict(from_dict)
+            return
+        
+        assert (ri is not None) & (rhoi is not None)
+
+        if r0 is None:
+            r0 = np.max(ri)
+        self.base_radius = r0
+        
+        self.set_density_profile(ri, rhoi)
+            
+    def set_density_profile(self, ri, rhoi, update=True):
+        """Change the bins that are used to bin the mass and solve the forces
+        
+        ri : radius sampling points
+        rhoi : densities
+        update : whether to update the mass, potential and force-profiles. Should always 
+                 be "True" unless you know what you are doing
+        """
+        self.ri = ri
+        self.q["rho"] = rhoi
+        
+        m0 = 4.*np.pi/3. * rhoi[0] * ri[0]**3
+        self.q["mofr"] = m0 + mathtools.trapez_integral_cumulative(self.ri, 4.*np.pi*self.q["rho"]*ri**2)
+        accr = - self.G * self.q["mofr"] / self.ri**2
+        self.q["phi"] = - mathtools.trapez_integral_cumulative(self.ri, accr)
+        
+        self.phasespace_initialized = False
+        self.potential_zero_at_infty = False
+
+    def density(self, r):
+        """Density in Msol/Mpc**3"""
+        return np.interp(np.log10(r), np.log10(self.ri), self.q["rho"])
+    
+    def m_of_r(self, r):
+        """The mass contained inside radius r"""
+        return np.interp(np.log10(r), np.log10(self.ri), self.q["mofr"])
+    
+    def potential(self, r, zero_at_zero=False):
+        """The gravitational  potential"""
+        assert not zero_at_zero, "mode not implemented"
+        dphi = np.interp(np.log10(r), np.log10(self.ri), self.q["phi"])
+        if self.ancorphi == "rmax":
+            return dphi - self.q["phi"][-1]
+        else: # ancored at 0
+            return dphi
+        
+    def r0(self):
+        """A scale radius"""
+        return self.base_radius
+
+    def to_dict(self):
+        """Returns a dictionary with all variables that describe the current state"""
+        d = {}
+        d["ri"] = self.ri
+        d["rhoi"] = self.q["rho"]
+        d["base_radius"] = self.base_radius
+        return d
+
+    def from_dict(self, d):
+        """Load a state  extracted from a previos '.to_dict()' call"""
+        self.base_radius = d["base_radius"]
+        self.set_density_profile(d["ri"], d["rhoi"], update=True)
+        
+    def to_string(self):
+        # We just create a hash here which allows comparison
+        # whether two MCProfiles are identical
+        import zlib
+        mystr = "baseradius%.5e" % self.base_radius
+        mystr += "_rihash" + str(zlib.adler32(self.ri.data.tobytes()))
+        mystr +=  "_rhoihash" + str(zlib.adler32(self.q["rho"].data.tobytes()))
+        
+        return mystr
+    
+    def _initialize_phasespace(self):
+        """private function. Initializes phase space calculation"""
+        self.phasespace_initialized = True
+        self.pss = phasespace.IsotropicPhaseSpaceSolver(self, rmin=self.scale("rmin"), rmax=self.scale("rmax"), rnorm=self.r0(), rbins=self.scale("pss_rbins"), nbinsE=self.scale("pss_ebins"), dlog_emin=np.log10(1+self.scale("pss_e_analytic_low")),  sample_profile_f=False)
+
+    def f_of_e(self, energy):
+        if not self.phasespace_initialized:
+            self._initialize_phasespace()
+            
+        f = self.pss.f_of_e(energy)*self.m_of_r(self.r0())
+        
+        return f
     
 class MonteCarloProfile(RadialProfile):
     def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
