@@ -825,7 +825,7 @@ class RadialProfile():
         
         rmin = np.clip(rmin, 0., None)
         
-        assert np.all(rmin <= rmax)
+        #assert np.all(rmin <= rmax)
 
         return rmin, rmax
     
@@ -1406,17 +1406,21 @@ class IsothermalSphere(RadialProfile):
 
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri=None, rhoi=None, r0=None, ancorphi="rmax", from_dict=None):
+    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmax", from_dict=None, potential_profile=None):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
         rhoi : densities
         r0 : base radius, will be maximum radius of the profile if not provided
         ancorphi : where to set the potential to zero? Can be 'rmax', 'rmin' or "infty"
+        potential_profile : can be passed to use the potential from another profile
+                            (might e.g. be relevant for Eddington inversion)
         
         from_dict : load a previous profile from a dict created by .to_dict()
         """
         super().__init__()
+        
+        self.potential_profile = potential_profile
         
         self.q = {}
         
@@ -1454,15 +1458,26 @@ class NumericalProfile(RadialProfile):
         self.phasespace_initialized = False
         self.potential_zero_at_infty = False
 
-    def density(self, r):
+    def self_density(self, r):
         """Density in Msol/Mpc**3"""
         return np.interp(np.log10(r), np.log10(self.ri), self.q["rho"])
+        
+    def density(self, r):
+        """Density in Msol/Mpc**3"""
+        return self.self_density(r)
     
-    def m_of_r(self, r):
+    def self_m_of_r(self, r):
         """The mass contained inside radius r"""
         return np.interp(np.log10(r), np.log10(self.ri), self.q["mofr"])
     
-    def potential(self, r, zero_at_zero=False):
+    def m_of_r(self, r):
+        """The mass contained inside radius r"""
+        if self.potential_profile is not None:
+            return self.potential_profile.m_of_r(r)
+        else:
+            return self.self_m_of_r(r)
+
+    def self_potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
         assert not zero_at_zero, "mode not implemented"
         dphi = np.interp(np.log10(r), np.log10(self.ri), self.q["phi"])
@@ -1470,6 +1485,13 @@ class NumericalProfile(RadialProfile):
             return dphi - self.q["phi"][-1]
         else: # ancored at 0
             return dphi
+
+    def potential(self, r, zero_at_zero=False):
+        """The gravitational  potential"""
+        if self.potential_profile is not None:
+            return self.potential_profile.potential(r)
+        else:
+            return self.self_potential(r, zero_at_zero=zero_at_zero)
         
     def r0(self):
         """A scale radius"""
@@ -1510,6 +1532,14 @@ class NumericalProfile(RadialProfile):
         f = self.pss.f_of_e(energy)*self.m_of_r(self.r0())
         
         return f
+    
+    def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None):
+        """Sample particles' positions, velocities and masses consistent with the Numerical profile
+        for more info see PhaseSpaceSolver.sample_particles"""
+        if not self.phasespace_initialized:
+            self._initialize_phasespace()
+        
+        return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed, res_of_r=res_of_r)
     
 class MonteCarloProfile(RadialProfile):
     def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
@@ -1999,7 +2029,7 @@ class AdiabaticProfile(RadialProfile):
             if not self.is_disrupted:
                 self._initialize_tidal_radius()
                 # Parameterize the new profile only up to the tidal radius, since rho(r > tid) = 0:
-                rinew = np.logspace(np.log10(self.rmin), np.log10(np.min([self._rtid*(1+1e-8), self.rmax])), self.nbins)
+                rinew = np.logspace(np.log10(self.rmin), np.log10(np.min([self._rtid*(1+1e-8), self.rmax*(1.-1e-8)])), self.nbins)
                 # calculate the new density given the current distribution function f(J,L):
                 if self._rtid < self.rmin: # We have been disrupted
                     rhonew = np.zeros_like(rinew)

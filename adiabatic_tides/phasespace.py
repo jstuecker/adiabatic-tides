@@ -6,7 +6,7 @@ from scipy.interpolate import interp1d, NearestNDInterpolator, LinearNDInterpola
         
 
 class IsotropicPhaseSpaceSolver():
-    def __init__(self, profile, rbins=1000, rnorm=None, rmax=None, rmin=None, sample_profile_f=False, nbinsE=100, dlog_emin=-5, force_profile_f=False):
+    def __init__(self, profile, rbins=1000, rnorm=None, rmax=None, rmin=None, potential_profile=None, sample_profile_f=False, nbinsE=100, dlog_emin=-5, force_profile_f=False):
         """This is a utility class that enables numerically calculating 
         distribution functions in arbitrary spherical profiles. It has only
         been tested for NFW models. On startup this class precomputes the 
@@ -26,6 +26,8 @@ class IsotropicPhaseSpaceSolver():
                (Should be way larger than the radius of your profile)
         rmin : the minimal radius considered for calculating the distribution function
                (Should be very close to zero, necessary for avoiding singularities at 0)
+        potential_profile : If provided use a different profile to generate the potential
+                            than for evaluating the density.
         sample_profile_f : if True, when sampling particles the phase space distriubtion
                will use the function p.f_of_e(e) of the profile when sampling particles
                instead of the own estimate of f_of_e
@@ -36,6 +38,10 @@ class IsotropicPhaseSpaceSolver():
         self.profile = profile
         self.sample_profile_f = sample_profile_f
         self.force_profile_f = force_profile_f
+        
+        if potential_profile is None:
+            potential_profile = profile
+        self.potential_profile = potential_profile
         
         if rnorm is None:
             self.rnorm = self.profile.r0()
@@ -57,8 +63,8 @@ class IsotropicPhaseSpaceSolver():
         else:
             self.ri = rbins
             
-        self.psi = -(self.profile.potential(self.ri) )
-        self.nu = self.profile.density(self.ri) / profile.m_of_r(self.rnorm)
+        self.psi = -(self.potential_profile.potential(self.ri) )
+        self.nu = self.profile.self_density(self.ri) / profile.self_m_of_r(self.rnorm)
         
         def filter_nonequal(*xis):
             valid = np.ones_like(xis[0], dtype=np.bool)
@@ -84,13 +90,16 @@ class IsotropicPhaseSpaceSolver():
         
         self._setup_interpolators()
         
-    def sample_particles(self, ntot=10000, rmax=None, seed=None, verbose=False):
+    def sample_particles(self, ntot=10000, rmax=None, seed=None, verbose=False, res_of_r=None):
         """Samples particles consistent with the phasespace distribution
         
         ntot : number of particles to sample
         rmax : Maximum radius to sample to. This is important for profiles
                which diverge M(r -> infty) -> infty
         seed : random seed
+        res_of_r: (optional) a function that returns a resolution weight as a 
+               function of r. The number of particles at radius r will be 
+               proportional to this weight and the mass will be inversely proportional
         
         returns : pos, vel, mass  -- the positions, velocities and masses
                masses are normalized so that Sum(mass) = M(<rmax)
@@ -103,18 +112,15 @@ class IsotropicPhaseSpaceSolver():
         if rmax is None:
             rmax = self.rnorm
             
-        ri = self._sample_r(ntot, rmax=rmax)
+        ri, mass = self._sample_r(ntot, rmax=rmax, res_of_r=res_of_r)
         ei = self._sample_e_given_r(ri, verbose=verbose)
         
         pos = mathtools.random_direction(ri.shape, 3) * ri[...,np.newaxis]
         
-        phi = self.profile.potential(ri)
+        phi = self.potential_profile.potential(ri)
         vi = np.sqrt(2.*(ei-phi))
         vel = mathtools.random_direction(ri.shape, 3) * vi[...,np.newaxis]
         
-        mass = np.ones_like(ri) * self.profile.m_of_r(rmax) / ntot
-        
-        mass[np.isnan(mass)] = 0.
         
         np.seterr(**float_err_handling)
         
@@ -152,7 +158,7 @@ class IsotropicPhaseSpaceSolver():
         
         pos = mathtools.random_direction(ri.shape, 3) * ri[...,np.newaxis]
         
-        phi = self.profile.potential(ri)
+        phi = self.potential_profile.potential(ri)
         vi = np.sqrt(2.*(ei-phi))
         vel = mathtools.random_direction(ri.shape, 3) * vi[...,np.newaxis]
         
@@ -193,10 +199,10 @@ class IsotropicPhaseSpaceSolver():
         def integrand(p, ei):
             return ip(p)  / np.sqrt(ei-p)
         
-        if self.profile.potential_zero_at_infty:
+        if self.potential_profile.potential_zero_at_infty:
             emax = 0.
         else:
-            emax = self.profile.potential(self.profile.scale("rmax"))
+            emax = self.potential_profile.potential(self.profile.scale("rmax"))
         
         def integral(ei):
             return quad(integrand, -emax, ei,  epsrel=self.eps, args=(ei,), full_output=True)[0]
@@ -216,8 +222,8 @@ class IsotropicPhaseSpaceSolver():
         return (4.*np.pi)**2 * self.f_of_e(e) * self._g_of_e(e)
     
     def _setup_interpolators(self):
-        self.phimin = self.profile.potential(self.rmin)
-        self.phimax = self.profile.potential(self.rmax)
+        self.phimin = self.potential_profile.potential(self.rmin)
+        self.phimax = self.potential_profile.potential(self.rmax)
 
         #n1,n2,n3 = self.nbinsE//4, self.nbinsE//2, self.nbinsE//4
         #efac = np.concatenate([np.logspace(-6,-1, n1), np.linspace(0.101,0.899, n2), 1.-np.logspace(-1, -6, n3)])
@@ -239,7 +245,7 @@ class IsotropicPhaseSpaceSolver():
     def _rapo_zeroL(self, e):
         """Radius at apocenter for zero angular momentum orbits"""
         def perifunc(rp, ei):
-            return self.profile.potential(rp) - ei
+            return self.potential_profile.potential(rp) - ei
         
         def apo_single(ei):
             return op.brentq(perifunc, 1e-2*self.rmin, 1e2*self.rmax, args=(ei,))
@@ -258,7 +264,7 @@ class IsotropicPhaseSpaceSolver():
             return self._rapo_zeroL(ei)
         
         def integrand(r, ei):
-            de = ei - self.profile.potential(r)
+            de = ei - self.potential_profile.potential(r)
             
             return r**2 * np.sqrt(2.*de)
 
@@ -279,23 +285,58 @@ class IsotropicPhaseSpaceSolver():
         else:
             norm = 1.
         
-        de = np.clip(e - self.profile.potential(r), 0., None)
+        de = np.clip(e - self.potential_profile.potential(r), 0., None)
         
         return r**2 * np.sqrt(2.*de)  * self.f_of_e(e, use_profile_f=use_profile_f) / norm
     
-    def _sample_r(self, ntot=100, rmax=None):
-        """Sample radii from the density profile"""
+    def _sample_r(self, ntot=100, rmax=None, res_of_r=None):
+        """Sample radii and masses from the density profile, 
+        res_of_r can be a function increasing resolution and decreasing mass"""
         if rmax is None:
             rmax = self.rnorm
-        
-        mofr = self.profile.m_of_r(self.ri)
-        mmax = self.profile.m_of_r(rmax)
-        
-        fsamp = np.random.uniform(0., 1., ntot)
-        
-        rsamp = np.interp(fsamp, mofr/mmax, self.ri)
+            
+        if res_of_r is None:
+            mofr = self.profile.self_m_of_r(self.ri)
+            mmax = self.profile.self_m_of_r(rmax)
+            fsamp = np.random.uniform(0., 1., ntot)
+            rsamp = np.interp(fsamp, mofr/mmax, self.ri)
+            mass = np.ones(ntot) * (mmax / ntot)
+        else:
+            def dmdr(r):
+                return 4.*np.pi*self.profile.self_density(r)*r**2 * res_of_r(r)
 
-        return rsamp
+            meff = self.profile.self_m_of_r(self.ri[0]) + mathtools.cum_simpson(dmdr, self.ri)
+            mmax = np.interp(rmax, self.ri, meff)
+
+            fsamp = np.random.uniform(0., 1., ntot)
+            rsamp = np.interp(fsamp, meff/mmax, self.ri)
+
+            mass = mmax / ntot / res_of_r(rsamp)
+        mass[np.isnan(mass)] = 0.
+
+        return rsamp, mass
+    
+        def sample_r(ntot):
+            if res_of_r is None:
+                mmax = self.self_m_of_r(rmax)
+                fsamp = np.random.uniform(0., 1., ntot)
+                rsamp = np.interp(fsamp, self.q["mofr"]/mmax, self.ri)
+                mass = np.ones(ntot) * (mmax / ntot)
+            else:
+                def dmdr(r):
+                    return 4.*np.pi*self.self_density(r)*r**2 * res_of_r(r)
+                
+                meff = self.prof_initial.self_m_of_r(self.ri[0]) + mathtools.cum_simpson(dmdr, self.ri)
+                mmax = np.interp(rmax, self.ri, meff)
+                
+                fsamp = np.random.uniform(0., 1., ntot)
+                rsamp = np.interp(fsamp, meff/mmax, self.ri)
+                
+                mass = mmax / ntot / res_of_r(rsamp)
+
+            return rsamp, mass
+        
+        rsamp, mass = sample_r(ntot)
     
     def _sample_e_given_r(self, ri, verbose=False, maxiter=10000, fpow=None):
         """Use rejection sampling like in arxiv:1906.01642 to find energies
@@ -304,9 +345,9 @@ class IsotropicPhaseSpaceSolver():
         fpow : take a power of the likelihood. Should be None or 1, unless
                you know what you are doing
         """
-        phimax = self.profile.potential(self.rmax)
+        phimax = self.potential_profile.potential(self.rmax)
 
-        phii = self.profile.potential(ri)
+        phii = self.potential_profile.potential(ri)
         
         ei = np.zeros_like(phii)
         ileft = np.arange(len(ri))
