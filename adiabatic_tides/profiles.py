@@ -2367,11 +2367,11 @@ class AdiabaticProfile(RadialProfile):
         # Check whether none of the numerical scales have been changed. These are implicit parameters
         for kw in d["numerical_scales"]:
             if d["numerical_scales"][kw] != self.scaledict()[kw]:
-                print("Warning: numerical scale '%s' differs (previous=%g, current=%g)\nIf you are unsure whether this is save, reset the cache" % (kw, d["numerical_scales"][kw], self.scaledict()[kw]))
+                print("Warning: numerical scale '%s' differs (previous=%s, current=%s)\nIf you are unsure whether this is save, reset the cache" % (kw, d["numerical_scales"][kw], self.scaledict()[kw]))
             ##print(kw, d["numerical_scales"][kw] == self.scaledict()[kw])
         for kw in d["profini_numerical_scales"]:
             if d["profini_numerical_scales"][kw] != self.prof_initial.scaledict()[kw]:
-                print("Warning: initial profile's numerical scale '%s' differs (previous=%g, current=%g)\nIf you are unsure whether this is save, reset the cache" % (kw, d["profini_numerical_scales"][kw], self.prof_initial.scaledict()[kw]))
+                print("Warning: initial profile's numerical scale '%s' differs (previous=%s, current=%s)\nIf you are unsure whether this is save, reset the cache" % (kw, d["profini_numerical_scales"][kw], self.prof_initial.scaledict()[kw]))
 
         self._update_profile(d["ri"], d["rhoi"])
         
