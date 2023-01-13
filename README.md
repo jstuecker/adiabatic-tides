@@ -41,3 +41,6 @@ For some intuition you might want to watch these videos, showing the potential l
 
 ## Acknowledgement:
 If you use this code, please cite the paper as [Stücker et al. (2022)](https://arxiv.org/abs/2207.00604)
+
+## References:
+A related code -- treating the effect of stellar encounters on prompt cusps -- can be found here [https://github.com/jstuecker/cusp-encounters](https://github.com/jstuecker/cusp-encounters)
