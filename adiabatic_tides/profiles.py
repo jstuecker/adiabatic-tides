@@ -673,6 +673,48 @@ class RadialProfile():
         
         return self._e_of_jl(J, L)
     
+    def vdispr2_via_jeans_integration(self, logr=None, anisotropy=0., density=None):
+        """Obtain the radial velocity dispersion squared through integration of the 1st Jeans equation
+        
+        logr : can provide integration points optionally, should be decreasing and log(radius)
+        anisotropy: anisotropy parameter beta = 1 - (sigma_phi**2 + sigma_t**2) / 2sigma_r**2 
+                    can be a function of radius
+        density: if provided use a different density distribution, than the one which generates the potential
+        
+        returns: r, sigmar2   radii and radial velocity dispersion
+        """
+        
+        if callable(anisotropy):
+            faniso = anisotropy
+        elif np.isscalar(anisotropy):
+            def faniso(r):
+                return anisotropy
+        else:
+            raise ValueError("Did not understand type for anisotropy (should be scalar or function)")
+            
+        if density is None:
+            def density(r):
+                return self.density(r)
+
+        def drhosigr2_dlogr(logr, sigr2=0.):
+            r = np.exp(logr)
+            return (density(r) * self.accr(r) - 2.*density(r) / r * sigr2 * faniso(r)) * r
+
+        if logr is None:
+            logr = np.linspace(np.log(self.scale("rmax")*1e3),np.log(self.scale("rmin")), 10000)
+        else:
+            assert np.all(logr[1:] <= logr[:-1]), "logr has to be descending"
+        rhosigr2 = np.zeros_like(logr)
+
+        for i in range(1,len(logr)):
+            dlogr = logr[i] - logr[i-1]
+
+            sigr2=rhosigr2[i-1]/density(np.exp(logr[i]-1))
+
+            rhosigr2[i] = rhosigr2[i-1] +  drhosigr2_dlogr(logr[i-1], sigr2)*dlogr
+            
+        return np.exp(logr[::-1]), (rhosigr2/density(np.exp(logr)))[::-1]
+    
     def _initialize_tidal_radius(self, reinit=False):
         """Calcualtes the maximum of the potential and of the angular momentum"""
         if (not self._tidal_radius_initialized) | reinit:
@@ -1080,6 +1122,7 @@ class RadialProfile():
     
     def to_string(self):
         raise NotImplementedError("to_string not implemented for this profile, need this for caching etc...")
+        
 
 class NFWProfile(RadialProfile):
     def __init__(self, conc, m200c=None, r200c=None, h=0.679):
