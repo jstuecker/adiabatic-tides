@@ -2180,7 +2180,7 @@ class AdiabaticProfile(RadialProfile):
         lmin_of_e, lmax_of_e = self.lminmax_of_e(e)
         e = e * np.ones_like(l)
             
-        valid = np.ones(l.shape, dtype=np.bool)
+        valid = np.ones(l.shape, dtype=bool)
         if self._has_tidal_radius:
             valid &= (l >= lmin_of_e) & (l < lmax_of_e) 
             if r is not None:

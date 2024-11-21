@@ -14,9 +14,9 @@ def finite_differences_n(x, f, deriv=1, h=1e-5, **kwargs):
     if deriv==0:
         return f(x, **kwargs)
     
-    grad = np.zeros(np.shape(f(x, **kwargs)) + (3,)*deriv)
-    
     dim = x.shape[-1]
+    
+    grad = np.zeros(np.shape(f(x, **kwargs)) + (dim,)*deriv)
     eij = np.diag(np.ones(dim))
     
     for ax in range(0, dim):

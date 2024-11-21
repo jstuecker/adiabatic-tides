@@ -67,7 +67,7 @@ class IsotropicPhaseSpaceSolver():
         self.nu = self.profile.self_density(self.ri) / profile.self_m_of_r(self.rnorm)
         
         def filter_nonequal(*xis):
-            valid = np.ones_like(xis[0], dtype=np.bool)
+            valid = np.ones_like(xis[0], dtype=bool)
             for xi in xis:
                 valid[1:] &= np.abs(xi[1:] - xi[:-1]) >= (np.abs(xi[1:]) + np.abs(xi[:-1])) * 1e-12
             xinew = [xi[valid] for xi in xis]
