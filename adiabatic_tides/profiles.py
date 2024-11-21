@@ -2415,18 +2415,16 @@ class AdiabaticProfile(RadialProfile):
             if isinstance(val, np.ndarray):
                 val = val.reshape(1)[0] # to make it scalar type
             if isinstance(val, bytes):
-                print("map")
                 return val.decode('utf-8')
             return val
         
         def different(v1, v2):
-            v1 = print(d["numerical_scales"][kw].reshape(1)[0])
+            #v1 = print(d["numerical_scales"][kw].reshape(1)[0])
             return conv_str(v1) != conv_str(v2)
 
         # Check whether none of the numerical scales have been changed. These are implicit parameters
         for kw in d["numerical_scales"]:
             if different(d["numerical_scales"][kw], self.scaledict()[kw]):
-                raise ValueError("wrong")
                 print("Warning: numerical scale '%s' differs (previous=%s, current=%s)\nIf you are unsure whether this is save, reset the cache" % (kw, d["numerical_scales"][kw], self.scaledict()[kw]))
             ##print(kw, d["numerical_scales"][kw] == self.scaledict()[kw])
         for kw in d["profini_numerical_scales"]:
