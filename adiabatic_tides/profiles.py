@@ -123,6 +123,11 @@ class RadialProfile():
     def f_of_e(self, E):
         """Abstract: A phase space distribution function that only depends on energy"""
         raise NotImplementedError("This optional function has not been implemented")
+    
+    def f_of_el(self, E, L):
+        """Abstract: By default we assume an isotropic distribution"""
+        print("defaulting...")
+        return self.f_of_e(E)
 
     #----------- Functions that can be implemented on the abstract level already ----------# 
     def accr(self, r):
@@ -2198,7 +2203,7 @@ class AdiabaticProfile(RadialProfile):
         valid[valid] &= jvalid
         
         eini = self.prof_initial.e_of_jl(j[jvalid],l[valid])
-        fini = self.prof_initial.f_of_e(eini)
+        fini = self.prof_initial.f_of_el(eini, l[valid])
 
         f = np.zeros_like(l)
         f[valid] = fini
@@ -2406,14 +2411,26 @@ class AdiabaticProfile(RadialProfile):
             self.is_disrupted = False
             self.iter_disrupted = 0
         
+        def conv_str(val):
+            if isinstance(val, np.ndarray):
+                val = val.reshape(1)[0] # to make it scalar type
+            if isinstance(val, bytes):
+                print("map")
+                return val.decode('utf-8')
+            return val
+        
+        def different(v1, v2):
+            v1 = print(d["numerical_scales"][kw].reshape(1)[0])
+            return conv_str(v1) != conv_str(v2)
 
         # Check whether none of the numerical scales have been changed. These are implicit parameters
         for kw in d["numerical_scales"]:
-            if d["numerical_scales"][kw] != self.scaledict()[kw]:
+            if different(d["numerical_scales"][kw], self.scaledict()[kw]):
+                raise ValueError("wrong")
                 print("Warning: numerical scale '%s' differs (previous=%s, current=%s)\nIf you are unsure whether this is save, reset the cache" % (kw, d["numerical_scales"][kw], self.scaledict()[kw]))
             ##print(kw, d["numerical_scales"][kw] == self.scaledict()[kw])
         for kw in d["profini_numerical_scales"]:
-            if d["profini_numerical_scales"][kw] != self.prof_initial.scaledict()[kw]:
+            if different(d["profini_numerical_scales"][kw], self.prof_initial.scaledict()[kw]):
                 print("Warning: initial profile's numerical scale '%s' differs (previous=%s, current=%s)\nIf you are unsure whether this is save, reset the cache" % (kw, d["profini_numerical_scales"][kw], self.prof_initial.scaledict()[kw]))
 
         self._update_profile(d["ri"], d["rhoi"])
@@ -2527,7 +2544,7 @@ class AdiabaticProfile(RadialProfile):
         np.seterr(divide="ignore", invalid="ignore") 
 
         fi, eini = self.f_of_el(efinal, L, r=r, get_eini=True)
-        f0 = self.prof_initial.f_of_e(e0)
+        f0 = self.prof_initial.f_of_el(e0, L)
         
         mass = mass * fi/f0
         
