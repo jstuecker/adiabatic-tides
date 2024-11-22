@@ -126,7 +126,6 @@ class RadialProfile():
     
     def f_of_el(self, E, L):
         """Abstract: By default we assume an isotropic distribution"""
-        print("defaulting...")
         return self.f_of_e(E)
 
     #----------- Functions that can be implemented on the abstract level already ----------# 
