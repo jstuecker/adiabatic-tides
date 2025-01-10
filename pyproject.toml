@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adiabatic-tides"
+version = "1.2"
+description = "Code to evaluate the remnants of an adiabatic tidal stripping process"
+authors = [
+    { name = "Jens Stücker", email = "jens.stuecker@univie.ac.at" }
+]
+dependencies = [
+    "numpy"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+[tool.setuptools.packages.find]
+include = ["adiabatic_tides"]
