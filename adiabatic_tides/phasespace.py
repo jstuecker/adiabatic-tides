@@ -232,11 +232,11 @@ class IsotropicPhaseSpaceSolver():
         
         self.fi = self.f_of_e(self.ei, interpolate=False)
         self.gi = None
+
+        assert np.min(self.fi) > 0.
         
         self.ei = self.ei[self.fi > 0.]
         self.fi = self.fi[self.fi > 0.]
-        
-        assert np.min(self.fi) > 0.
         
         self.ip_e_logf = self._interpolator(self.ei, np.log10(self.fi))
         
