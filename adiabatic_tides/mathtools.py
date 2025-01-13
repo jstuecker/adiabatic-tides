@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline
-from scipy.integrate import simps
+from scipy.integrate import simps, trapezoid
+from scipy.interpolate import CubicSpline
 
 def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
     """Returns the virial radius of a halo with a given virial mass
@@ -113,6 +114,42 @@ def trapez_integral_lastax(xi, fi):
     Ii = np.sum(0.5 * (fi[...,1:] + fi[...,:-1]) * (xi[...,1:] - xi[...,:-1]), axis=-1)
     
     return Ii
+
+def powerlaw_trapez_integral_cumulative(xi, fi):
+    """Approximates the integrand as a powerlaw on each interval"""
+    slopes = (np.log(fi[1:]) - np.log(fi[:-1]))/(np.log(xi[1:]) - np.log(xi[:-1]))
+    amps = fi[1:] / xi[1:] ** slopes
+
+    Ipl = amps * (xi[1:]**(slopes+1) - xi[:-1]**(slopes+1)) / (slopes+1)
+    sel = np.isnan(Ipl) | (slopes == 0.)
+
+    if(np.sum(sel) > 0):
+        Itrapez = 0.5 * (fi[1:] + fi[:-1]) * (xi[1:] - xi[:-1])
+        Ipl[sel] = Itrapez[sel]
+        print("Warning %d out of %d points undefined as powerlaws and replaced by linear trapezes" % (np.sum(sel), len(sel)))
+
+    Ii = np.cumsum(Ipl)
+    
+    return np.concatenate([[0.], Ii])
+
+def extended_simpson_cumulative(fi, dx):
+    """Adapted From Numerical Recipes 4.1.14
+    only works for constant dx"""
+    Ii = np.cumsum(fi)
+
+    # Correct contributions from start boundaries
+    Ii += -5./8. * fi[0] + 1./6. * fi[1] - 1./24. * fi[2]
+    
+    # Handle upper boundaries leading up to each point
+    Ii -= 5./8. * fi
+    Ii[1:] += 1./6. * fi[:-1]
+    Ii[2:] -= 1./24. * fi[:-2]
+
+    # For first points use trapezoidal rule
+    Ii[0] = 0
+    Ii[1] = 0.5 * (fi[0] + fi[1])
+
+    return Ii * dx
 
 def vectorized_binary_search(f, xlow, xhigh, niter=100, mode="sqrt", return_err=False, exceptions=True, xfallback=None, **kwargs):
     """A vectorized binary search which searches the zero-point of f
@@ -365,3 +402,216 @@ def sample_metropolis_hastings(f, x0, stepsize=1., nsteps=1000):
         f0[accept] = f1[accept]
         
     return x
+
+def second_deriv(f, x):
+    """Second order second derivative"""
+    h1 = x[1:-1] - x[:-2]
+    h2 = x[2:] - x[1:-1]
+
+    yl, yc, yr = f[:-2], f[1:-1], f[2:]
+
+    fderiv2 = np.zeros_like(f)
+    fderiv2[1:-1] = 2*(yl*h2 + yr*h1 - yc*(h1+h2)) / (h1*h2*(h1+h2))
+    
+    fderiv2[0] = fderiv2[1]
+    fderiv2[-1] = fderiv2[-2]
+
+    return fderiv2
+
+def fit_powerlaw(x1,x2,y1,y2):
+    slope = (np.log(y2) - np.log(y1)) / (np.log(x2) - np.log(x1))
+    amp = y2 / x2**slope
+    return amp, slope
+
+def solve_poisson(ri, rho, boundary="powerlaw", integration_mode="trapez", G=43.0071057317063e-10):
+    """Solve Poisson's equation returning m(<r) and phi (normalized to 0 at 0)
+        
+    ri : radius sampling points
+    rhoi : densities
+    boundary : How to handle radii r < min(ri). Can be "constant" or "powerlaw"
+                For the powerlaw case a powerlaw profile is fitted based on the
+                two smallest radii. This is the recommended mode if applicable.
+    integration_mode : don't change for now
+    """
+
+    assert np.all(ri[1:] > ri[:-1])
+
+    if boundary == "powerlaw":
+        rhoc, alpha = fit_powerlaw(ri[0], ri[1], rho[0], rho[1])
+        
+        # See profiles.PowerlawProfile for understanding this
+        m0 = 4.*np.pi * rhoc  / (3. + alpha) * ri[0]**(3.+alpha)
+        phi0 = 4.*np.pi * G * rhoc / ( (3. + alpha) * (2. + alpha) ) * ri[0]**(2.+alpha)
+    elif boundary == "constant":
+        m0 = 4.*np.pi/3. * rho[0] * ri[0]**3
+    else:
+        raise ValueError("Unknown boundary mode %s" % boundary)
+    
+    if integration_mode == "trapez":
+        m = m0 + trapez_integral_cumulative(ri, 4.*np.pi*rho*ri**2)
+        phi = phi0 + trapez_integral_cumulative(ri, G * m / ri**2)
+    elif integration_mode == "powerlaw_trapez":
+        m = m0 + powerlaw_trapez_integral_cumulative(ri, 4.*np.pi*rho*ri**2)
+        phi = phi0 + powerlaw_trapez_integral_cumulative(ri, G * m / ri**2)
+    else:
+        raise ValueError("Unknown integration mode %s" % integration_mode)
+    
+    return m, phi
+
+def cosh_space(fmax, n, pow=1.):
+    x = np.linspace(0., np.arccosh(fmax), n)
+    return np.cosh(x[-1] * (x/x[-1])**pow)
+
+def eddington_inversion(ri, rho, phi=None, integrator=None):
+    """Does the Eddington inversion at discrete energies ei=phi
+    
+    phi : potential -- if not provided a simple Poisson solver is used
+          assuming that the distribution rho generates the potential
+
+    to avoid the singularity we use a substitution t = sqrt(phi - E)
+
+    f(E) &= \frac{1}{\sqrt{8} \pi^2} \frac{d}{dE} \int_E^{E_{max}} \frac{d \rho}{d \Phi} (\Phi - E)^{-1/2} d \Phi \\
+        &= \frac{1}{\sqrt{8} \pi^2} \frac{d}{dE} \int_0^{\sqrt{E_{max} - E}} 2 \frac{d \rho}{d \Phi} (\phi = E + t^2)  d t
+    """
+    if integrator is None:
+        integrator = trapezoid
+    if phi is None:
+        m, phi = solve_poisson(ri, rho)
+
+    d2rhodphi2 = second_deriv(rho, phi)
+
+    integrand = d2rhodphi2 * (2/(np.sqrt(8.) * np.pi**2))
+
+    f = np.zeros_like(phi)
+    for i,E in enumerate(phi):
+        t = np.sqrt(np.clip(phi - E, 0, None))
+        f[i] = integrator(integrand, x=t)
+    return phi, f
+
+def eddington_inversion_adaptive(ri, prof, integrator=None, nintegrate=None):
+    """Does the Eddington inversion for discrete energies ei=phi(ri), but using
+       adaptively spaced integration points.
+       nintegrate: number of integration steps. Defaults to len(ri)
+    """
+    if integrator is None:
+        integrator = trapezoid
+    if nintegrate is None:
+        nintegrate = len(ri)
+    rho, phi = prof.density(ri), prof.potential(ri)
+
+    d2rhodphi2 = second_deriv(rho, phi)
+
+    spl_d2rhodphi2 = CubicSpline(ri, d2rhodphi2)
+
+    f = np.zeros_like(phi)
+    for i,E in enumerate(phi[:-1]):
+        rev = ri[i] * cosh_space(ri[-1]/ri[i], nintegrate, pow=2)
+
+        t = np.sqrt(np.clip(prof.potential(rev) - E, 0, None))
+        f[i] = integrator(spl_d2rhodphi2(rev), x=t) * (2/(np.sqrt(8.) * np.pi**2))
+
+    return phi, f
+
+def eddington_inversion_diff_last(ri, rho, phi=None, integrator=None):
+    """Does the Eddington inversion at discrete energies ei=phi
+    using a different approach where the parent function is calculated first
+    
+    phi : potential -- if not provided a simple Poisson solver is used
+          assuming that the distribution rho generates the potential
+
+    to avoid the singularity we use a substitution t = sqrt(phi - E)
+
+    f(E) &= \frac{1}{\sqrt{8} \pi^2} \frac{d}{dE} \int_E^{E_{max}} \frac{d \rho}{d \Phi} (\Phi - E)^{-1/2} d \Phi \\
+         &= \frac{1}{\sqrt{8} \pi^2} \frac{d}{dE} \int_0^{\sqrt{E_{max} - E}} 2 \frac{d \rho}{d \Phi} (\phi = E + t^2)  d t
+    """
+    if integrator is None:
+        integrator = trapezoid
+    if phi is None:
+        m, phi = solve_poisson(ri, rho)
+
+    drhodphi = np.gradient(rho, phi, edge_order=1)
+
+    integrand = -drhodphi * (2/(np.sqrt(8.) * np.pi**2))
+
+    fparent = np.zeros_like(phi)
+    for i,E in enumerate(phi):
+        t = np.sqrt(np.clip(phi - E, 0, None))
+        fparent[i] = integrator(integrand, x=t)
+
+    return phi, -np.gradient(fparent, phi, edge_order=1)
+
+def integrate_f_to_density(ei, fi):
+    """Integrates a phase space distribution to obtain rho(phi)
+    See Binney and Tremaine (4.43)
+    """
+    rho_phi = np.zeros_like(fi)
+    for i,phi in enumerate(ei):
+        integrand = fi * np.sqrt(np.clip(ei - phi, 0, None)) 
+        rho_phi[i] = trapezoid(integrand, ei) * (np.sqrt(2.)*4.*np.pi)
+    
+    return rho_phi
+
+def integrate_f_to_density_adaptive(ei, profile, nintegrate=None):
+    """Integrates a phase space distribution to obtain rho(phi)
+    See Binney and Tremaine (4.43)
+    Chooses the evaluation points adaptively
+    """
+    assert np.min(ei) > 0, "Please normalize potential to zero at zero"
+
+    if nintegrate is None:
+        nintegrate = len(ei)
+
+    rho_phi = np.zeros_like(ei)
+    for i,phi in enumerate(ei[:-1]):
+        eeval = phi * cosh_space(ei[-1]/phi, nintegrate, 2)
+        assert ~np.isnan(np.max(eeval))
+        
+        integrand = profile.f_of_e(eeval) * np.sqrt(np.clip(eeval - phi, 0, None)) 
+        rho_phi[i] = trapezoid(integrand, eeval) * (np.sqrt(2.)*4.*np.pi)
+    
+    return rho_phi
+
+def sample_from_Finv(Finv, size):
+    Fs = np.random.uniform(0., 1., size)
+
+    return Finv(Fs)
+
+def sample_radii(ri, mi, size=1, rmax=None):
+    """sample radii from a given mass profile
+
+    returns sampled radii and total mass
+    """
+    mi = mi-mi[0]
+
+    if rmax is None:
+        Mmax = mi[-1]
+    else:
+        Mmax = np.interp(rmax, ri, mi)
+
+    def FcumInv(f):
+        return np.interp(f, mi/Mmax, ri)
+    
+    return sample_from_Finv(FcumInv, size)
+
+def sample_rimi_from_density(ri, rhoi, size=1, rmax=None, weights=None):
+    """ sample radii and masses from a density profile
+        weights : can be provided to sample more particles (with lower weights)
+                  at different radii. The number of particles at a radius will
+                  be proportional to rhoi*weights, but the masses to 1/weights
+    """
+    mi = trapez_integral_cumulative(ri, 4.*np.pi*rhoi*ri**2)
+    if rmax is None:
+        Mmax = mi[-1]
+    else:
+        Mmax = np.interp(rmax, ri, mi)
+
+    if weights is None:
+        rsamp = sample_radii(ri, mi, size=size, rmax=rmax)
+        msamp = np.ones_like(rsamp) * Mmax / len(rsamp)
+    else:
+        miwi = trapez_integral_cumulative(ri, 4.*np.pi*rhoi*ri**2*weights)
+        rsamp = sample_radii(ri, miwi, size=size, rmax=rmax)
+        msamp = 1. / np.interp(rsamp, ri, weights)
+        msamp *= Mmax / np.sum(msamp) # normaliz
+
+    return rsamp, msamp

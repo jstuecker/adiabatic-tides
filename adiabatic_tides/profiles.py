@@ -1378,6 +1378,21 @@ class PowerlawProfile(RadialProfile):
     def drhodr(self, r):
         return self.rhoc * (r/self.rscale)**(self.slope-1.) * self.slope / self.rscale
     
+    def rho_of_phi(self, phi, deriv=0):
+        # phi = self.phic * (r/self.rscale)**(2.+self.slope)
+        # rho = self.rhoc * (r/self.rscale)**self.slope
+
+        # (r/self.rscale) = (phi/self.phic)**(1.(2.+self.slope))
+        assert deriv <= 2
+
+        alpha = self.slope/(2.+self.slope)
+        if deriv == 0:
+            return self.rhoc * (phi/self.phic)**alpha
+        elif deriv == 1:
+            return self.rhoc * (phi/self.phic)**alpha * alpha / phi
+        elif deriv == 2:
+            return self.rhoc * (phi/self.phic)**alpha * alpha * (alpha-1.) / phi**2
+    
     def m_of_r(self, r):
         return 4.*np.pi * self.rhoc / self.rscale**self.slope / (3. + self.slope) * r**(3.+self.slope)
     
@@ -1453,7 +1468,7 @@ class IsothermalSphere(RadialProfile):
 
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmax", from_dict=None, potential_profile=None):
+    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw"):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
@@ -1462,7 +1477,9 @@ class NumericalProfile(RadialProfile):
         ancorphi : where to set the potential to zero? Can be 'rmax', 'rmin' or "infty"
         potential_profile : can be passed to use the potential from another profile
                             (might e.g. be relevant for Eddington inversion)
-        
+        boundary : How to handle radii r < min(ri). Can be "constant" or "powerlaw"
+                   For the powerlaw case a powerlaw profile is fitted based on the
+                   two smallest radii. This is the recommended mode if applicable.
         from_dict : load a previous profile from a dict created by .to_dict()
         """
         super().__init__()
@@ -1483,10 +1500,12 @@ class NumericalProfile(RadialProfile):
         if r0 is None:
             r0 = np.max(ri)
         self.base_radius = r0
+
+        self.boundary = boundary
         
         self.set_density_profile(ri, rhoi)
             
-    def set_density_profile(self, ri, rhoi, update=True):
+    def set_density_profile(self, ri, rhoi, update=True, integration_mode="trapez"):
         """Change the bins that are used to bin the mass and solve the forces
         
         ri : radius sampling points
@@ -1496,12 +1515,9 @@ class NumericalProfile(RadialProfile):
         """
         self.ri = ri
         self.q["rho"] = rhoi
-        
-        m0 = 4.*np.pi/3. * rhoi[0] * ri[0]**3
-        self.q["mofr"] = m0 + mathtools.trapez_integral_cumulative(self.ri, 4.*np.pi*self.q["rho"]*ri**2)
-        accr = - self.G * self.q["mofr"] / self.ri**2
-        self.q["phi"] = - mathtools.trapez_integral_cumulative(self.ri, accr)
-        
+
+        self.q["mofr"], self.q["phi"] = mathtools.solve_poisson(ri, rhoi, boundary=self.boundary, integration_mode=integration_mode)
+
         self.phasespace_initialized = False
         self.potential_zero_at_infty = False
 
@@ -1567,18 +1583,30 @@ class NumericalProfile(RadialProfile):
         
         return mystr
     
-    def _initialize_phasespace(self):
-        """private function. Initializes phase space calculation"""
+    def _initialize_phasespace(self,  mode="fixed", nintegrate=None):
+        """Initialize f(E) through Eddington inversion. See
+        eddington_inversion, eddington_inversion_adaptive and eddington_inversion_diff_last for detail
+
+        mode : can be "fixed", "adaptive" or "fixed_diff_last". "fixed" is recommended for robustness and 
+               small n whereas "adaptive" is more accurate and recommended for faster convergence at larger n
+        """
+
+        if mode == "fixed":
+            ei,self.q["f"] = mathtools.eddington_inversion(self.ri, self.q["rho"], self.q["phi"])
+        elif mode == "adaptive":
+            ei,self.q["f"] = mathtools.eddington_inversion_adaptive(self.ri, self, nintegrate=nintegrate)
+        elif mode == "fixed_diff_last":
+            ei,self.q["f"] = mathtools.eddington_inversion_diff_last(self.ri, self.q["rho"], self.q["phi"])
+        else:
+            raise ValueError("Unknown Mode")
+        
         self.phasespace_initialized = True
-        self.pss = phasespace.IsotropicPhaseSpaceSolver(self, rmin=self.scale("rmin"), rmax=self.scale("rmax"), rnorm=self.r0(), rbins=self.scale("pss_rbins"), nbinsE=self.scale("pss_ebins"), dlog_emin=np.log10(1+self.scale("pss_e_analytic_low")),  sample_profile_f=False)
 
     def f_of_e(self, energy):
         if not self.phasespace_initialized:
             self._initialize_phasespace()
-            
-        f = self.pss.f_of_e(energy)*self.m_of_r(self.r0())
         
-        return f
+        return np.interp(energy, self.q["phi"], self.q["f"])
     
     def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None):
         """Sample particles' positions, velocities and masses consistent with the Numerical profile
