@@ -615,3 +615,64 @@ def sample_rimi_from_density(ri, rhoi, size=1, rmax=None, weights=None):
         msamp *= Mmax / np.sum(msamp) # normaliz
 
     return rsamp, msamp
+
+def integrate_fiso_cumulative_phi_e(ei, fi):
+    """Integrates a phase space distribution to obtain rho(phi, <E)
+    This is useful for sampling the distribution with particles
+
+    \\rho(\\phi, < E) = 4 \\pi \\int_\\phi^{E} f(E) \\sqrt{2E' - 2\\phi} \\text{\\quad}  dE'
+    """
+    rho_phi = np.zeros((len(ei), len(ei)), dtype=ei.dtype)
+    for i,phi in enumerate(ei):
+        integrand = fi * np.sqrt(np.clip(ei - phi, 0, None))  * (np.sqrt(2.)*4.*np.pi)
+        rho_phi[i] = trapez_integral_cumulative(ei, integrand)
+    
+    return rho_phi
+
+def sample_conditional_energy(phisamp, ei, fi, emaxsamp=None):
+    """Samples the energy, given that the particle is at a radius where the potential is phi
+    phisamp : potential energies of sampled particles
+    ei, fi: phase space distribution as function of energy
+    """
+    
+    rho_phi_e = integrate_fiso_cumulative_phi_e(ei, fi)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        Fcum = rho_phi_e / rho_phi_e[:,-2:-1]
+        print(np.nanmax(Fcum[Fcum < 1e10]))
+    Fsamp = np.random.uniform(0., 1., phisamp.shape)
+
+    itab = np.interp(phisamp, ei, np.arange(len(ei)))
+
+    esamp = np.zeros_like(phisamp)
+    for i in range(0, len(phisamp)):
+        #Fcum_sel = np.interp(phisamp, ei, Fcum) # select the correct row of our table
+        Fcum_sel = Fcum[itab[i].astype(int)]
+        esamp[i] = np.interp(Fsamp[i], Fcum_sel, ei) # do  the inversion sampling
+    
+    return esamp
+
+def sample_conditional_vr_L_isotropic(r, dE):
+    """Input: dE=E-phi(r)
+    Output: vr, L
+    """
+    vel= random_direction(dE.shape, 3) * np.sqrt(2.*dE)[...,np.newaxis]
+    # assume r = x-axis
+    vr = vel[...,0]
+
+    L = np.linalg.norm([0.*r, -r * vel[...,2], r * vel[...,1]], axis=0)
+
+    return vr, L
+
+def integrate_radial_orbits(acc_func, r, vr, L, t, nsteps=1000):
+    # Hamiltonian = phi(r) + 0.5 vr**2 + 0.5 L**2 / r**2
+    # dvr/dt = -dphi/dr - L**2 / r**3
+    
+    dt = t/nsteps
+
+    for i in range(nsteps):    
+        # Drift Kick Drift Integrator
+        r = r + vr*dt*0.5
+        vr = vr + (acc_func(r) + L**2/r**3) * dt
+        r = r + vr*dt*0.5
+
+    return r, vr
