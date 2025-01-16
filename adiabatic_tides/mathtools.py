@@ -709,3 +709,14 @@ def integrate_radial_orbits_with_snaps(acc_func, r, vr, L, t, nsnaps=10, nsteps_
     for i in range(0, nsnaps):
         r, vr = integrate_radial_orbits(acc_func, r, vr, L, t/nsnaps, nsteps=nsteps_per_snap)
         yield r, vr
+
+def integrate_to_density_of_states(ri, phii, rmax=np.infty):
+    """Calculates the density of states
+    See Binney and Tremaine (4.56)
+    """
+    gE = np.zeros_like(ri)
+    for i,phi in enumerate(phii):
+        integrand = np.sqrt(np.clip(phi - phii, 0, None)) * ri**2 * (ri < rmax)
+        gE[i] = trapezoid(integrand, ri) * (4.*np.pi)**2 * np.sqrt(2.)
+        
+    return gE

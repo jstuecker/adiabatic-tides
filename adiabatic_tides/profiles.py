@@ -1600,6 +1600,8 @@ class NumericalProfile(RadialProfile):
         else:
             raise ValueError("Unknown Mode")
         
+        self.q["g"] = mathtools.integrate_to_density_of_states(self.ri, self.q["phi"])
+        
         self.phasespace_initialized = True
 
     def f_of_e(self, energy):
@@ -1607,6 +1609,16 @@ class NumericalProfile(RadialProfile):
             self._initialize_phasespace()
         
         return np.interp(energy, self.q["phi"], self.q["f"])
+    
+    def g_of_e(self, energy):
+        """Density of states"""
+        if not self.phasespace_initialized:
+            self._initialize_phasespace()
+        
+        return np.interp(energy, self.q["phi"], self.q["g"])
+    
+    def n_of_e(self, energy):
+        return self.g_of_e(energy) * self.f_of_e(energy)
     
     def sample_r_E_L_vr_m(self, size, weight_func=None, rmax=None, nintegrate=1000):
         if not self.phasespace_initialized:
