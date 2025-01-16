@@ -634,11 +634,11 @@ def sample_conditional_energy(phisamp, ei, fi, emaxsamp=None):
     phisamp : potential energies of sampled particles
     ei, fi: phase space distribution as function of energy
     """
+    print("Warning this method is deprecated, use adaptive one!")
     
     rho_phi_e = integrate_fiso_cumulative_phi_e(ei, fi)
     with np.errstate(divide='ignore', invalid='ignore'):
-        Fcum = rho_phi_e / rho_phi_e[:,-2:-1]
-        print(np.nanmax(Fcum[Fcum < 1e10]))
+        Fcum = rho_phi_e / rho_phi_e[:,-1:]
     Fsamp = np.random.uniform(0., 1., phisamp.shape)
 
     itab = np.interp(phisamp, ei, np.arange(len(ei)))
@@ -646,10 +646,38 @@ def sample_conditional_energy(phisamp, ei, fi, emaxsamp=None):
     esamp = np.zeros_like(phisamp)
     for i in range(0, len(phisamp)):
         #Fcum_sel = np.interp(phisamp, ei, Fcum) # select the correct row of our table
+        #i0 = np.floor(itab[i]).astype(int)
+        #di = itab[i] - i0
         Fcum_sel = Fcum[itab[i].astype(int)]
+        #Fcum_sel = Fcum[i0] * (1-di) + Fcum[i0+1] * di
         esamp[i] = np.interp(Fsamp[i], Fcum_sel, ei) # do  the inversion sampling
     
     return esamp
+
+def sample_conditional_energy_adaptive(phisamp, f_of_e, emax=None, nintegrate=1000):
+    """Samples the energy, given that the particle is at a radius where the potential is phi
+    phisamp : potential energies of sampled particles
+    ei, fi: phase space distribution as function of energy
+    """
+
+    assert np.min(phisamp) > 0, "Please normalize potential to zero at zero"
+    
+    Fsamp = np.random.uniform(0., 1., phisamp.shape)
+
+    if emax is None:
+        emax = np.max(phisamp)*1e3
+
+    Esamp = np.zeros_like(phisamp)
+    for i,phi in enumerate(phisamp):
+        eeval = phi * cosh_space(emax/phi, nintegrate, 2)
+        assert ~np.isnan(np.max(eeval))
+        
+        integrand = f_of_e(eeval) * np.sqrt(np.clip(eeval - phi, 0, None)) 
+        fcum = trapez_integral_cumulative(eeval, integrand)
+
+        Esamp[i] = np.interp(Fsamp[i], fcum/fcum[-1], eeval)
+    
+    return Esamp
 
 def sample_conditional_vr_L_isotropic(r, dE):
     """Input: dE=E-phi(r)
@@ -676,3 +704,8 @@ def integrate_radial_orbits(acc_func, r, vr, L, t, nsteps=1000):
         r = r + vr*dt*0.5
 
     return r, vr
+
+def integrate_radial_orbits_with_snaps(acc_func, r, vr, L, t, nsnaps=10, nsteps_per_snap=100):
+    for i in range(0, nsnaps):
+        r, vr = integrate_radial_orbits(acc_func, r, vr, L, t/nsnaps, nsteps=nsteps_per_snap)
+        yield r, vr

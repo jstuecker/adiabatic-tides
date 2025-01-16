@@ -1608,6 +1608,23 @@ class NumericalProfile(RadialProfile):
         
         return np.interp(energy, self.q["phi"], self.q["f"])
     
+    def sample_r_E_L_vr_m(self, size, weight_func=None, rmax=None, nintegrate=1000):
+        if not self.phasespace_initialized:
+            self._initialize_phasespace()
+
+        if weight_func is None:
+            weights = None
+        else:
+            weights = weight_func(self.ri)
+            
+        rs,ms = mathtools.sample_rimi_from_density(self.ri, self.q["rho"], size, weights=weights, rmax=rmax)
+        phis = self.potential(rs)
+        Es = mathtools.sample_conditional_energy_adaptive(phis, self.f_of_e, emax=np.max(self.q["phi"]), nintegrate=nintegrate)
+        assert np.all(Es >= phis), "Energy should never be smaller than potential"
+        vrs, Ls = mathtools.sample_conditional_vr_L_isotropic(rs, Es - phis)
+        
+        return rs, Es, Ls, vrs, ms
+    
     def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None):
         """Sample particles' positions, velocities and masses consistent with the Numerical profile
         for more info see PhaseSpaceSolver.sample_particles"""
