@@ -703,6 +703,35 @@ def sample_conditional_energy_adaptive(phisamp, f_of_e, emax=None, nintegrate=10
     
     return Esamp
 
+def sample_conditional_energy_perisplit_adaptive(rsamp, pot, f_of_e, rp1=0, rp2=np.infty, nintegrate=1000, rmaxfac=1e10):
+    """Samples the energy, given that the particle is at a radius where the potential is phi
+    but limits to orbits which have pericenters in rp1 < rp < rp2
+    phisamp : potential energies of sampled particles
+    ei, fi: phase space distribution as function of energy
+    """
+    Fsamp = np.random.uniform(0., 1., rsamp.shape)
+
+    phip1, phip2 = pot(rp1), pot(rp2)
+
+    rfacs = cosh_space(rmaxfac, nintegrate, 2)
+
+    Esamp = np.zeros_like(rsamp)
+    for i,r in enumerate(rsamp):
+        reval = r * rfacs
+
+        phi, eeval = pot(r), pot(reval)
+
+        q1 = np.clip(eeval - phi - np.clip(eeval - phip1, 0, None) * (rp1**2 / r**2), 0, None) * (r >= rp1)
+        q2 = np.clip(eeval - phi - np.clip(eeval - phip2, 0, None) * (rp2**2 / r**2), 0, None) * (r >= rp2)
+        q2 = np.nan_to_num(q2, 0)
+        integrand = f_of_e(eeval) * (np.sqrt(q1) - np.nan_to_num(np.sqrt(q2),0))
+
+        fcum = trapez_integral_cumulative(eeval, integrand)
+
+        Esamp[i] = np.interp(Fsamp[i], fcum/fcum[-1], eeval)
+    
+    return Esamp
+
 def vectorized_interp(x, xi, yi):
     """Like a np.interp that broadcasts along first axis for x,xi and yi"""
     i1 = np.argmax(xi > x[:,np.newaxis], axis=-1)
