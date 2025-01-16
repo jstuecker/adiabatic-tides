@@ -100,9 +100,9 @@ def trapez_integral_cumulative(xi, fi):
     returns: the integral between (xi[0] and xi[:]). Starts with 0 at index 0.
          Shape (Nbins,...)"""
     
-    Ii = np.cumsum(0.5 * (fi[1:] + fi[:-1]) * (xi[1:] - xi[:-1]))
+    Ii = np.cumsum(0.5 * (fi[...,1:] + fi[...,:-1]) * (xi[...,1:] - xi[...,:-1]), axis=-1)
     
-    return np.concatenate([[0.], Ii])
+    return np.insert(Ii, 0, 0, axis=-1)
 
 def trapez_integral_lastax(xi, fi):
     """Calculates the integral of a function using the trapez-rule over the last axis
@@ -676,6 +676,54 @@ def sample_conditional_energy_adaptive(phisamp, f_of_e, emax=None, nintegrate=10
         fcum = trapez_integral_cumulative(eeval, integrand)
 
         Esamp[i] = np.interp(Fsamp[i], fcum/fcum[-1], eeval)
+    
+    return Esamp
+
+def vectorized_interp(x, xi, yi):
+    """Like a np.interp that broadcasts along first axis for x,xi and yi"""
+    i1 = np.argmax(xi > x[:,np.newaxis], axis=-1)
+    ar = np.arange(0, len(xi))
+
+    i0 = np.clip(i1-1, 0, xi.shape[1]-1)
+    i1 = np.clip(i1, 0, xi.shape[1]-1)
+
+    x0, y0 = xi[(ar,i0)], yi[(ar,i0)]
+    x1, y1 = xi[(ar,i1)], yi[(ar,i1)]
+
+    eps = 1e-30
+    dx = np.clip(x1 - x0, eps, None)
+
+    return y0 + (y1 - y0) * (x - x0) / dx
+
+def sample_conditional_energy_adaptive_batched(phisamp, f_of_e, emax=None, nintegrate=1000, batchsize=500):
+    """Samples the energy, given that the particle is at a radius where the potential is phi
+    phisamp : potential energies of sampled particles
+    ei, fi: phase space distribution as function of energy
+    """
+
+    assert np.min(phisamp) > 0, "Please normalize potential to zero at zero"
+    
+    Fsamp = np.random.uniform(0., 1., phisamp.shape)
+
+    if emax is None:
+        emax = np.max(phisamp)*1e3
+
+    facspace = cosh_space(emax/np.min(phisamp), nintegrate, 2)
+
+    Esamp = np.zeros_like(phisamp)
+
+    nlow = np.arange(0, len(phisamp), batchsize)
+    nup = np.clip(nlow + batchsize, 0, len(phisamp))
+
+    for ilow,iup in zip(nlow, nup):
+        phi = phisamp[ilow:iup,np.newaxis]
+        eeval = phi * facspace
+        assert ~np.isnan(np.max(eeval))
+        
+        integrand = f_of_e(eeval) * np.sqrt(np.clip(eeval - phi, 0, None)) 
+        fcum = trapez_integral_cumulative(eeval, integrand)
+
+        Esamp[ilow:iup] = vectorized_interp(Fsamp[ilow:iup], fcum/fcum[:,-1:], eeval)
     
     return Esamp
 
