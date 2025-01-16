@@ -562,7 +562,7 @@ def integrate_f_to_density_adaptive(ei, profile, nintegrate=None):
         nintegrate = len(ei)
 
     rho_phi = np.zeros_like(ei)
-    for i,phi in enumerate(ei[:-1]):
+    for i,phi in enumerate(ei):
         eeval = phi * cosh_space(ei[-1]/phi, nintegrate, 2)
         assert ~np.isnan(np.max(eeval))
         
@@ -570,6 +570,30 @@ def integrate_f_to_density_adaptive(ei, profile, nintegrate=None):
         rho_phi[i] = trapezoid(integrand, eeval) * (np.sqrt(2.)*4.*np.pi)
     
     return rho_phi
+
+def integrate_f_to_density_perisplit_adaptive(ri, pot, f_of_e, rp1=0, rp2=np.infty, nintegrate=None, rmaxfac=1e10):
+    """Integrates a phase space distribution to obtain the density
+    but limits to orbits which have pericenters in rp1 < rp < rp2
+    """
+    if nintegrate is None:
+        nintegrate = len(ri)
+
+    phip1, phip2 = pot(rp1), pot(rp2)
+
+    rho = np.zeros_like(ri)
+    for i,r in enumerate(ri):
+        reval = r * cosh_space(rmaxfac, nintegrate, 2)
+        phi, eeval = pot(r), pot(reval)
+
+        q1 = np.clip(eeval - phi - np.clip(eeval - phip1, 0, None) * (rp1**2 / r**2), 0, None) * (r >= rp1)
+        q2 = np.clip(eeval - phi - np.clip(eeval - phip2, 0, None) * (rp2**2 / r**2), 0, None) * (r >= rp2)
+        q2 = np.nan_to_num(q2, 0)
+
+        integrand = f_of_e(eeval) * (np.sqrt(q1) - np.nan_to_num(np.sqrt(q2),0))
+        
+        rho[i] = trapezoid(integrand, eeval) * (np.sqrt(2.)*4.*np.pi)
+    
+    return rho
 
 def sample_from_Finv(Finv, size):
     Fs = np.random.uniform(0., 1., size)
