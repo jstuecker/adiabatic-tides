@@ -444,6 +444,7 @@ def solve_poisson(ri, rho, boundary="powerlaw", integration_mode="trapez", G=43.
         phi0 = 4.*np.pi * G * rhoc / ( (3. + alpha) * (2. + alpha) ) * ri[0]**(2.+alpha)
     elif boundary == "constant":
         m0 = 4.*np.pi/3. * rho[0] * ri[0]**3
+        phi0 = 0.
     else:
         raise ValueError("Unknown boundary mode %s" % boundary)
     
@@ -791,6 +792,36 @@ def sample_conditional_vr_L_isotropic(r, dE):
     L = np.linalg.norm([0.*r, -r * vel[...,2], r * vel[...,1]], axis=0)
 
     return vr, L
+
+def sample_conditional_L_vr_perisplit(r, E, pot, rp1, rp2):
+    """Samples angular momenta for a given (r,E) and
+    assuming that the peri center has to be in the range (rp1, rp2)
+    """
+    Fsamp = np.random.uniform(0., 1., r.shape)
+
+    phip1, phip2 = pot(rp1), pot(rp2)
+    phi = pot(r)
+
+    assert np.all(E >= phi)
+    assert np.all(r >= rp1), "Your input radii are not quite consistent. Maybe a numerical error from radial bins not lining up with peri center radii?"
+
+    def Fu(L2): # Parent function of ang-mom distr. (for isotropic systems)
+        return -np.sqrt(np.clip(2.*(E - phi) - L2/r**2,0,None))
+    
+    Lmin2 = np.clip(2.*(E - phip1) * rp1**2, 0, None)
+    Lmax2 = 2.*(E - phi) * r**2
+    Lmaxb2 = 2.*(E - phip2) * rp2**2
+    Lmax2[r >= rp2] = Lmaxb2[r >= rp2]
+
+    # Cumulative Function is F = (Fu(L) - Fu(Lmin))/(Fu(Lmax) - Fu(Lmin))
+    # Invert this
+    FuL = Fsamp * (Fu(Lmax2) - Fu(Lmin2)) + Fu(Lmin2)
+    L2 = (2. * (E-phi) - FuL**2) * r**2
+
+    vr = np.sqrt(np.clip(2.*(E - phi) - L2/r**2,0,None))
+    vr = vr * np.sign(np.random.uniform(-1,1, r.shape))
+
+    return np.sqrt(L2), vr
 
 def integrate_radial_orbits(acc_func, r, vr, L, t, nsteps=1000):
     # Hamiltonian = phi(r) + 0.5 vr**2 + 0.5 L**2 / r**2

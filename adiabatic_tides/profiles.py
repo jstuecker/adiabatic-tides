@@ -1637,6 +1637,32 @@ class NumericalProfile(RadialProfile):
         
         return rs, Es, Ls, vrs, ms
     
+    def sample_r_E_L_vr_m_perisplit(self, size_per_split, rpsplits=(0,np.infty), nintegrate=1000, flat=True):
+        assert len(rpsplits) >= 2, "Need at least two split points to define one population"
+
+        def sample_perisplit(rp1,rp2):
+            # Make sure the lowest peri-center is contained so we don't get particles at r<rp1 due to interpolation errors
+            ri =  np.insert(self.ri[self.ri > rp1], 0, rp1)
+
+            rhops = mathtools.integrate_f_to_density_perisplit_adaptive(ri, self.potential, self.f_of_e, rp1, rp2, nintegrate=nintegrate)
+            rs,ms = mathtools.sample_rimi_from_density(ri, rhops, size_per_split)
+            es = mathtools.sample_conditional_energy_perisplit_adaptive(rs, self.potential, self.f_of_e, rp1, rp2)
+            Ls, vrs = mathtools.sample_conditional_L_vr_perisplit(rs, es, self.potential, rp1, rp2)
+
+            return rs, es, Ls, vrs, ms
+        
+        nsplits = len(rpsplits)-1
+        shape = (nsplits, size_per_split)
+        rs, es, ls, vrs, ms = np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape)
+
+        for i in range(nsplits):
+            rs[i], es[i], ls[i], vrs[i], ms[i] = sample_perisplit(rpsplits[i], rpsplits[i+1])
+
+        if flat:
+            return rs.flatten(), es.flatten(), ls.flatten(), vrs.flatten(), ms.flatten()
+        else:
+            return rs, es, ls, vrs, ms
+
     def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None):
         """Sample particles' positions, velocities and masses consistent with the Numerical profile
         for more info see PhaseSpaceSolver.sample_particles"""
