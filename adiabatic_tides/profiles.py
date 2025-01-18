@@ -1502,6 +1502,11 @@ class NumericalProfile(RadialProfile):
         self.base_radius = r0
 
         self.boundary = boundary
+
+        # offset for non-diverging interpolation at 0
+        self.q["roff"] = np.min(ri)
+        if self.q["roff"] == 0:
+            self.q["roff"] = np.min(ri[1:] - ri[:-1])
         
         self.set_density_profile(ri, rhoi)
             
@@ -1523,7 +1528,7 @@ class NumericalProfile(RadialProfile):
 
     def self_density(self, r):
         """Density in Msol/Mpc**3"""
-        return np.interp(np.log10(r), np.log10(self.ri), self.q["rho"])
+        return np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["rho"])
         
     def density(self, r):
         """Density in Msol/Mpc**3"""
@@ -1531,7 +1536,7 @@ class NumericalProfile(RadialProfile):
     
     def self_m_of_r(self, r):
         """The mass contained inside radius r"""
-        return np.interp(np.log10(r), np.log10(self.ri), self.q["mofr"])
+        return np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["mofr"])
     
     def m_of_r(self, r):
         """The mass contained inside radius r"""
@@ -1543,7 +1548,7 @@ class NumericalProfile(RadialProfile):
     def self_potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
         assert not zero_at_zero, "mode not implemented"
-        dphi = np.interp(np.log10(r), np.log10(self.ri), self.q["phi"])
+        dphi = np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["phi"])
         if self.ancorphi == "rmax":
             return dphi - self.q["phi"][-1]
         else: # ancored at 0

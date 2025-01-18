@@ -581,17 +581,19 @@ def integrate_f_to_density_perisplit_adaptive(ri, pot, f_of_e, rp1=0, rp2=np.inf
 
     phip1, phip2 = pot(rp1), pot(rp2)
 
+    assert not np.isnan(phip1)
+
     rho = np.zeros_like(ri)
     for i,r in enumerate(ri):
         reval = r * cosh_space(rmaxfac, nintegrate, 2)
         phi, eeval = pot(r), pot(reval)
 
-        q1 = np.clip(eeval - phi - np.clip(eeval - phip1, 0, None) * (rp1**2 / r**2), 0, None) * (r >= rp1)
-        q2 = np.clip(eeval - phi - np.clip(eeval - phip2, 0, None) * (rp2**2 / r**2), 0, None) * (r >= rp2)
-        q2 = np.nan_to_num(q2, 0)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            q1 = np.clip(eeval - phi - np.clip(eeval - phip1, 0, None) * (rp1**2 / r**2), 0, None) * (r >= rp1)
+            q2 = np.clip(eeval - phi - np.clip(eeval - phip2, 0, None) * (rp2**2 / r**2), 0, None) * (r >= rp2)
 
-        integrand = f_of_e(eeval) * (np.sqrt(q1) - np.nan_to_num(np.sqrt(q2),0))
-        
+            integrand = f_of_e(eeval) * (np.nan_to_num(np.sqrt(q1),0) - np.nan_to_num(np.sqrt(q2),0))
+
         rho[i] = trapezoid(integrand, eeval) * (np.sqrt(2.)*4.*np.pi)
     
     return rho
