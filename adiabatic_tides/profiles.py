@@ -1466,6 +1466,37 @@ class IsothermalSphere(RadialProfile):
 
         return self.v0**2 /r**2
 
+class PlummerProfile(RadialProfile):
+    def __init__(self, M=1, a=1):
+        """Set up a Plummer profile
+        """
+        super().__init__()
+        
+        self.M = M
+        self.a = a
+
+        self.phi0 = - self.G * self.M / self.a
+
+    def density(self, r):
+        return 3*self.M/(4*np.pi) * (1 + (r/self.a)**2)**-2.5
+    
+    def m_of_r(self, r):
+        return r**3 / (r**2 + self.a**2)**1.5 * self.M
+
+    def potential(self, r, zero_at_zero=False):
+        phi = - self.G * self.M / np.sqrt(r**2 + self.a**2)
+        if zero_at_zero:
+            phi -= self.phi0
+            # At small radii put expansion to avoid cancelation erros
+            sel = r < 1e-4*self.a
+            phi[sel] = 1.5 * self.G * self.M * r[sel]**2 / self.a**3
+        return phi
+    
+    def r0(self):
+        return self.a
+
+    def f_of_e(self, E):
+        return 24.* np.sqrt(2.) / (7. * np.pi**3) * self.a**2 / (self.G**5 * self.M**4) * (-E)**3.5
 
 class NumericalProfile(RadialProfile):
     def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw"):
@@ -1519,6 +1550,12 @@ class NumericalProfile(RadialProfile):
                  be "True" unless you know what you are doing
         """
         self.ri = ri
+
+        assert np.all(rhoi > 0), "Density profile has to be positive"
+        assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic"
+        rdiffmin = np.min(0.5*(rhoi[:-1] - rhoi[1:])/(rhoi[1:] + rhoi[:-1]))
+        assert rdiffmin > 1e-10, "Consecutive densities are too close (%.1e) this will lead to cancelation errors... use fewer points in constant density regions" % rdiffmin
+
         self.q["rho"] = rhoi
 
         self.q["mofr"], self.q["phi"] = mathtools.solve_poisson(ri, rhoi, boundary=self.boundary, integration_mode=integration_mode)

@@ -428,7 +428,8 @@ def solve_poisson(ri, rho, boundary="powerlaw", integration_mode="trapez", G=43.
         
     ri : radius sampling points
     rhoi : densities
-    boundary : How to handle radii r < min(ri). Can be "constant" or "powerlaw"
+    boundary : How to handle radii r < min(ri) if min(ri) > 0. 
+                Can be "constant" or "powerlaw"
                 For the powerlaw case a powerlaw profile is fitted based on the
                 two smallest radii. This is the recommended mode if applicable.
     integration_mode : don't change for now
@@ -436,12 +437,17 @@ def solve_poisson(ri, rho, boundary="powerlaw", integration_mode="trapez", G=43.
 
     assert np.all(ri[1:] > ri[:-1])
 
-    if boundary == "powerlaw":
+    if ri[0] == 0.:
+        m0 = phi0 = 0.
+    elif boundary == "powerlaw":
         rhoc, alpha = fit_powerlaw(ri[0], ri[1], rho[0], rho[1])
+        # See profiles.PowerlawProfile for seeing the powerlaw normalization
         
-        # See profiles.PowerlawProfile for understanding this
         m0 = 4.*np.pi * rhoc  / (3. + alpha) * ri[0]**(3.+alpha)
-        phi0 = 4.*np.pi * G * rhoc / ( (3. + alpha) * (2. + alpha) ) * ri[0]**(2.+alpha)
+        if alpha > -2:
+            phi0 = 4.*np.pi * G * rhoc / ( (3. + alpha) * (2. + alpha) ) * ri[0]**(2.+alpha)
+        else:
+            raise ValueError("Potential is not normalizable at 0 consider using boundary=constant (inner slope %.2f)" % alpha)
     elif boundary == "constant":
         m0 = 4.*np.pi/3. * rho[0] * ri[0]**3
         phi0 = 0.
@@ -450,7 +456,8 @@ def solve_poisson(ri, rho, boundary="powerlaw", integration_mode="trapez", G=43.
     
     if integration_mode == "trapez":
         m = m0 + trapez_integral_cumulative(ri, 4.*np.pi*rho*ri**2)
-        phi = phi0 + trapez_integral_cumulative(ri, G * m / ri**2)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            phi = phi0 + trapez_integral_cumulative(ri, np.nan_to_num(G * m / ri**2, 0))
     elif integration_mode == "powerlaw_trapez":
         m = m0 + powerlaw_trapez_integral_cumulative(ri, 4.*np.pi*rho*ri**2)
         phi = phi0 + powerlaw_trapez_integral_cumulative(ri, G * m / ri**2)
