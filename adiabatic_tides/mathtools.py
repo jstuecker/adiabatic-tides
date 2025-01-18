@@ -418,6 +418,50 @@ def second_deriv(f, x):
 
     return fderiv2
 
+def second_deriv_avoid_cancelation(f, x, degree=1e-10):
+    """Second order second derivative"""
+    il = np.arange(0, len(x)-2)
+    ic = np.arange(1, len(x)-1)
+    ir = np.arange(2, len(x))
+
+    def cancelation_degree():
+        h1, h2 = x[ic] - x[il], x[ir] - x[ic]
+        f2d = 2*(f[il]*h2 + f[ir]*h1 - f[ic]*(h1+h2)) / (h1+h2)
+        return np.abs(f2d)/(f[ic])
+        #return np.abs(f[il] - 2*f[ic] + f[ir])/(np.abs(f[il]) + 2.*np.abs(f[ic]) + np.abs(f[ir]))
+
+    for i in range(0, len(x)//2):
+        sel = cancelation_degree() < degree
+        print(i, np.sum(sel))
+        if np.sum(sel) == 0:
+            break
+
+        ir[sel] = ir[sel]+1
+        il[sel] = il[sel]-1
+
+        iadd = np.zeros_like(il)
+
+        # hit a boundary, shift everything 1 extra
+        iadd[il < 0] = 1
+        iadd[ir >= len(x)] = -1
+
+        ir = ir + iadd
+        il = il + iadd
+        ic = ic + iadd
+        
+        if (i == len(x)//2 - 1):
+            raise ValueError("Could not find a non-canceling neighbor")
+
+    h1, h2 = x[ic] - x[il], x[ir] - x[ic]
+
+    fderiv2 = np.zeros_like(f)
+    fderiv2[1:-1] = 2*(f[il]*h2 + f[ir]*h1 - f[ic]*(h1+h2)) / (h1*h2*(h1+h2))
+    
+    fderiv2[0] = fderiv2[1]
+    fderiv2[-1] = fderiv2[-2]
+
+    return fderiv2
+
 def fit_powerlaw(x1,x2,y1,y2):
     slope = (np.log(y2) - np.log(y1)) / (np.log(x2) - np.log(x1))
     amp = y2 / x2**slope
@@ -486,7 +530,7 @@ def eddington_inversion(ri, rho, phi=None, integrator=None):
     if phi is None:
         m, phi = solve_poisson(ri, rho)
 
-    d2rhodphi2 = second_deriv(rho, phi)
+    d2rhodphi2 = second_deriv_avoid_cancelation(rho, phi)
 
     integrand = d2rhodphi2 * (2/(np.sqrt(8.) * np.pi**2))
 
@@ -507,7 +551,7 @@ def eddington_inversion_adaptive(ri, prof, integrator=None, nintegrate=None):
         nintegrate = len(ri)
     rho, phi = prof.density(ri), prof.potential(ri)
 
-    d2rhodphi2 = second_deriv(rho, phi)
+    d2rhodphi2 = second_deriv_avoid_cancelation(rho, phi)
 
     spl_d2rhodphi2 = CubicSpline(ri, d2rhodphi2)
 

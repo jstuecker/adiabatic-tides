@@ -1554,7 +1554,8 @@ class NumericalProfile(RadialProfile):
         assert np.all(rhoi > 0), "Density profile has to be positive"
         assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic"
         rdiffmin = np.min(0.5*(rhoi[:-1] - rhoi[1:])/(rhoi[1:] + rhoi[:-1]))
-        assert rdiffmin > 1e-10, "Consecutive densities are too close (%.1e) this will lead to cancelation errors... use fewer points in constant density regions" % rdiffmin
+        if rdiffmin < 1e-10:
+            print("Warning: I found that some consecutive points have only a relative difference of %.1e in density. This may lead to cancelation. I'll do my best to deal with this, but no warranties!" % rdiffmin)
 
         self.q["rho"] = rhoi
 
