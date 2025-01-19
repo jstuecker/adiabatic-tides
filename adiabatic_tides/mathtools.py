@@ -73,6 +73,12 @@ def get_mass_profile(ri, mi, rbins):
     vbins = 4./3.*np.pi*(rbins[1:]**3 - rbins[:-1]**3)
     m,_ = np.histogram(ri, bins=rbins, weights=mi)
 
+    # Estimate the error in the mass profile that results
+    # from the numpy histogram being based on a cumulative sum
+    rel_inc = np.min(np.clip(m,np.min(mi),None)/np.cumsum(m))
+    if rel_inc <= 1e-13:
+        print("Warning: I expect cancellation in the mass-profile calculation, worst mass ratio = %.2e" % (rel_inc))
+
     rho = m / vbins
     mprof = np.concatenate([[0.], np.cumsum(m)])
 
