@@ -75,7 +75,8 @@ def get_mass_profile(ri, mi, rbins):
 
     # Estimate the error in the mass profile that results
     # from the numpy histogram being based on a cumulative sum
-    rel_inc = np.min(np.clip(m,np.min(mi),None)/np.cumsum(m))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rel_inc = np.nanmin(np.clip(m,np.min(mi),None)/np.cumsum(m))
     if rel_inc <= 1e-13:
         print("Warning: I expect cancellation in the mass-profile calculation, worst mass ratio = %.2e" % (rel_inc))
 
@@ -432,9 +433,9 @@ def second_deriv_avoid_cancelation(f, x, degree=1e-10):
 
     def cancelation_degree():
         h1, h2 = x[ic] - x[il], x[ir] - x[ic]
-        f2d = 2*(f[il]*h2 + f[ir]*h1 - f[ic]*(h1+h2)) / (h1+h2)
-        return np.abs(f2d)/(f[ic])
-        #return np.abs(f[il] - 2*f[ic] + f[ir])/(np.abs(f[il]) + 2.*np.abs(f[ic]) + np.abs(f[ir]))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            f2d = 2*(f[il]*h2 + f[ir]*h1 - f[ic]*(h1+h2)) / (h1+h2)
+        return np.nanmin((np.abs(f2d)/(f[ic]), np.abs((h1+h2)/np.abs(x[ic]))), axis=0)
 
     for i in range(0, len(x)//2):
         sel = cancelation_degree() < degree
@@ -597,6 +598,35 @@ def eddington_inversion_diff_last(ri, rho, phi=None, integrator=None):
         fparent[i] = integrator(integrand, x=t)
 
     return phi, -np.gradient(fparent, phi, edge_order=1)
+
+def anisotropic_inversion(ri, rho, phi=None, beta=0.):
+    """Assuming a profile with constant anisotropy beta, calculates f1(E)
+    assuming that f(E,L) = f1(E) * L**(-2beta)
+    
+    phi : potential -- if not provided a simple Poisson solver is used
+          assuming that the distribution rho generates the potential
+    """
+    if phi is None:
+        m, phi = solve_poisson(ri, rho)
+
+    rho_rbeta2 = rho * ri**(2*beta)
+
+    d2rb2 = second_deriv_avoid_cancelation(rho_rbeta2, phi)
+
+    integrand = d2rb2
+
+    f = np.zeros_like(phi)
+    for i,E in enumerate(phi):
+        t = (np.clip(phi - E, 0, None))**(beta + 0.5)
+        f[i] = trapezoid(integrand, x=t)
+
+    from scipy.special import gamma
+
+    Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
+    fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
+    fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) * (0.5 + beta)
+
+    return phi, f*fac
 
 def integrate_f_to_density(ei, fi):
     """Integrates a phase space distribution to obtain rho(phi)

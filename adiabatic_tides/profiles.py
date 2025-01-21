@@ -1433,6 +1433,89 @@ class PowerlawProfile(RadialProfile):
         d["rhoc"] = self.rhoc
         
         return d
+    
+class AnisotropicPowerlawProfile(RadialProfile):
+    def __init__(self, alpha=None, beta=0., gamma=None, rhoc=1.):
+        """
+        Initialize a powerlaw profile with the given parameters.
+
+        density profile: rho = rhoc * r**(-alpha)
+        phase space profile: f(E,L) ~ E**-gamma L**-beta
+
+        free variables: either alpha or gamma, and beta
+        """
+        super().__init__()
+        
+        def gamma_of_alpha_beta(alpha, beta=0.):
+            return (3 - 0.5*alpha - 4.*beta + alpha*beta)/(2. - alpha)
+
+        def alpha_of_gamma_beta(gamma, beta=0.):
+            return (2.*gamma + 4*beta - 3.)/(gamma + beta - 0.5)
+
+        if alpha is None and gamma is None:
+            raise ValueError("Please provide either alpha or gamma")
+
+        if alpha is None:
+            alpha = alpha_of_gamma_beta(gamma, beta)
+        elif gamma is None:
+            assert beta < alpha/2.
+            gamma = gamma_of_alpha_beta(alpha, beta)
+        else:
+            raise ValueError("Please provide either alpha or gamma, not both")
+        
+        #print(f"alpha={alpha}, beta={beta}, gamma={gamma}")
+
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+
+        # Normalization constants:
+        self.rhoc = rhoc
+        self.phic = 4.*np.pi * self.G * self.rhoc / ( (3. - self.alpha) * (2. - self.alpha)  )
+
+        from scipy.special import gamma as GammaF
+
+        Cby = 2**(1.5 - beta) * np.pi**1.5 * GammaF(1. - beta) * GammaF(gamma + beta - 1.5) / GammaF(gamma)
+        
+        self.fc = self.rhoc / Cby / self.phic**(-gamma-beta+1.5)
+
+
+    def density(self, r):
+        return self.rhoc*r**(-self.alpha)
+    
+    def m_of_r(self, r):
+        return 4.*np.pi * self.rhoc / (3. - self.alpha) * r**(3.-self.alpha)
+    
+    def potential(self, r, zero_at_zero=True):
+        assert self.alpha < 2., "Have to check normalization for this case"
+        
+        return self.phic * r**(2.-self.alpha)
+    
+    def f_of_el(self, e, l):
+        """Binney and Tremaine"""
+        return self.fc * e**-self.gamma * l**(-2.*self.beta)
+    
+    def r0(self):
+        return 1.0
+    
+    
+    def _initialize_numerical_scales(self):
+        super()._initialize_numerical_scales()
+
+        self._sc["rmin"] = 1e-12
+        self._sc["rperimin"] = 1e-12
+
+    def to_string(self):
+        return "alpha=%.3f_beta=%.5e_rhoc=%.5e" % (self.alpha, self.beta, self.rhoc)
+    
+    def to_dict(self):
+        d = {}
+        
+        d["alpha"] = self.alpha
+        d["beta"] = self.beta
+        d["rhoc"] = self.rhoc
+        
+        return d
 
     
 class IsothermalSphere(RadialProfile):
