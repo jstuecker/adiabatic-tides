@@ -40,3 +40,11 @@ def integrate_exp_0_inf(f, N=100, xscale=1.):
     dxdt = x
     
     return np.trapz(f(x)*dxdt, t, axis=-1)
+
+def integrate_adaptive(f, a, b, N=100, method="exp"):
+    if np.all(a==0) and np.all(b==np.infty):
+        return integrate_exp_0_inf(f, N)
+    elif np.all(a <= np.infty) & np.all(b <= np.infty):
+        return integrate_tanh_a_b(f, a, b, N)
+    else:
+        raise ValueError("Not implemented: a={}, b={}".format(a,b))

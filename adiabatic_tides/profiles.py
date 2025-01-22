@@ -1721,8 +1721,6 @@ class NumericalProfile(RadialProfile):
             ei,self.q["f"] = mathtools.eddington_inversion(self.ri, self.q["rho"], self.q["phi"])
         elif mode == "adaptive":
             ei,self.q["f"] = mathtools.eddington_inversion_adaptive(self.ri, self, nintegrate=nintegrate)
-        elif mode == "adaptive_new":
-            ei,self.q["f"] = mathtools.eddington_inversion_adaptive_new(self.ri, self, nintegrate=nintegrate)
         elif mode == "fixed_diff_last":
             ei,self.q["f"] = mathtools.eddington_inversion_diff_last(self.ri, self.q["rho"], self.q["phi"])
         else:
@@ -1736,7 +1734,7 @@ class NumericalProfile(RadialProfile):
         if not self.phasespace_initialized:
             self._initialize_phasespace()
         
-        return np.interp(energy, self.q["phi"], self.q["f"])
+        return np.interp(energy, self.q["phi"], self.q["f"], right=0.)
     
     def g_of_e(self, energy):
         """Density of states"""

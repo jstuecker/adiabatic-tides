@@ -547,31 +547,7 @@ def eddington_inversion(ri, rho, phi=None, integrator=None):
         f[i] = integrator(integrand, x=t)
     return phi, f
 
-def eddington_inversion_adaptive(ri, prof, integrator=None, nintegrate=None):
-    """Does the Eddington inversion for discrete energies ei=phi(ri), but using
-       adaptively spaced integration points.
-       nintegrate: number of integration steps. Defaults to len(ri)
-    """
-    if integrator is None:
-        integrator = trapezoid
-    if nintegrate is None:
-        nintegrate = len(ri)
-    rho, phi = prof.density(ri), prof.potential(ri)
-
-    d2rhodphi2 = second_deriv_avoid_cancelation(rho, phi)
-
-    spl_d2rhodphi2 = CubicSpline(ri, d2rhodphi2)
-
-    f = np.zeros_like(phi)
-    for i,E in enumerate(phi[:-1]):
-        rev = ri[i] * cosh_space(ri[-1]/ri[i], nintegrate, pow=2)
-
-        t = np.sqrt(np.clip(prof.potential(rev) - E, 0, None))
-        f[i] = integrator(spl_d2rhodphi2(rev), x=t) * (2/(np.sqrt(8.) * np.pi**2))
-
-    return phi, f
-
-def eddington_inversion_adaptive_new(ri, prof, nintegrate=None):
+def eddington_inversion_adaptive(ri, prof, nintegrate=None):
     """Does the Eddington inversion for discrete energies ei=phi(ri), but using
        adaptively spaced integration points.
        nintegrate: number of integration steps. Defaults to len(ri)
@@ -662,25 +638,20 @@ def integrate_f_to_density(ei, fi):
     
     return rho_phi
 
-def integrate_f_to_density_adaptive(ei, profile, nintegrate=None):
+def integrate_f_to_density_adaptive(f_of_e, phi, nintegrate=200):
     """Integrates a phase space distribution to obtain rho(phi)
     See Binney and Tremaine (4.43)
     Chooses the evaluation points adaptively
     """
-    assert np.min(ei) > 0, "Please normalize potential to zero at zero"
+    assert np.min(phi) > 0, "Please normalize potential to zero at zero"
 
-    if nintegrate is None:
-        nintegrate = len(ei)
-
-    rho_phi = np.zeros_like(ei)
-    for i,phi in enumerate(ei):
-        eeval = phi * cosh_space(ei[-1]/phi, nintegrate, 2)
-        assert ~np.isnan(np.max(eeval))
-        
-        integrand = profile.f_of_e(eeval) * np.sqrt(np.clip(eeval - phi, 0, None)) 
-        rho_phi[i] = trapezoid(integrand, eeval) * (np.sqrt(2.)*4.*np.pi)
+    def integrand(de):
+        return f_of_e(phi[...,np.newaxis] + de) * np.sqrt(de)
     
-    return rho_phi
+    fphi = f_of_e(phi)
+    phiscale = np.interp(fphi*0.5, fphi[::-1], phi[::-1])
+    
+    return integrals.integrate_exp_0_inf(integrand, nintegrate, xscale=phiscale)* (np.sqrt(2.)*4.*np.pi)
 
 def integrate_f_to_density_perisplit_adaptive(ri, pot, f_of_e, rp1=0, rp2=np.infty, nintegrate=None, rmaxfac=1e10):
     """Integrates a phase space distribution to obtain the density
