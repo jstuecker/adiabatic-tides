@@ -964,3 +964,22 @@ def integrate_to_density_of_states(ri, phii, rmax=np.infty):
         gE[i] = trapezoid(integrand, ri) * (4.*np.pi)**2 * np.sqrt(2.)
         
     return gE
+
+def integrate_fofel_adaptive(f_of_el, phi, r, N=100):
+    r = np.array(r)
+
+    Escale = np.clip(phi(r*2.) - phi(r), 0, None)
+    def integrate_vl(f_of_el, phi, vr, r, N=100):
+        vlscale = np.clip(np.abs(vr), np.sqrt(Escale)[...,np.newaxis], None)
+        def integrand(vl):
+            E = (phi(r)[...,np.newaxis] + 0.5*vr**2)[...,np.newaxis] + 0.5*vl**2
+            L = vl*r[...,np.newaxis,np.newaxis]
+            return 2.*np.pi*vl * f_of_el(E, L)
+        return integrals.integrate_exp_0_inf(integrand, N=N, xscale=vlscale)
+    
+    def integrand(vr):
+        return integrate_vl(f_of_el, phi, vr, r, N=N)
+    
+    vrscale = np.sqrt(phi(r*2.) - phi(r))
+    
+    return 2.*integrals.integrate_exp_0_inf(integrand, N=N, xscale=vrscale)

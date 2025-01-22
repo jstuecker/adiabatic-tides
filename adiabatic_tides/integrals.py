@@ -27,14 +27,12 @@ def integrate_tanh_a_b(f, a, b, N=100):
     
     return np.trapz(f(x)*dxdt, t, axis=-1)
 
-def integrate_exp_0_inf(f, a, N=100, xscale=1.):
+def integrate_exp_0_inf(f, N=100, xscale=1.):
     """ Integrates f over the interval (a,inf) using a log/exp substitution.
     x = exp(t)
     dxdt = x
     """
     xscale = np.array(xscale)[...,np.newaxis]
-
-    a = np.array(a)[...,np.newaxis]
 
     h = np.pi/np.sqrt(2.*N)
     t = (np.arange(N)-N/2.)*h
