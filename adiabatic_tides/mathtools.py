@@ -2,6 +2,7 @@ import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline
 from scipy.integrate import simps, trapezoid
 from scipy.interpolate import CubicSpline
+from . import integrals
 
 def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
     """Returns the virial radius of a halo with a given virial mass
@@ -439,7 +440,6 @@ def second_deriv_avoid_cancelation(f, x, degree=1e-10):
 
     for i in range(0, len(x)//2):
         sel = cancelation_degree() < degree
-        print(i, np.sum(sel))
         if np.sum(sel) == 0:
             break
 
@@ -570,6 +570,29 @@ def eddington_inversion_adaptive(ri, prof, integrator=None, nintegrate=None):
         f[i] = integrator(spl_d2rhodphi2(rev), x=t) * (2/(np.sqrt(8.) * np.pi**2))
 
     return phi, f
+
+def eddington_inversion_adaptive_new(ri, prof, nintegrate=None):
+    """Does the Eddington inversion for discrete energies ei=phi(ri), but using
+       adaptively spaced integration points.
+       nintegrate: number of integration steps. Defaults to len(ri)
+    """
+    if nintegrate is None:
+        nintegrate = len(ri)
+    
+    rho, phi = prof.density(ri), prof.potential(ri)
+
+    d2rhodphi2 = second_deriv_avoid_cancelation(rho, phi)
+
+    spl_d2rhodphi2 = CubicSpline(phi, d2rhodphi2)
+
+    def integrand(v):
+        E = prof.potential(ri)[:,np.newaxis] + 0.5*v**2
+        return spl_d2rhodphi2(E) * (E <= phi[-1])
+    
+    vscale = prof.vcirc(ri)
+    I = integrals.integrate_exp_0_inf(integrand, nintegrate, xscale=vscale)
+
+    return phi, I / (2. * np.pi**2)
 
 def eddington_inversion_diff_last(ri, rho, phi=None, integrator=None):
     """Does the Eddington inversion at discrete energies ei=phi

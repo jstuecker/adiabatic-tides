@@ -1721,6 +1721,8 @@ class NumericalProfile(RadialProfile):
             ei,self.q["f"] = mathtools.eddington_inversion(self.ri, self.q["rho"], self.q["phi"])
         elif mode == "adaptive":
             ei,self.q["f"] = mathtools.eddington_inversion_adaptive(self.ri, self, nintegrate=nintegrate)
+        elif mode == "adaptive_new":
+            ei,self.q["f"] = mathtools.eddington_inversion_adaptive_new(self.ri, self, nintegrate=nintegrate)
         elif mode == "fixed_diff_last":
             ei,self.q["f"] = mathtools.eddington_inversion_diff_last(self.ri, self.q["rho"], self.q["phi"])
         else:
