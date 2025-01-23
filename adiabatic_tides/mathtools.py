@@ -1044,7 +1044,7 @@ def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=100):
 
     return Es, Ls, vrs
 
-def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=100, rp1=None, rp2=None):
+def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None):
     phis = pot(rs)
 
     assert rp2 > rp1
@@ -1106,54 +1106,3 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
     vrs = vs * np.cos(thetas)
 
     return es, ls, vrs
-
-def sample_E_L_vr_given_r_metropolis_perisplit_old(f_of_el, pot, vcirc, rs, nsteps_chain=100, rp1=None, rp2=None):
-    phis = pot(rs)
-    vref = vcirc(rs)
-
-    if rp1 is not None:
-        phip1 = pot(rp1)
-    if rp2 is not None:
-        phip2 = pot(rp2)
-
-    def vlmin_vlmax(r):
-        vlmin2 = np.clip((2*(phis-phip1))/(r**2/rp1**2 - 1.), 0, None)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            vlmax2 = np.clip((2*(phis-phip2))/(r**2/rp2**2 - 1.), 0, None)
-        vlmax2[r <= rp2] = (phip2-phip1)*1e5
-        return np.sqrt(vlmin2), np.sqrt(vlmax2)
-    
-    def likelihood_of_vel_given_r(logvtheta):
-        # Likelihood in polar coordinates in velocity space
-        vs,thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
-
-        es = phis + 0.5*vs**2
-        ls = vs * rs * np.abs(np.sin(thetas))
-        
-        fac = 1.
-        if rp1 is not None:
-            fac *= ls**2 >= 2.*(es - phip1) * rp1**2
-        if rp2 is not None:
-            fac *= (ls**2 <= 2.*(es - phip2) * rp2**2) | (rs <= rp2)
-        
-        return f_of_el(es,ls) * vs**3 * np.abs(np.sin(thetas)) * fac #* (thetas <= np.pi)
-
-    logv0 = np.random.uniform(-2., 2., rs.shape) + np.log(vref)
-    theta0 = np.random.uniform(0., np.pi, rs.shape)
-
-    if rp1 is not None and rp2 is not None:
-        vmin, vmax = vlmin_vlmax(rs)
-        logvl0 = np.random.uniform(np.log(vmin), np.log(vmax), rs.shape)
-        theta0 = theta0*0. + np.pi/2.
-        logv0 = logvl0 - np.log(np.sin(theta0))
-    
-    logvtheta = np.stack([logv0,theta0], axis=-1)
-    stepsize = np.stack([1.0, 0.05*np.pi], axis=-1)
-    
-    logvtheta = sample_metropolis_hastings(likelihood_of_vel_given_r, logvtheta, stepsize=stepsize, nsteps=nsteps_chain)
-    vs, thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
-    Ls = vs *rs * np.abs(np.sin(thetas))
-    vrs = vs * np.cos(thetas)
-    Es = phis + 0.5*vs**2
-
-    return Es, Ls, vrs
