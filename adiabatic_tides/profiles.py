@@ -120,7 +120,7 @@ class RadialProfile():
         """Abstract: Sample particles' positions, velocities and masses"""
         raise NotImplementedError("This optional function has not been implemented")
     
-    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, nintegrate=200, nsteps_chain=100):
+    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, nintegrate=150, nsteps_chain=512):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -135,18 +135,21 @@ class RadialProfile():
 
         --- numerical parameters ---
         nintegrate : number of integration points for the energy integral (200 is usually already very precise)
-        nsteps_chain : number of steps in the metropolis chain (100 is more than enough, for typical profiles even ~20 is good)
+        nsteps_chain : number of steps in the metropolis chain (to be safe use 512 or higher)
                        sampling time scales linear with this parameter
         """
         if rpmin is not None:
            rmin = max(rmin, rpmin)
 
-        ri = np.logspace(np.log10(rmin), np.log10(rmax), 2001)
+        ri = np.logspace(np.log10(rmin), np.log10(rmax), 1001)
         if (rpmin is not None) or (rpmax is not None):
             ri = ri[ri > rpmin]
             rho = mathtools.integrate_fofel_adaptive_rperi_lim(self.f_of_el, self.potential, ri, N=nintegrate, rp1=rpmin, rp2=rpmax)
             rs,ms = mathtools.sample_rimi_from_density(ri, rho, ntot)
-            Es,Ls,vrs = mathtools.sample_E_L_vr_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs, nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
+            sel = rs < rpmax
+            Es,Ls,vrs = np.zeros_like(rs), np.zeros_like(rs), np.zeros_like(rs)
+            Es[sel],Ls[sel],vrs[sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit_old(self.f_of_el, self.potential, self.accr, rs[sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
+            Es[~sel],Ls[~sel],vrs[~sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs[~sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
         else:
             rs = mathtools.sample_radii(ri, self.m_of_r(ri), ntot)
             ms = np.ones_like(rs) * self.m_of_r(rmax) / len(rs)
