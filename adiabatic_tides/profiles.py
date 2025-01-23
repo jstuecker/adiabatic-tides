@@ -120,6 +120,60 @@ class RadialProfile():
         """Abstract: Sample particles' positions, velocities and masses"""
         raise NotImplementedError("This optional function has not been implemented")
     
+    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, nintegrate=200, nsteps_chain=100):
+        """ Samples particles radii, energies, angular momenta, radial velocities and masses
+        using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
+        possibility, but it is very robust and works for every profile, including anisotropic
+        ones
+
+        --- important parameters ---
+        ntot : number of particles
+        rmin : minimal radius to sample
+        rmax : maximal radius to sample
+        rpmin : If given, all particles have a peri-center rp > rpmin
+        rpmax : If given, all particles have a peri-center rp < rpmax
+
+        --- numerical parameters ---
+        nintegrate : number of integration points for the energy integral (200 is usually already very precise)
+        nsteps_chain : number of steps in the metropolis chain (100 is more than enough, for typical profiles even ~20 is good)
+                       sampling time scales linear with this parameter
+        """
+        if rpmin is not None:
+           rmin = max(rmin, rpmin)
+
+        ri = np.logspace(np.log10(rmin), np.log10(rmax), 2001)
+        if (rpmin is not None) or (rpmax is not None):
+            ri = ri[ri > rpmin]
+            rho = mathtools.integrate_fofel_adaptive_rperi_lim(self.f_of_el, self.potential, ri, N=nintegrate, rp1=rpmin, rp2=rpmax)
+            rs,ms = mathtools.sample_rimi_from_density(ri, rho, ntot)
+            Es,Ls,vrs = mathtools.sample_E_L_vr_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs, nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
+        else:
+            rs = mathtools.sample_radii(ri, self.m_of_r(ri), ntot)
+            ms = np.ones_like(rs) * self.m_of_r(rmax) / len(rs)
+            Es,Ls,vrs = mathtools.sample_E_L_vr_given_r_metropolis(self.f_of_el, self.potential, self.vcirc, rs, nsteps_chain=nsteps_chain)
+
+        return rs,Es,Ls,vrs,ms
+    
+    def sample_r_E_L_vr_m_metropolis_perisplits(self, size_per_split=10000, rpsplits=(None, None), flat=True, **kwargs):
+        """See sample_r_E_L_vr_m_metropolis for a detailed description of optional keyword parameters
+
+        size_per_split : number of particles in each split
+        rpsplits : a list of splitting points
+        flat : whether to return particles in form (nsplits, nper_split) or as a flat array
+        """
+        
+        nsplits = len(rpsplits)-1
+        shape = (nsplits, size_per_split)
+        rs, es, ls, vrs, ms = np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape)
+
+        for i in range(nsplits):
+            rs[i], es[i], ls[i], vrs[i], ms[i] = self.sample_r_E_L_vr_m_metropolis(size_per_split, rpmin=rpsplits[i], rpmax=rpsplits[i+1], **kwargs)
+
+        if flat:
+            return rs.flatten(), es.flatten(), ls.flatten(), vrs.flatten(), ms.flatten()
+        else:
+            return rs, es, ls, vrs, ms
+    
     def f_of_e(self, E):
         """Abstract: A phase space distribution function that only depends on energy"""
         raise NotImplementedError("This optional function has not been implemented")

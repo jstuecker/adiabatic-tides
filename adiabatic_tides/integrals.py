@@ -23,7 +23,8 @@ def integrate_tanh_a_b(f, a, b, N=100):
     
     x = np.concatenate([x1, x2, x3], axis=-1)
 
-    dxdt = (2./(b-a)) * (b-x)*(x-a)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        dxdt = np.nan_to_num((2./(b-a)) * (b-x)*(x-a), 0.)
     
     return np.trapz(f(x)*dxdt, t, axis=-1)
 

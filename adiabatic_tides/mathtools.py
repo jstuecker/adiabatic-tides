@@ -399,6 +399,10 @@ def sample_metropolis_hastings(f, x0, stepsize=1., nsteps=1000):
     x = np.copy(x0)
     f0 = f(x)
 
+    if np.sum(f0 <= 0) > 0:
+        print("Warning, I am starting with invalid points... %d" % np.sum(f0 <= 0))
+        #raise ValueError("Invalid starting points")
+
     for i in range(0, nsteps):
         dx = np.random.normal(loc=0., scale=stepsize, size=x.shape)
 
@@ -410,6 +414,10 @@ def sample_metropolis_hastings(f, x0, stepsize=1., nsteps=1000):
 
         x[accept] = (x+dx)[accept]
         f0[accept] = f1[accept]
+
+    if np.sum(f0 <= 0) > 0:
+        print("Warning, I ended with invalid points... %d" % np.sum(f0 <= 0))
+        #raise ValueError("Invalid starting points")
         
     return x
 
@@ -971,12 +979,15 @@ def integrate_fofel_adaptive(f_of_el, phi, r, N=100):
 def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=100):
     r = np.array(r)
     rho = np.zeros_like(r)
-    sel = r >= rp1
+    if rp1 == 0.:
+        rp1 = np.min(r) * 1e-5
+
+    assert rp2 > rp1
+
+    sel = r > rp1
     r = r[sel]
 
-    Escale = np.clip(phi(r*2.) - phi(r), 0, None)
     def integrate_vl(f_of_el, phi, vr, r, N=100):
-        vlscale = np.clip(np.abs(vr), np.sqrt(Escale)[...,np.newaxis], None)
         def integrand(vl):
             E = (phi(r)[...,np.newaxis] + 0.5*vr**2)[...,np.newaxis] + 0.5*vl**2
             L = vl*r[...,np.newaxis,np.newaxis]
@@ -985,11 +996,15 @@ def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=1
         phip1, phip2 = phi(rp1), phi(rp2)
         phir = phi(r)
 
-        Lmin2 = np.clip((vr**2 + 2*(phir-phip1)[...,np.newaxis])/(rp1**-2 - r**-2)[...,np.newaxis], 0, None)
-        Lmax2 = np.clip((vr**2 + 2*(phir-phip2)[...,np.newaxis])/(rp2**-2 - r**-2)[...,np.newaxis], 0, None)
-        Lmax2[r <= rp2] = np.sqrt(phip2-phip1)*1e5
+        # Lmin2 = np.clip((vr**2 + 2*(phir-phip1)[...,np.newaxis])/(rp1**-2 - r**-2)[...,np.newaxis], 0, None)
+        # Lmax2 = np.clip((vr**2 + 2*(phir-phip2)[...,np.newaxis])/(rp2**-2 - r**-2)[...,np.newaxis], 0, None)
+        vlmin2 = np.clip((vr**2 + 2*(phir-phip1)[...,np.newaxis])/(r**2/rp1**2 - 1.)[...,np.newaxis], 0, None)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            vlmax2 = np.clip((vr**2 + 2*(phir-phip2)[...,np.newaxis])/(r**2/rp2**2 - 1.)[...,np.newaxis], 0, None)
 
-        return integrals.integrate_tanh_a_b(integrand, np.sqrt(Lmin2/r[...,np.newaxis]**2), np.sqrt(Lmax2/r[...,np.newaxis]**2),  N=N)
+        vlmax2[r <= rp2] = (phip2-phip1)*1e5
+
+        return integrals.integrate_tanh_a_b(integrand, np.sqrt(vlmin2), np.sqrt(vlmax2),  N=N)
     
     
     def integrand(vr):
@@ -1002,14 +1017,111 @@ def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=1
     
     return rho
 
-def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=1000, rp1=None, rp2=None):
+def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=100):
     phis = pot(rs)
-    vcircs = vcirc(rs)
+    vref = vcirc(rs)
+    
+    def likelihood_of_vel_given_r(logvtheta):
+        # Likelihood in polar coordinates in velocity space
+        vs,thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
+
+        es = phis + 0.5*vs**2
+        ls = vs * rs * np.abs(np.sin(thetas))
+        
+        return f_of_el(es,ls) * vs**3 * np.abs(np.sin(thetas))
+
+    logv0 = np.random.uniform(-2., 2., rs.shape) + np.log(vref)
+    theta0 = np.random.uniform(0., np.pi, rs.shape)
+    
+    logvtheta = np.stack([logv0,theta0], axis=-1)
+    stepsize = np.stack([2.0, 0.2*np.pi], axis=-1)
+    
+    logvtheta = sample_metropolis_hastings(likelihood_of_vel_given_r, logvtheta, stepsize=stepsize, nsteps=nsteps_chain)
+    vs, thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
+    Ls = vs *rs * np.abs(np.sin(thetas))
+    vrs = vs * np.cos(thetas)
+    Es = phis + 0.5*vs**2
+
+    return Es, Ls, vrs
+
+def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=100, rp1=None, rp2=None):
+    phis = pot(rs)
+
+    assert rp2 > rp1
+
+    # we have to sample from
+    # f(E,L) v^2 sin(theta) dv dtheta
+    # L = v r sin(theta)
+    # vr = v cos(theta)
+
+    # parameterize v in terms of u_p = r_p/r
+    # where r_p is the pericenter radius
+    # this way it is easy to predict the relevant
+    
+    def dv_du_overv(u, sintheta2, rs, phis):
+        rp = rs * u
+        f = u**-3 * sintheta2 / (u**-2 * sintheta2 - 1)
+        f = f + accr(rp)*rs / (2*phis - 2*pot(rp))
+        return f
+
+    def likelihood_of_vel_given_r(logutheta):
+        # Likelihood in polar coordinates in velocity space
+        us,thetas = np.exp(logutheta[...,0]), logutheta[...,1]
+
+        rp = rs * us
+        sintheta2 = np.square(np.sin(thetas))
+        vs2 = 2.*(phis - pot(rp)) / (us**-2 * sintheta2 - 1.)
+
+        valid = (rp >= rp1) & (rp <= rs) & (rp <= rp2) & (vs2 > 0)
+
+        es = phis[valid] + 0.5*vs2[valid]
+        ls = rs[valid] * np.sqrt(vs2[valid] * sintheta2[valid])
+
+        dvol = vs2[valid] * np.sqrt(sintheta2[valid])
+        dvol *= dv_du_overv(us[valid], sintheta2[valid], rs[valid], phis[valid]) * us[valid] * np.sqrt(vs2[valid])
+
+        f = np.zeros_like(rs)
+        f[valid] = f_of_el(es,ls) * dvol
+        
+        return f
+    
+    umax = np.clip(rp2/rs,None,1.)
+    umin = rp1 / rs
+    logu0 = np.random.uniform(np.log(umin), np.log(umax), rs.shape)
+    u0 = np.exp(logu0)
+    thmin = np.arcsin(u0)
+    theta0 = np.random.uniform(thmin, np.pi-thmin, rs.shape)
+    
+    logutheta = np.stack([logu0,theta0], axis=-1)
+    stepsize = np.stack([np.log(umax/umin)*0.25, (np.pi/2.-np.arcsin(rp1/rs))/4.], axis=-1)
+    
+    logutheta = sample_metropolis_hastings(likelihood_of_vel_given_r, logutheta, stepsize=stepsize, nsteps=nsteps_chain)
+
+    # Transform back
+    us,thetas = np.exp(logutheta[...,0]), logutheta[...,1]
+    vs = np.sqrt(2.*(phis - pot(us*rs)) / (us**-2 * np.sin(thetas)**2 - 1.))
+
+    es = phis + 0.5*vs**2
+    ls = rs * vs * np.abs(np.sin(thetas))
+    vrs = vs * np.cos(thetas)
+
+    return es, ls, vrs
+
+def sample_E_L_vr_given_r_metropolis_perisplit_old(f_of_el, pot, vcirc, rs, nsteps_chain=100, rp1=None, rp2=None):
+    phis = pot(rs)
+    vref = vcirc(rs)
 
     if rp1 is not None:
         phip1 = pot(rp1)
     if rp2 is not None:
         phip2 = pot(rp2)
+
+    def vlmin_vlmax(r):
+        vlmin2 = np.clip((2*(phis-phip1))/(r**2/rp1**2 - 1.), 0, None)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            vlmax2 = np.clip((2*(phis-phip2))/(r**2/rp2**2 - 1.), 0, None)
+        vlmax2[r <= rp2] = (phip2-phip1)*1e5
+        return np.sqrt(vlmin2), np.sqrt(vlmax2)
     
     def likelihood_of_vel_given_r(logvtheta):
         # Likelihood in polar coordinates in velocity space
@@ -1022,15 +1134,21 @@ def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=1000,
         if rp1 is not None:
             fac *= ls**2 >= 2.*(es - phip1) * rp1**2
         if rp2 is not None:
-            fac *= (ls**2 <= 2.*(es - phip2) * rp2**2) | (rs >= rp2)
+            fac *= (ls**2 <= 2.*(es - phip2) * rp2**2) | (rs <= rp2)
         
-        return f_of_el(es,ls) * vs**3 * np.abs(np.sin(thetas)) #* (thetas <= np.pi)
+        return f_of_el(es,ls) * vs**3 * np.abs(np.sin(thetas)) * fac #* (thetas <= np.pi)
 
-    logv0 = np.random.uniform(-2., 2., rs.shape) + np.log(vcircs)
+    logv0 = np.random.uniform(-2., 2., rs.shape) + np.log(vref)
     theta0 = np.random.uniform(0., np.pi, rs.shape)
+
+    if rp1 is not None and rp2 is not None:
+        vmin, vmax = vlmin_vlmax(rs)
+        logvl0 = np.random.uniform(np.log(vmin), np.log(vmax), rs.shape)
+        theta0 = theta0*0. + np.pi/2.
+        logv0 = logvl0 - np.log(np.sin(theta0))
     
     logvtheta = np.stack([logv0,theta0], axis=-1)
-    stepsize = np.stack([0.5, 0.1*np.pi], axis=-1)
+    stepsize = np.stack([1.0, 0.05*np.pi], axis=-1)
     
     logvtheta = sample_metropolis_hastings(likelihood_of_vel_given_r, logvtheta, stepsize=stepsize, nsteps=nsteps_chain)
     vs, thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
