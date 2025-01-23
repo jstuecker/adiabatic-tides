@@ -211,6 +211,8 @@ def vectorized_binary_search(f, xlow, xhigh, niter=100, mode="sqrt", return_err=
         xhigh = choose(xnew, xhigh, ~change_low)
         fhigh = choose(fnew, fhigh, ~change_low)
     
+    xnew = choose(xlow, xhigh, flow >= 0.)
+    
     if return_err:
         return xnew, xhigh - xlow
     else:
@@ -936,6 +938,17 @@ def integrate_to_density_of_states(ri, phii, rmax=np.infty):
         
     return gE
 
+def integrate_to_density_of_states_adaptive(phi, ri, nintegrate=200):
+    """Calculates the density of states
+    See Binney and Tremaine (4.56)
+    """
+    E = phi(ri)
+
+    def integrand(r):
+        return np.sqrt(E[...,np.newaxis] - phi(r)) * r**2
+    
+    return integrals.integrate_tanh_a_b(integrand, 0., ri, N=nintegrate) * (4.*np.pi)**2 * np.sqrt(2.)
+
 def integrate_fofel_adaptive(f_of_el, phi, r, N=100):
     r = np.array(r)
 
@@ -954,3 +967,75 @@ def integrate_fofel_adaptive(f_of_el, phi, r, N=100):
     vrscale = np.sqrt(phi(r*2.) - phi(r))
     
     return 2.*integrals.integrate_exp_0_inf(integrand, N=N, xscale=vrscale)
+
+def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=100):
+    r = np.array(r)
+    rho = np.zeros_like(r)
+    sel = r >= rp1
+    r = r[sel]
+
+    Escale = np.clip(phi(r*2.) - phi(r), 0, None)
+    def integrate_vl(f_of_el, phi, vr, r, N=100):
+        vlscale = np.clip(np.abs(vr), np.sqrt(Escale)[...,np.newaxis], None)
+        def integrand(vl):
+            E = (phi(r)[...,np.newaxis] + 0.5*vr**2)[...,np.newaxis] + 0.5*vl**2
+            L = vl*r[...,np.newaxis,np.newaxis]
+            return 2.*np.pi*vl * f_of_el(E, L)
+        
+        phip1, phip2 = phi(rp1), phi(rp2)
+        phir = phi(r)
+
+        Lmin2 = np.clip((vr**2 + 2*(phir-phip1)[...,np.newaxis])/(rp1**-2 - r**-2)[...,np.newaxis], 0, None)
+        Lmax2 = np.clip((vr**2 + 2*(phir-phip2)[...,np.newaxis])/(rp2**-2 - r**-2)[...,np.newaxis], 0, None)
+        Lmax2[r <= rp2] = np.sqrt(phip2-phip1)*1e5
+
+        return integrals.integrate_tanh_a_b(integrand, np.sqrt(Lmin2/r[...,np.newaxis]**2), np.sqrt(Lmax2/r[...,np.newaxis]**2),  N=N)
+    
+    
+    def integrand(vr):
+        return integrate_vl(f_of_el, phi, vr, r, N=N)
+    
+    vrscale = np.sqrt(phi(r*2.) - phi(r))
+
+    
+    rho[sel] = 2.*integrals.integrate_exp_0_inf(integrand, N=N, xscale=vrscale)
+    
+    return rho
+
+def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=1000, rp1=None, rp2=None):
+    phis = pot(rs)
+    vcircs = vcirc(rs)
+
+    if rp1 is not None:
+        phip1 = pot(rp1)
+    if rp2 is not None:
+        phip2 = pot(rp2)
+    
+    def likelihood_of_vel_given_r(logvtheta):
+        # Likelihood in polar coordinates in velocity space
+        vs,thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
+
+        es = phis + 0.5*vs**2
+        ls = vs * rs * np.abs(np.sin(thetas))
+        
+        fac = 1.
+        if rp1 is not None:
+            fac *= ls**2 >= 2.*(es - phip1) * rp1**2
+        if rp2 is not None:
+            fac *= (ls**2 <= 2.*(es - phip2) * rp2**2) | (rs >= rp2)
+        
+        return f_of_el(es,ls) * vs**3 * np.abs(np.sin(thetas)) #* (thetas <= np.pi)
+
+    logv0 = np.random.uniform(-2., 2., rs.shape) + np.log(vcircs)
+    theta0 = np.random.uniform(0., np.pi, rs.shape)
+    
+    logvtheta = np.stack([logv0,theta0], axis=-1)
+    stepsize = np.stack([0.5, 0.1*np.pi], axis=-1)
+    
+    logvtheta = sample_metropolis_hastings(likelihood_of_vel_given_r, logvtheta, stepsize=stepsize, nsteps=nsteps_chain)
+    vs, thetas = np.exp(logvtheta[...,0]), logvtheta[...,1]
+    Ls = vs *rs * np.abs(np.sin(thetas))
+    vrs = vs * np.cos(thetas)
+    Es = phis + 0.5*vs**2
+
+    return Es, Ls, vrs
