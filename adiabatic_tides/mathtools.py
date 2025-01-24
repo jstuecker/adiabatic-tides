@@ -1049,12 +1049,6 @@ def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=100):
     return Es, Ls, vrs
 
 def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None):
-    print("new")
-    
-    phis = pot(rs)
-
-    assert rp2 > rp1
-
     # we have to sample from
     # f(E,L) v^2 sin(theta) dv dtheta
     # L = v r sin(theta)
@@ -1063,13 +1057,17 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
     # parameterize v in terms of u_p = r_p/r
     # where r_p is the pericenter radius
     # this way it is easy to predict the relevant
-    
+    # also substitute mu = sin(theta)
+    # additionally transform to a hyperbolic space
+    # where the boundaries are rapidly approached at infinity
+
     def dv_du_overv(u, sintheta2, rs, phis):
         rp = rs * u
         f = u**-3 * sintheta2 / (u**-2 * sintheta2 - 1)
         f = f + accr(rp)*rs / (2*phis - 2*pot(rp))
         return f
-    
+
+    assert rp2 > rp1
     umax = np.clip(rp2/rs,None,1.)
     umin = rp1 / rs
     
@@ -1087,22 +1085,22 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
     def s_of_u(x, a=umin, b=umax):
         return np.arctanh((x - 0.5*(b+a))/(0.5*(b-a)))
 
-    def likelihood_of_vel_given_r(log_u_mu):
+    phis = pot(rs)
+    def likelihood_of_vel_given_r(s_t):
         # Likelihood in polar coordinates in velocity space
-        us,mus = u_of_s(log_u_mu[...,0]), mu_of_t(log_u_mu[...,1])
+        us,mus = u_of_s(s_t[...,0]), mu_of_t(s_t[...,1])
 
         rp = rs * us
-        sintheta2 = mus**2 #np.square(mus)
-        vs2 = 2.*(phis - pot(rp)) / (us**-2 * sintheta2 - 1.)
+        vs2 = 2.*(phis - pot(rp)) / (us**-2 * mus**2 - 1.)
 
         valid = (rp >= rp1) & (rp <= rs) & (rp <= rp2) & (vs2 > 0) & (mus <= 1.) & (mus >= 0.)
 
         es = phis[valid] + 0.5*vs2[valid]
-        ls = rs[valid] * np.sqrt(vs2[valid] * sintheta2[valid])
+        ls = rs[valid] * np.sqrt(vs2[valid]) * mus[valid]
 
-        dvol = dmudt_of_mu(mus)[valid] * du_ds_of_u(us)[valid] *  mus[valid] / np.sqrt(1. - mus[valid]**2)
-        dvol *= vs2[valid]  #* mus[valid]  / np.sqrt(1. - mus[valid]**2)  # * np.sqrt(sintheta2[valid])
-        dvol *= dv_du_overv(us[valid], sintheta2[valid], rs[valid], phis[valid]) * np.sqrt(vs2[valid])
+        dvol = dmudt_of_mu(mus)[valid] * du_ds_of_u(us)[valid]
+        dvol *= vs2[valid] * mus[valid] / np.sqrt(1. - mus[valid]**2)
+        dvol *= dv_du_overv(us[valid], mus[valid]**2, rs[valid], phis[valid]) * np.sqrt(vs2[valid])
 
         f = np.zeros_like(rs)
         f[valid] = f_of_el(es,ls) * dvol
@@ -1110,86 +1108,19 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
         return f
     
     s0 = np.random.uniform(-1, 1, rs.shape)
-    u0 = u_of_s(s0)
-    # eta = sintheta
-    mu0 = np.random.uniform(u0, 1., rs.shape)
+    mu0 = np.random.uniform(u_of_s(s0), 1., rs.shape)
     
-    log_u_mu = np.stack([s0,t_of_mu(mu0)], axis=-1)
+    s_t = np.stack([s0,t_of_mu(mu0)], axis=-1)
     stepsize = np.stack([4./np.sqrt(nsteps_chain), 4./np.sqrt(nsteps_chain)], axis=-1)
     
-    log_u_mu = sample_metropolis_hastings(likelihood_of_vel_given_r, log_u_mu, stepsize=stepsize, nsteps=nsteps_chain, nhalf=None)#max(1,nsteps_chain//4)
+    s_t = sample_metropolis_hastings(likelihood_of_vel_given_r, s_t, stepsize=stepsize, nsteps=nsteps_chain)
 
     # Transform back
-    us,mus = u_of_s(log_u_mu[...,0]), mu_of_t(log_u_mu[...,1])
+    us,mus = u_of_s(s_t[...,0]), mu_of_t(s_t[...,1])
     vs = np.sqrt(2.*(phis - pot(us*rs)) / (us**-2 * mus**2 - 1.))
 
     es = phis + 0.5*vs**2
     ls = rs * vs * mus
     vrs = vs * np.sqrt(1. - mus**2) * np.sign(np.random.uniform(-1,1,rs.shape))
-
-    return es, ls, vrs
-
-def sample_E_L_vr_given_r_metropolis_perisplit_old(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None):
-    print("old")
-    
-    phis = pot(rs)
-
-    assert rp2 > rp1
-
-    # we have to sample from
-    # f(E,L) v^2 sin(theta) dv dtheta
-    # L = v r sin(theta)
-    # vr = v cos(theta)
-
-    # parameterize v in terms of u_p = r_p/r
-    # where r_p is the pericenter radius
-    # this way it is easy to predict the relevant
-    
-    def dv_du_overv(u, sintheta2, rs, phis):
-        rp = rs * u
-        f = u**-3 * sintheta2 / (u**-2 * sintheta2 - 1)
-        f = f + accr(rp)*rs / (2*phis - 2*pot(rp))
-        return f
-
-    def likelihood_of_vel_given_r(logutheta):
-        # Likelihood in polar coordinates in velocity space
-        us,thetas = np.exp(logutheta[...,0]), logutheta[...,1]
-
-        rp = rs * us
-        sintheta2 = np.square(np.cos(thetas))
-        vs2 = 2.*(phis - pot(rp)) / (us**-2 * sintheta2 - 1.)
-
-        valid = (rp >= rp1) & (rp <= rs) & (rp <= rp2) & (vs2 > 0)
-
-        es = phis[valid] + 0.5*vs2[valid]
-        ls = rs[valid] * np.sqrt(vs2[valid] * sintheta2[valid])
-
-        dvol = vs2[valid] * np.sqrt(sintheta2[valid])
-        dvol *= dv_du_overv(us[valid], sintheta2[valid], rs[valid], phis[valid]) * us[valid] * np.sqrt(vs2[valid])
-
-        f = np.zeros_like(rs)
-        f[valid] = f_of_el(es,ls) * dvol
-        
-        return f
-    
-    umax = np.clip(rp2/rs,None,1.)
-    umin = rp1 / rs
-    logu0 = np.random.uniform(np.log(umin), np.log(umax), rs.shape)
-    u0 = np.exp(logu0)
-    thmax = np.arccos(u0)
-    theta0 = np.random.uniform(-thmax, thmax, rs.shape)
-    
-    logutheta = np.stack([logu0,theta0], axis=-1)
-    stepsize = np.stack([np.log(umax/umin)*0.5, (np.pi/2.-np.arcsin(rp1/rs))/2.], axis=-1)
-    
-    logutheta = sample_metropolis_hastings(likelihood_of_vel_given_r, logutheta, stepsize=stepsize, nsteps=nsteps_chain, nhalf=nsteps_chain//8)
-
-    # Transform back
-    us,thetas = np.exp(logutheta[...,0]), logutheta[...,1]
-    vs = np.sqrt(2.*(phis - pot(us*rs)) / (us**-2 * np.cos(thetas)**2 - 1.))
-
-    es = phis + 0.5*vs**2
-    ls = rs * vs * np.abs(np.cos(thetas))
-    vrs = vs * np.sin(thetas) * np.sign(np.random.uniform(-1,1,rs.shape))
 
     return es, ls, vrs
