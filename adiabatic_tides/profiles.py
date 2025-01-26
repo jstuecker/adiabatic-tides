@@ -121,13 +121,16 @@ class RadialProfile():
         for potentials normalized at infinity this should be zero
         """
         return np.infty
+    
+    def anisotropy(self):
+        return 0.
 
     #----------- Optional features, that can be helpful in some situations ----------#
     def sample_particles(self, ntot=10000, rmax=None, seed=42):
         """Abstract: Sample particles' positions, velocities and masses"""
         raise NotImplementedError("This optional function has not been implemented")
     
-    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, ninterp=1001, nintegrate=150, nsteps_chain=64, get_rho=False):
+    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, ninterp=1001, nintegrate=150, nsteps_chain=100, get_rho=False):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -1579,6 +1582,8 @@ class AnisotropicPowerlawProfile(RadialProfile):
     def r0(self):
         return 1.0
     
+    def anisotropy(self):
+        return self.beta
     
     def _initialize_numerical_scales(self):
         super()._initialize_numerical_scales()

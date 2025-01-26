@@ -86,6 +86,26 @@ def get_mass_profile(ri, mi, rbins):
 
     return rho, mprof
 
+def get_anisotropy_profile(ri, mi, vri, li, rbins):
+    """Returns the mass profile, given some particle radii
+    
+    ri : radii of particles
+    vri : radial velocities of the particles
+    li : angular momentum of the particles
+    mi : masses of the particles
+    rbins : radial bins to use
+    
+    returns : r, beta  where the anisotropy beta is 
+              given by the expectation value of 1-vt**2/vr**2/2.
+    """
+    rhoxvr2 = np.histogram(ri.flatten(), weights=(vri**2*mi).flatten(), bins=rbins)[0]
+    rhoxvt2 = np.histogram(ri.flatten(), weights=((li/ri)**2*mi).flatten(), bins=rbins)[0]
+
+    beta = 1-rhoxvt2/rhoxvr2/2.
+
+    rcent = np.sqrt(rbins[1:]*rbins[:-1])
+    return rcent, beta
+
 def random_direction(size, ndim):
     """Samples random unit vectors
     
@@ -1113,10 +1133,12 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
         mumin = u0 * np.sqrt((phimax-pot(u0*rs))/(phimax-phis))
     else:
         mumin = u_of_s(s0)
+    # dmu = 1. - mumin
+    # mu0 = np.random.uniform(1.-0.66*dmu, 1.-0.33*dmu, rs.shape)
     mu0 = np.random.uniform(mumin, 1., rs.shape)
 
     s_t = np.stack([s0,t_of_mu(mu0)], axis=-1)
-    stepsize = np.stack([4./np.sqrt(nsteps_chain), 4./np.sqrt(nsteps_chain)], axis=-1)
+    stepsize = np.stack([8./np.cbrt(nsteps_chain), 8./np.cbrt(nsteps_chain)], axis=-1)
     
     s_t = sample_metropolis_hastings(likelihood_of_vel_given_r, s_t, stepsize=stepsize, nsteps=nsteps_chain)
 
