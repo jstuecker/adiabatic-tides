@@ -1660,7 +1660,14 @@ class PlummerProfile(RadialProfile):
         return self.a
 
     def f_of_e(self, E):
-        return 24.* np.sqrt(2.) / (7. * np.pi**3) * self.a**2 / (self.G**5 * self.M**4) * (-E)**3.5
+        f = np.zeros_like(E)
+        f[E < 0] = 24.* np.sqrt(2.) / (7. * np.pi**3) * self.a**2 / (self.G**5 * self.M**4) * (-E[E < 0])**3.5
+        f[E >= 0] = 0.
+        return f
+    
+    def phimax(self):
+        return 0.
+
 
 class NumericalProfile(RadialProfile):
     def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw"):

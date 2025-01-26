@@ -10,12 +10,12 @@ def plot_profile_rel(axs, rbins, rhoi, rhoref, **kwargs):
     axs[0].set_xlim(rbins[0], rbins[-1])
     axs[1].set_xlim(rbins[0], rbins[-1])
     axs[0].set_ylim(np.min(rhor)/2, np.max(rhor)*2.)
-    axs[1].set_ylim(-0.1,2.1)
+    axs[1].set_ylim(-0.1,1.5)
     axs[1].set_xlabel("r")
     axs[0].set_ylabel(r"$\rho$")
     axs[1].set_ylabel(r"$\rho/\rho_0$")
 
-def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, rpmax=1.0, norb=100):
+def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, rpmax=1.0, norb=100, steps_per_orb=100):
 
     rs0,Es0,Ls0,vrs0,ms,ri,rho = prof.sample_r_E_L_vr_m_metropolis(npart, rpmin=rpmin, rpmax=rpmax, nsteps_chain=nsteps_chain, get_rho=True, rmax=1e4)
     tmax = prof.tcirc(rpmin)
@@ -28,7 +28,7 @@ def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, r
     rhos,rs,vrs = [],rs0,vrs0
     for i in range(norb):
         rhos.append(at.mathtools.get_mass_profile(rs, ms, rbins)[0])
-        rs, vrs = at.mathtools.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=40)
+        rs, vrs = at.mathtools.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=steps_per_orb)
 
     plot_profile_rel(axs, rbins, rhos[0], prof.density, label="initial")
     plot_profile_rel(axs, rbins, rhos[-1], prof.density, label="final")
