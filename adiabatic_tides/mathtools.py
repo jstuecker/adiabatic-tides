@@ -1048,7 +1048,7 @@ def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=100):
 
     return Es, Ls, vrs
 
-def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None):
+def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None, phimax=np.infty):
     # we have to sample from
     # f(E,L) v^2 sin(theta) dv dtheta
     # L = v r sin(theta)
@@ -1108,8 +1108,13 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
         return f
     
     s0 = np.random.uniform(-1, 1, rs.shape)
-    mu0 = np.random.uniform(u_of_s(s0), 1., rs.shape)
-    
+    if phimax < np.infty:
+        u0 = u_of_s(s0)
+        mumin = u0 * np.sqrt((phimax-pot(u0*rs))/(phimax-phis))
+    else:
+        mumin = u_of_s(s0)
+    mu0 = np.random.uniform(mumin, 1., rs.shape)
+
     s_t = np.stack([s0,t_of_mu(mu0)], axis=-1)
     stepsize = np.stack([4./np.sqrt(nsteps_chain), 4./np.sqrt(nsteps_chain)], axis=-1)
     

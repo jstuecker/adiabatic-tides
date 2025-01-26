@@ -114,13 +114,20 @@ class RadialProfile():
     def r0(self):
         """A radius that is used for normalization of the profile"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
-        
+    
+    def phimax(self):
+        """The maximal potential value (phi(r->infty) for montonous profiles)
+        for potentials normalized at 0 this can be a finite value or infinity
+        for potentials normalized at infinity this should be zero
+        """
+        return np.infty
+
     #----------- Optional features, that can be helpful in some situations ----------#
     def sample_particles(self, ntot=10000, rmax=None, seed=42):
         """Abstract: Sample particles' positions, velocities and masses"""
         raise NotImplementedError("This optional function has not been implemented")
     
-    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, nintegrate=150, nsteps_chain=64):
+    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, ninterp=1001, nintegrate=150, nsteps_chain=64, get_rho=False):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -133,29 +140,40 @@ class RadialProfile():
         rpmin : If given, all particles have a peri-center rp > rpmin
         rpmax : If given, all particles have a peri-center rp < rpmax
 
+        get_rho: If true, the density profile is returned as well
+
         --- numerical parameters ---
+        ninterp: number of interpolation points for the denisty profile
         nintegrate : number of integration points for the energy integral (200 is usually already very precise)
         nsteps_chain : number of steps in the metropolis chain (to be safe use 32 or higher)
                        sampling time scales linear with this parameter
         """
-        if rpmin is not None:
-           rmin = max(rmin, rpmin)
+        # if rpmin is not None:
+        #    rmin = max(rmin, rpmin)
 
-        ri = np.logspace(np.log10(rmin), np.log10(rmax), 1001)
+        ri = np.logspace(np.log10(rmin), np.log10(rmax), ninterp)
         if (rpmin is not None) or (rpmax is not None):
-            ri = ri[ri > rpmin]
+            ri = ri[ri >= rpmin]
             rho = mathtools.integrate_fofel_adaptive_rperi_lim(self.f_of_el, self.potential, ri, N=nintegrate, rp1=rpmin, rp2=rpmax)
+            assert(np.all(~np.isnan(rho)))
             rs,ms = mathtools.sample_rimi_from_density(ri, rho, ntot)
+            assert(np.all(~np.isnan(rs)))
             sel = rs < 0
             Es,Ls,vrs = np.zeros_like(rs), np.zeros_like(rs), np.zeros_like(rs)
             #Es[sel],Ls[sel],vrs[sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit_old(self.f_of_el, self.potential, self.accr, rs[sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
-            Es[~sel],Ls[~sel],vrs[~sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs[~sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
+            Es[~sel],Ls[~sel],vrs[~sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs[~sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax, phimax=self.phimax())
+            if get_rho:
+                return rs,Es,Ls,vrs,ms,ri,rho
+            else:
+                return rs,Es,Ls,vrs,ms
         else:
             rs = mathtools.sample_radii(ri, self.m_of_r(ri), ntot)
             ms = np.ones_like(rs) * self.m_of_r(rmax) / len(rs)
             Es,Ls,vrs = mathtools.sample_E_L_vr_given_r_metropolis(self.f_of_el, self.potential, self.vcirc, rs, nsteps_chain=nsteps_chain)
-
-        return rs,Es,Ls,vrs,ms
+            if get_rho:
+                return rs,Es,Ls,vrs,ms,ri,self.density(ri)
+            else:
+                return rs,Es,Ls,vrs,ms
     
     def sample_r_E_L_vr_m_metropolis_perisplits(self, size_per_split=10000, rpsplits=(None, None), flat=True, **kwargs):
         """See sample_r_E_L_vr_m_metropolis for a detailed description of optional keyword parameters
@@ -1231,7 +1249,7 @@ class NFWProfile(RadialProfile):
     
     def m_of_r(self, r):
         """The mass contained inside radius r"""
-        x = r / self.rs
+        x = np.array(r) / self.rs
         M0 = 4.*np.pi*self.rs**3*self.rhoc
         
         m = np.zeros_like(r)
@@ -1246,7 +1264,7 @@ class NFWProfile(RadialProfile):
         zero_at_zero: if True, norm to phi(r->0)=0. This can be useful
         to avoid problems caused by roundoff errors as r->0"""
         phi = np.zeros_like(r)
-        x = r / self.rs
+        x = np.array(r) / self.rs
         sel = x > 1e-4
         if zero_at_zero:
             phi[sel] = self.phi0 * (np.log(1. + x[sel]) / x[sel] - 1.)
@@ -1255,6 +1273,9 @@ class NFWProfile(RadialProfile):
             phi[sel] = self.phi0 * np.log(1. + x[sel]) / x[sel]
             phi[~sel] = self.phi0 * (1. - x[~sel]/2. + x[~sel]**2/3.)
         return phi
+    
+    def phimax(self):
+        return 0.
     
     def r0(self):
         """The virial radius"""
@@ -1297,7 +1318,10 @@ class NFWProfile(RadialProfile):
         norm_low = self.pss.f_of_e(self.scale("pss_e_analytic_low")*E0, interpolate=True) / f_widrow(self.scale("pss_e_analytic_low")*E0)
         norm_up = self.pss.f_of_e(self.scale("pss_e_analytic_up")*E0, interpolate=True) / f_widrow(self.scale("pss_e_analytic_up")*E0)
         res[too_low] = f_widrow(energy[too_low]) * norm_low
-        res[too_high] = f_widrow(energy[too_high]) * norm_up
+        res[too_high & (energy < 0)] = f_widrow(energy[too_high & (energy < 0)]) * norm_up
+        res[energy > 0] = 0.
+        
+        assert np.all(~np.isnan(res))
         
         return res * self.m_of_r(self.r0())
 
@@ -1739,6 +1763,9 @@ class NumericalProfile(RadialProfile):
         else:
             return self.self_potential(r, zero_at_zero=zero_at_zero)
         
+    def phimax(self):
+        return self.q["phi"][-1]
+
     def r0(self):
         """A scale radius"""
         return self.base_radius
