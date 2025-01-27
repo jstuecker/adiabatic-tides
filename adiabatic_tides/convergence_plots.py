@@ -56,16 +56,20 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=100, 
 
     rs,vrs = rs0,vrs0
     rhos = np.zeros((norb, len(rpsplits), len(rbins)-1))
-    rhoxvr2, rhoxvt2 = [], []
+    rhoxvr2, rhoxvt2, rhoxvr2red, rhoxvt2red = [], [], [], []
     for i in range(norb):
         for j in range(len(rpsplits)-1):
             rhos[i,j] = at.mathtools.get_mass_profile(rs[j], ms[j], rbins)[0]
         rhoxvr2.append(np.histogram(rs[rs >0.], weights=np.float128((vrs**2*ms)[rs > 0.]), bins=rbinsaniso)[0])
         rhoxvt2.append(np.histogram(rs[rs >0.], weights=((Ls0/rs)**2*ms)[rs > 0.], bins=rbinsaniso)[0])
+        v2 = vrs**2 + (Ls0/rs)**2
+        rhoxvr2red.append(np.histogram(rs[rs >0.], weights=np.float128((vrs**2*ms/v2)[rs > 0.]), bins=rbinsaniso)[0])
+        rhoxvt2red.append(np.histogram(rs[rs >0.], weights=((Ls0/rs)**2*ms/v2)[rs > 0.], bins=rbinsaniso)[0])
 
         rs, vrs = at.mathtools.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=steps_per_orb)
     betas = 1-np.array(rhoxvt2)/np.array(rhoxvr2)/2.
     betamean = 1-np.mean(rhoxvt2, axis=0)/np.mean(rhoxvr2, axis=0)/2.
+    betamean_red = 1-np.mean(rhoxvt2red, axis=0)/np.mean(rhoxvr2red, axis=0)/2.
 
     if np.sum(rs <= 0.) > 0:
         print("Warning: fraction %.2e particles have r <= 0" % np.mean(rs <= 0.))
@@ -89,6 +93,7 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=100, 
     plot_all(rhos[0],betas[0], alpha=0.5, label="Initial", label_peris=True)
     plot_all(rhos[-1],betas[-1], alpha=0.5, ls="dashed", label="Final", lw=2)
     plot_all(np.mean(rhos, axis=0),betamean, alpha=1.0, ls="dotted", label="Averaged (%d)" % norb, lw=2)
+    axs[2].semilogx(rcentaniso, betamean_red, color="green", label=r"Reduced, Av(%d)" % norb, lw=2, ls="dotted")
 
     for i in range(0,len(rpsplits)-1):
         rhotrue = at.mathtools.integrate_fofel_adaptive_rperi_lim(prof.f_of_el, prof.potential, rcent, N=200, rp1=rpsplits[i], rp2=rpsplits[i+1])
@@ -106,7 +111,7 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=100, 
     axs[2].set_ylabel(r"$\beta(r)$")
 
     axs[0].legend(ncol=2, fontsize=9)
-    axs[2].legend(fontsize=9)
+    axs[2].legend(ncol=2, fontsize=9)
 
     for ax in axs:
         ax.grid("on")

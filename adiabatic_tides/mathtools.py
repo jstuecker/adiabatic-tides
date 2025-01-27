@@ -86,7 +86,7 @@ def get_mass_profile(ri, mi, rbins):
 
     return rho, mprof
 
-def get_anisotropy_profile(ri, mi, vri, li, rbins):
+def get_anisotropy_profile(ri, mi, vri, li, rbins, reduced=False):
     """Returns the mass profile, given some particle radii
     
     ri : radii of particles
@@ -94,12 +94,21 @@ def get_anisotropy_profile(ri, mi, vri, li, rbins):
     li : angular momentum of the particles
     mi : masses of the particles
     rbins : radial bins to use
+    reduced : If true, then we replace e.g. simga_vt2 by expect(vt**2/v**2)
+            instead of expect(vt**2). For profiles with constant anisotropy
+            this leads to the same parameter, but it seems more robustly defined
+            especially, for profiles with shallow energy distributions
     
     returns : r, beta  where the anisotropy beta is 
-              given by the expectation value of 1-vt**2/vr**2/2.
+              given by the value of 1-simga_vt**2/sigma_vr**2/2.
     """
-    rhoxvr2 = np.histogram(ri.flatten(), weights=(vri**2*mi).flatten(), bins=rbins)[0]
-    rhoxvt2 = np.histogram(ri.flatten(), weights=((li/ri)**2*mi).flatten(), bins=rbins)[0]
+    if reduced:
+        v2 = (vri**2 + (li/ri)**2)
+        rhoxvr2 = np.histogram(ri.flatten(), weights=np.float128(vri**2*mi/v2).flatten(), bins=rbins)[0]
+        rhoxvt2 = np.histogram(ri.flatten(), weights=np.float128((li/ri)**2*mi/v2).flatten(), bins=rbins)[0]
+    else:
+        rhoxvr2 = np.histogram(ri.flatten(), weights=np.float128(vri**2*mi).flatten(), bins=rbins)[0]
+        rhoxvt2 = np.histogram(ri.flatten(), weights=np.float128((li/ri)**2*mi).flatten(), bins=rbins)[0]
 
     beta = 1-rhoxvt2/rhoxvr2/2.
 
