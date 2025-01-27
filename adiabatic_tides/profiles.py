@@ -1675,7 +1675,7 @@ class PlummerProfile(RadialProfile):
 
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw"):
+    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw", anisotropy=0.):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
@@ -1692,6 +1692,7 @@ class NumericalProfile(RadialProfile):
         super().__init__()
         
         self.potential_profile = potential_profile
+        self.beta = anisotropy
         
         self.q = {}
         
@@ -1781,6 +1782,9 @@ class NumericalProfile(RadialProfile):
     def r0(self):
         """A scale radius"""
         return self.base_radius
+    
+    def anisotropy(self):
+        return self.beta
 
     def to_dict(self):
         """Returns a dictionary with all variables that describe the current state"""
@@ -1813,14 +1817,17 @@ class NumericalProfile(RadialProfile):
                small n whereas "adaptive" is more accurate and recommended for faster convergence at larger n
         """
 
-        if mode == "fixed":
-            ei,self.q["f"] = mathtools.eddington_inversion(self.ri, self.q["rho"], self.q["phi"])
-        elif mode == "adaptive":
-            ei,self.q["f"] = mathtools.eddington_inversion_adaptive(self.ri, self, nintegrate=nintegrate)
-        elif mode == "fixed_diff_last":
-            ei,self.q["f"] = mathtools.eddington_inversion_diff_last(self.ri, self.q["rho"], self.q["phi"])
+        if self.beta == 0:
+            if mode == "fixed":
+                ei,self.q["f"] = mathtools.eddington_inversion(self.ri, self.q["rho"], self.q["phi"])
+            elif mode == "adaptive":
+                ei,self.q["f"] = mathtools.eddington_inversion_adaptive(self.ri, self, nintegrate=nintegrate)
+            elif mode == "fixed_diff_last":
+                ei,self.q["f"] = mathtools.eddington_inversion_diff_last(self.ri, self.q["rho"], self.q["phi"])
+            else:
+                raise ValueError("Unknown Mode")
         else:
-            raise ValueError("Unknown Mode")
+            ei,self.q["f"] = mathtools.anisotropic_inversion(self.ri, self.q["rho"], self.q["phi"], beta=self.beta)
         
         self.q["g"] = mathtools.integrate_to_density_of_states(self.ri, self.q["phi"])
         
@@ -1831,6 +1838,12 @@ class NumericalProfile(RadialProfile):
             self._initialize_phasespace()
         
         return np.interp(energy, self.q["phi"], self.q["f"], right=0.)
+    
+    def f_of_el(self, E, L):
+        if self.beta == 0:
+            return self.f_of_e(E)
+        else:
+            return self.f_of_e(E) * L**(-2.*self.beta)
     
     def g_of_e(self, energy):
         """Density of states"""
