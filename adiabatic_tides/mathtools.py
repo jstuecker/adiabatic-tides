@@ -1258,7 +1258,10 @@ def coshspace_map(fmax, pow=1.):
         return (np.arccosh(x)/np.arccosh(fmax))**(1./pow)
     return x_of_u, u_of_x
 
-def map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, rpoff=0., pow=1.):
+def map_peri_apo_space_log_cosh(rpmin, rpmax, facmax=None, rpoff=0., pow=1.):
+    if facmax is None:
+        facmax = rpmax/rpmin
+
     def rpra_of_uv(u,v):
         rp = (rpmin+rpoff) * ((rpmax+rpoff)/(rpmin+rpoff))**u - rpoff
         fac = np.cosh(v**pow*np.arccosh(facmax))
@@ -1269,10 +1272,7 @@ def map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, rpoff=0., pow=1.):
         return u,v
     return rpra_of_uv, uv_of_rpra
 
-def setup_rperi_rapo_of_jl(pot, rpmin=1e-10, rpmax=1e10, nbins=200, nsteps_newton=5, nintegrate_action=40, facmax=None, nbins_apo=None):
-    """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
-    if facmax is None:
-        facmax = rpmax/rpmin
+def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., pow=1.):
     if nbins_apo is None:
         nbins_apo = nbins
 
@@ -1282,8 +1282,14 @@ def setup_rperi_rapo_of_jl(pot, rpmin=1e-10, rpmax=1e10, nbins=200, nsteps_newto
     uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, pow=1.)
+    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_cosh(rpmin, rpmax, facmax)
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
+
+    return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
+
+def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40):
+    """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
+    u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
     l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
@@ -1320,3 +1326,20 @@ def setup_rperi_rapo_of_jl(pot, rpmin=1e-10, rpmax=1e10, nbins=200, nsteps_newto
         return rpra_of_uv(xynew[...,0], xynew[...,1])
     
     return rpra_of_jl
+
+def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40):
+    u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
+
+    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
+    l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
+    
+    f = f_of_jl(j,l)
+    f0 = np.min(f[f>0])
+
+    ip = RectBivariateSpline(u, v, np.log(f+f0))
+
+    def f_of_rperi_rapo(rp, ra):
+        u,v = uv_of_rpra(rp, ra)
+        return np.exp(ip.ev(u,v)) - f0
+    
+    return f_of_rperi_rapo
