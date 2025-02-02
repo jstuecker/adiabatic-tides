@@ -332,7 +332,7 @@ class RadialProfile():
         return r, E, L
     
     
-    def rperi(self, particles, rlow=None, niter=None, return_err=False, exceptions=True):
+    def rperi(self, particles, rlow=None, niter=None, return_err=False, exceptions=True, mode="binary"):
         """Calculates the peri-center radii of particles
         
         particles : Tuple defining the particles either given by 
@@ -370,9 +370,13 @@ class RadialProfile():
         def energy_permitted(r, E, L): # This function changes sign at peri/apo center
             return E - 0.5*L**2/r**2 - self.potential(r)
 
-        return mathtools.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, E=E, L=L, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+        if mode == "binary":
+            return mathtools.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, E=E, L=L, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+        elif mode == "ridders":
+            return mathtools.ridders_method(energy_permitted, rlow*np.ones_like(r), r, E=E, L=L, mode="positive", niter=niter)
     
-    def rapo(self, particles, rup=None, niter=None, return_err=False, exceptions=True):
+    
+    def rapo(self, particles, rup=None, niter=None, return_err=False, exceptions=True, mode="binary"):
         """Calculates the peri-center radii of particles
         
         particles : Tuple defining the particles either given by 
@@ -412,7 +416,10 @@ class RadialProfile():
         def energy_permitted(r, E, L): # This function changes sign at peri/apo center
             return E - 0.5*L**2/r**2 - self.potential(r)
 
-        return mathtools.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), E=E, L=L, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+        if mode == "binary":
+            return mathtools.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), E=E, L=L, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+        elif mode == "ridders":
+            return mathtools.ridders_method(energy_permitted, r, rup*np.ones_like(r), E=E, L=L, mode="positive")
     
     def radial_action(self, particles, nbins=None, rlow=None, rup=None, exceptions=False, dlog_rmin=None, rpow=0):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224
@@ -1022,7 +1029,16 @@ class RadialProfile():
         else:
             raise ValueError("Unknown mode %s" % mode)
         return rmax,vmax
+    
+    def E_L_of_rperi_rapo(self, rperi, rapo):
+        """Given a peri and apo-center, finds the energy and angular-momentum of the corresponding orbit"""
+        phip = self.potential(rperi)
+        phia = self.potential(rapo)
+
+        e = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
+        l = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
         
+        return e, l
         
     def rcirc_eta_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the radius where a circular orbit

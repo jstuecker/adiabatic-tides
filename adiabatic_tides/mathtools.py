@@ -1160,3 +1160,134 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
     vrs = vs * np.sqrt(1. - mus**2) * np.sign(np.random.uniform(-1,1,rs.shape))
 
     return es, ls, vrs
+
+def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+    phip, phia = pot(rperi), pot(rapo)
+    #E = (phia*rapo**2 - phip * rperi**2) / (rapo**2 - rperi**2)
+    E = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
+    L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
+
+    assert np.all(rapo > rperi)
+    # assert np.all(E >= phia)
+
+    def integrand(r):
+        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
+        return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
+    
+    I = integrals.integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
+    return I / np.pi
+
+def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+    phip, phia = pot(rperi), pot(rapo)
+    E = (phip * rperi**2 - phia*rapo**2) / (rperi**2 - rapo**2)
+    L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
+
+    def integrand(r):
+        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.nan_to_num(1./np.sqrt(vr2), 0)
+    
+    I = integrals.integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
+    return I / np.pi
+
+def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
+    """Finds the root f(x) = 0 using Ridder's method.
+    """
+
+    f0 = f(x0, **kwargs)
+    f2 = f(x2, **kwargs)
+
+    #assert np.all(np.sign(f0*f2) <= 0)
+
+    for i in range(0, niter):
+        x1 = (x0 + x2)/2
+        f1 = f(x1, **kwargs)
+
+        x3 = x1 + (x1 - x0) * np.sign(f0) * f1 / np.sqrt(f1**2 - f0*f2)
+        f3 = f(x3, **kwargs)
+
+        keep1 = np.sign(f1*f3) < 0
+        keep0 = (~keep1) & (np.sign(f0*f3) < 0)
+        keep2 = (~keep1) & (~keep0)
+
+        x0 = x0*keep0 + x1*keep1 + x2*keep2
+        f0 = f0*keep0 + f1*keep1 + f2*keep2
+
+        x2 = x3
+        f2 = f3
+
+    if mode == "both":
+        return x2, x3
+    elif mode == "positive":
+        return np.where(f2 > 0, x2, x0)
+    elif mode == "negative":
+        return np.where(f2 < 0, x2, x0)
+    else:
+        raise ValueError("Unknown mode")
+    
+def newton_raphson(F, Jac, x0, niter=10):
+    x = x0
+    for i in range(niter):
+        myJ = Jac(x)
+        Jinv = np.linalg.inv(myJ)
+        dx = -np.einsum("...ij,...j", Jinv, F(x))
+        x = x + dx
+    return x
+
+def setup_rperi_rapo_of_jl(pot, rp, nbins=200, nsteps_newton=5, umax=None):
+    """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
+    if umax is None:
+        umax = np.max(rp)/np.min(rp)
+    u = cosh_space(umax, nbins, pow=1)[1:]
+
+    rp = rp[:,np.newaxis]
+    ra = rp * u
+    phia, phip = pot(ra), pot(rp)
+
+    j = calculate_radial_action_tanh_peri_apo(pot, rp, ra, nintegrate=40)
+    e = (phia*ra**2 - phip*rp**2)/(ra**2 - rp**2)
+    l = np.sqrt(2.*(phia - phip)/(rp**-2 - ra**-2))
+
+    r0, j0, l0 = np.min(rp[rp>0]), np.min(j[j>0]), np.min(l[l>0])
+
+    from scipy.interpolate import NearestNDInterpolator, RectBivariateSpline
+
+    # We interpolate in index-grid, this should make the function reasonably smooth
+    #ix, iy = np.arange(len(rp)), np.arange(len(u))
+    logrp, logu = np.log(rp+r0), np.log(u)
+    xy = np.stack(np.meshgrid(logrp, logu, indexing="ij"), axis=-1)
+
+    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1).reshape(-1,2), xy.reshape(-1,2))
+    
+    logj_spline = RectBivariateSpline(logrp, logu, np.log(j+j0))
+    logl_spline = RectBivariateSpline(logrp, logu, np.log(l+l0))
+
+    def rpra_of_jl(j, l):
+        # Use NN interpolator for first guess
+        ftarget, gtarget = np.log(j+j0), np.log(l+l0)
+        xy0 = xy_nn(np.stack((ftarget, gtarget), axis=-1))
+
+        def F(xy):
+            return np.stack((logj_spline.ev(xy[...,0], xy[...,1]) - ftarget, logl_spline.ev(xy[...,0], xy[...,1]) - gtarget), axis=-1)
+        def Jac(xy):
+            res = np.array([[logj_spline.ev(xy[...,0], xy[...,1],dx=1), logj_spline.ev(xy[...,0], xy[...,1],dy=1)], 
+                            [logl_spline.ev(xy[...,0], xy[...,1],dx=1), logl_spline.ev(xy[...,0], xy[...,1],dy=1)]])
+            return np.einsum("ij...->...ij", res) # convenient transpose
+        
+        xynew = newton_raphson(F, Jac, xy0, niter=nsteps_newton)
+
+        failed = np.abs(F(xynew)) > np.abs(F(xy0))
+        if np.sum(failed) > 0:
+            print("Warning, Newton Raphson failed for %d/%d points" % (np.sum(failed), failed.size))
+            raise ValueError("Newton Raphson failed for %d/%d points. (For a hack, simply comment this line out)" % (np.sum(failed), failed.size))
+            # In principle, we can fall back to the original nearest neighbor. 
+            # However, in testing I never found this to be necessary and I want
+            # to be aware in case it becomes necessary. Please PM me if you see the
+            # warning and I will look into it.
+            xynew[failed] = xy0[failed] 
+
+        rp, u = np.exp(xynew[...,0])-r0, np.exp(xynew[...,1])
+
+        return rp, rp*u
+    
+    return rpra_of_jl
