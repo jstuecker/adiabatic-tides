@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.interpolate import interp1d, RectBivariateSpline
+from scipy.interpolate import interp1d, RectBivariateSpline, NearestNDInterpolator
 from scipy.integrate import simps, trapezoid
 from scipy.interpolate import CubicSpline
 from . import integrals
@@ -1226,6 +1226,9 @@ def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
         raise ValueError("Unknown mode")
     
 def newton_raphson(F, Jac, x0, niter=10):
+    if niter == 0:
+        return x0
+
     x = x0
     for i in range(niter):
         myJ = Jac(x)
@@ -1234,38 +1237,71 @@ def newton_raphson(F, Jac, x0, niter=10):
         x = x + dx
     return x
 
-def setup_rperi_rapo_of_jl(pot, rp, nbins=200, nsteps_newton=5, umax=None):
+def logspace_map(xmin, xmax):
+    def x_of_u(u):
+        return xmin * (xmax/xmin)**u
+    def u_of_x(x):
+        return np.log(x/xmin) / np.log(xmax/xmin)
+    return x_of_u, u_of_x
+
+def logspace_map_offset(xmin, xmax, xoff):
+    def x_of_u(u):
+        return (xmin+xoff) * ((xmax+xoff)/(xmin+xoff))**u - xoff
+    def u_of_x(x):
+        return np.log((x+xoff)/(xmin+xoff)) / np.log((xmax+xoff)/(xmin+xoff))
+    return x_of_u, u_of_x
+
+def coshspace_map(fmax, pow=1.):
+    def x_of_u(u):
+        return np.cosh(u**pow*np.arccosh(fmax))
+    def u_of_x(x):
+        return (np.arccosh(x)/np.arccosh(fmax))**(1./pow)
+    return x_of_u, u_of_x
+
+def map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, rpoff=0., pow=1.):
+    def rpra_of_uv(u,v):
+        rp = (rpmin+rpoff) * ((rpmax+rpoff)/(rpmin+rpoff))**u - rpoff
+        fac = np.cosh(v**pow*np.arccosh(facmax))
+        return rp, rp*fac
+    def uv_of_rpra(rp, ra):
+        u = np.log((rp+rpoff)/(rpmin+rpoff)) / np.log((rpmax+rpoff)/(rpmin+rpoff))
+        v = (np.arccosh(ra/rp)/np.arccosh(facmax))**(1./pow)
+        return u,v
+    return rpra_of_uv, uv_of_rpra
+
+def setup_rperi_rapo_of_jl(pot, rpmin=1e-10, rpmax=1e10, nbins=200, nsteps_newton=5, nintegrate_action=40, facmax=None, nbins_apo=None):
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
-    if umax is None:
-        umax = np.max(rp)/np.min(rp)
-    u = cosh_space(umax, nbins, pow=1)[1:]
+    if facmax is None:
+        facmax = rpmax/rpmin
+    if nbins_apo is None:
+        nbins_apo = nbins
 
-    rp = rp[:,np.newaxis]
-    ra = rp * u
-    phia, phip = pot(ra), pot(rp)
+    # Set up a uniform domain
+    u = np.linspace(0, 1, nbins)
+    v = np.linspace(0, 1, nbins_apo+1)[1:]
+    uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
-    j = calculate_radial_action_tanh_peri_apo(pot, rp, ra, nintegrate=40)
-    e = (phia*ra**2 - phip*rp**2)/(ra**2 - rp**2)
-    l = np.sqrt(2.*(phia - phip)/(rp**-2 - ra**-2))
+    # Set up functions that map between peri/apo centers and the uniform domain
+    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, pow=1.)
+    rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
-    r0, j0, l0 = np.min(rp[rp>0]), np.min(j[j>0]), np.min(l[l>0])
+    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
+    l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
 
-    from scipy.interpolate import NearestNDInterpolator, RectBivariateSpline
+    j0, l0 = np.min(j[j>0]), np.min(l[l>0])
 
-    # We interpolate in index-grid, this should make the function reasonably smooth
-    #ix, iy = np.arange(len(rp)), np.arange(len(u))
-    logrp, logu = np.log(rp+r0), np.log(u)
-    xy = np.stack(np.meshgrid(logrp, logu, indexing="ij"), axis=-1)
-
-    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1).reshape(-1,2), xy.reshape(-1,2))
+    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1).reshape(-1,2), uvgrid.reshape(-1,2))
     
-    logj_spline = RectBivariateSpline(logrp, logu, np.log(j+j0))
-    logl_spline = RectBivariateSpline(logrp, logu, np.log(l+l0))
+    logj_spline = RectBivariateSpline(u, v, np.log(j+j0))
+    logl_spline = RectBivariateSpline(u, v, np.log(l+l0))
 
     def rpra_of_jl(j, l):
         # Use NN interpolator for first guess
         ftarget, gtarget = np.log(j+j0), np.log(l+l0)
         xy0 = xy_nn(np.stack((ftarget, gtarget), axis=-1))
+
+        if nsteps_newton == 0:
+            return rpra_of_uv(xy0[...,0], xy0[...,1])
 
         def F(xy):
             return np.stack((logj_spline.ev(xy[...,0], xy[...,1]) - ftarget, logl_spline.ev(xy[...,0], xy[...,1]) - gtarget), axis=-1)
@@ -1279,15 +1315,8 @@ def setup_rperi_rapo_of_jl(pot, rp, nbins=200, nsteps_newton=5, umax=None):
         failed = np.abs(F(xynew)) > np.abs(F(xy0))
         if np.sum(failed) > 0:
             print("Warning, Newton Raphson failed for %d/%d points" % (np.sum(failed), failed.size))
-            raise ValueError("Newton Raphson failed for %d/%d points. (For a hack, simply comment this line out)" % (np.sum(failed), failed.size))
-            # In principle, we can fall back to the original nearest neighbor. 
-            # However, in testing I never found this to be necessary and I want
-            # to be aware in case it becomes necessary. Please PM me if you see the
-            # warning and I will look into it.
-            xynew[failed] = xy0[failed] 
+            xynew[failed] = xy0[failed]
 
-        rp, u = np.exp(xynew[...,0])-r0, np.exp(xynew[...,1])
-
-        return rp, rp*u
+        return rpra_of_uv(xynew[...,0], xynew[...,1])
     
     return rpra_of_jl
