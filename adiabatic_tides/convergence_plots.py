@@ -44,7 +44,7 @@ def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, r
     
     return fig,axs
 
-def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=100, norb=40, steps_per_orb=100, rpsplits=None):
+def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=64, norb=40, steps_per_orb=100, rpsplits=None):
     if rpsplits is None:
         rpsplits = np.insert(np.logspace(-3,3,7), 0, 1e-6)
     rs0,Es0,Ls0,vrs0,ms = prof.sample_r_E_L_vr_m_metropolis_perisplits(n_per_split, rpsplits=rpsplits, flat=False, nsteps_chain=nsteps_chain)
