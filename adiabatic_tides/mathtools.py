@@ -1192,6 +1192,7 @@ def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
 
 def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
     """Finds the root f(x) = 0 using Ridder's method.
+    mode : can be "both", "positive" or "negative"
     """
 
     f0 = f(x0, **kwargs)
@@ -1217,7 +1218,7 @@ def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
         f2 = f3
 
     if mode == "both":
-        return x2, x3
+        return x0, x2
     elif mode == "positive":
         return np.where(f2 > 0, x2, x0)
     elif mode == "negative":
@@ -1330,7 +1331,7 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40):
     return rpra_of_jl
 
 def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None):
-    u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
+    ui,vi,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
     l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
@@ -1338,13 +1339,13 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     f = f_of_jl(j,l)
     f0 = np.min(f[f>0])
 
-    ip = RectBivariateSpline(u, v, np.log(f+f0))
+    ip = RectBivariateSpline(ui, vi, np.log(f+f0))
 
     def f_of_rperi_rapo(rp, ra):
         u,v = uv_of_rpra(rp, ra)
         res = np.exp(ip.ev(u,v)) - f0
 
-        valid = (u >= 0) & (u <= 1) & (v >= 0) & (v <= 1)
+        valid = (u >= np.min(ui)) & (u <= np.max(ui)) & (v >= np.min(vi)) & (v <= np.max(vi))
         res[~valid] = 0
 
         if fpa_below is not None: 
