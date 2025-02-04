@@ -1406,9 +1406,9 @@ def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0,
     I = integrals.integrate_double_exponential_a_b(integrand_rp, a, b, N=N, tmax=4)
     return 4.*np.pi*I  / r**2
 
-def sample_ra_rp_given_r_metropolis_perisplot(f_of_el, pot, accr, rs, nsteps_chain=40, rprange=(0., np.infty)):
+def sample_ra_rp_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
     """Samples particle's peri-apo-centers given their radii and an allowed range of peri-center"""
-    assert (np.min(rs) >= rprange[0]) & (rprange[1] >= rprange[0])
+    assert (np.min(rs) >= rperirange[0]) & (rperirange[1] >= rperirange[0])
 
     phis = pot(rs)
     def likelihood_rpra(rp, ra):
@@ -1423,7 +1423,7 @@ def sample_ra_rp_given_r_metropolis_perisplot(f_of_el, pot, accr, rs, nsteps_cha
         return np.divide(f * ldlde, vr, out=np.zeros_like(f), where=valid)
 
     # Morph space to a uniform space in (u,v) going from (-inf, inf) each
-    rpmin, rpmax = np.clip(rprange[0], 0, rs), np.clip(rprange[1], 0, rs)
+    rpmin, rpmax = np.clip(rperirange[0], 0, rs), np.clip(rperirange[1], 0, rs)
     def rp_ra(u,v):
         rp = 0.5*(rpmax+rpmin) + 0.5*(rpmax-rpmin) * np.tanh(u)
         ra = rs * (1. + np.exp(v))

@@ -15,9 +15,10 @@ def plot_profile_rel(axs, rbins, rhoi, rhoref, **kwargs):
     axs[0].set_ylabel(r"$\rho$")
     axs[1].set_ylabel(r"$\rho/\rho_0$")
 
-def plot_perisplit_integration(prof, npart=100000, nsteps_chain=100, rpmin=0.1, rpmax=1.0, norb=100, steps_per_orb=100):
+def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, rpmax=1.0, norb=100, steps_per_orb=100):
 
     rs0,Es0,Ls0,vrs0,ms,ri,rho = prof.sample_r_E_L_vr_m_metropolis(npart, rpmin=rpmin, rpmax=rpmax, nsteps_chain=nsteps_chain, get_rho=True, rmax=1e4)
+
     tmax = prof.tcirc(rpmin)
     
     rbins = np.geomspace(rpmin/2., rpmax*1e2, 100)

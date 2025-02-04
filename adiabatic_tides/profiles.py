@@ -130,7 +130,7 @@ class RadialProfile():
         """Abstract: Sample particles' positions, velocities and masses"""
         raise NotImplementedError("This optional function has not been implemented")
     
-    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, ninterp=1001, nintegrate=150, nsteps_chain=100, get_rho=False):
+    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, ninterp=1001, nintegrate=32, nsteps_chain=64, get_rho=False):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -157,14 +157,13 @@ class RadialProfile():
         ri = np.logspace(np.log10(rmin), np.log10(rmax), ninterp)
         if (rpmin is not None) or (rpmax is not None):
             ri = ri[ri >= rpmin]
-            rho = mathtools.integrate_fofel_adaptive_rperi_lim(self.f_of_el, self.potential, ri, N=nintegrate, rp1=rpmin, rp2=rpmax)
-            assert(np.all(~np.isnan(rho)))
+
+            rho = mathtools.integrate_fofel_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
             rs,ms = mathtools.sample_rimi_from_density(ri, rho, ntot)
-            assert(np.all(~np.isnan(rs)))
-            sel = rs < 0
-            Es,Ls,vrs = np.zeros_like(rs), np.zeros_like(rs), np.zeros_like(rs)
-            #Es[sel],Ls[sel],vrs[sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit_old(self.f_of_el, self.potential, self.accr, rs[sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax)
-            Es[~sel],Ls[~sel],vrs[~sel] = mathtools.sample_E_L_vr_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs[~sel], nsteps_chain=nsteps_chain, rp1=rpmin, rp2=rpmax, phimax=self.phimax())
+
+            ra, rp = mathtools.sample_ra_rp_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs, rperirange=(rpmin, rpmax), nsteps_chain=nsteps_chain)
+            Es,Ls,vrs = mathtools.E_L_vr_from_rp_r_ra(self.potential, rp, rs, ra)
+
             if get_rho:
                 return rs,Es,Ls,vrs,ms,ri,rho
             else:
