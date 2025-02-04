@@ -1343,3 +1343,56 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40):
         return np.exp(ip.ev(u,v)) - f0
     
     return f_of_rperi_rapo
+
+def save_divide(a, b):
+    return np.divide(a, b, out=np.zeros_like(a), where=(b!=0)) # &(a!=np.infty)&(~np.isnan(a))&(~np.isnan(b)
+
+def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
+    """The jacobian need for a substitution of angular momentum and energy through
+    peri and apocenter radii multiplied with the angular moment L
+    """
+    acca, accp = accr(ra), accr(rp)
+    phia, phip = pot(ra), pot(rp)
+    res = ra*rp*(ra**3*acca - ra*rp**2*acca + 2*rp**2*phia - 2*rp**2*phip)
+    res = res *(ra**2*rp*accp + 2*ra**2*phia - 2*ra**2*phip - rp**3*accp)
+    res = save_divide(res, (ra - rp)**3*(ra + rp)**3)
+    
+    res = np.nan_to_num(res, 0)
+    if get_el:
+        e = save_divide(phia*ra**2 - phip*rp**2, ra**2 - rp**2)
+        l = np.sqrt(2*save_divide(phia - phip,rp**-2 - ra**-2))
+        return e,l,np.abs(res)
+    else:
+        return np.abs(res)
+
+def integrate_fofel_peri_apo(f_of_el, pot, accr, r, N=32, N2=None):
+    if N2 is None:
+        N2 = N
+
+    r = np.array(r)
+    phir = pot(r)
+
+    def integrate_ra_given_rp(f_of_el, phi, rp, r, N=N2):
+        def integrand(ra):
+            e,l,ldlde = Jacobian_ldlde_drpdra(phi, accr, rp[...,np.newaxis], ra, get_el=True)
+            vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
+
+            valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
+
+            f = np.zeros_like(e)
+            f[valid] = f_of_el(e[valid], l[valid])
+
+            return np.divide(f * ldlde, vr, out=np.zeros_like(f), where=valid)
+
+        # I = integrals.integrate_exp_a_inf(integrand, a==r[...,np.newaxis], N=N, xscale==r[...,np.newaxis])
+        I = integrals.integrate_double_exponential_a_inf(integrand, a=r[...,np.newaxis], N=N,c=1, tmax=4, xscale=r[...,np.newaxis])
+
+        return I
+    
+    def integrand_rp(rp):
+        return integrate_ra_given_rp(f_of_el, pot, rp, r)
+    
+    #I = integrals.integrate_tanh_a_b(integrand_rp, 0, r, N=N)
+    # I = integrals.integrate_exp_tanh_a_b(integrand_rp, r*1e-8, r, N=N, tmax=8)
+    I = integrals.integrate_double_exponential_a_b(integrand_rp, 0, r, N=N, tmax=4)
+    return 4.*np.pi*I  / r**2
