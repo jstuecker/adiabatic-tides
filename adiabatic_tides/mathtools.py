@@ -1365,12 +1365,15 @@ def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
     else:
         return np.abs(res)
 
-def integrate_fofel_peri_apo(f_of_el, pot, accr, r, N=32, N2=None):
-    if N2 is None:
-        N2 = N
-
+def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty)):
+    """Integrates a distribution function, discretizing the integral in "paspace"
+    paspace is the space of possible peri- and apocenter radii and maps one to one
+    to (E,L) space
+    """
     r = np.array(r)
     phir = pot(r)
+    if N2 is None:
+        N2 = N
 
     def integrate_ra_given_rp(f_of_el, phi, rp, r, N=N2):
         def integrand(ra):
@@ -1384,15 +1387,21 @@ def integrate_fofel_peri_apo(f_of_el, pot, accr, r, N=32, N2=None):
 
             return np.divide(f * ldlde, vr, out=np.zeros_like(f), where=valid)
 
-        # I = integrals.integrate_exp_a_inf(integrand, a==r[...,np.newaxis], N=N, xscale==r[...,np.newaxis])
-        I = integrals.integrate_double_exponential_a_inf(integrand, a=r[...,np.newaxis], N=N,c=1, tmax=4, xscale=r[...,np.newaxis])
+        a = np.clip(raporange[0], r, None)[...,np.newaxis]
+        if raporange[1] == np.infty:
+            I = integrals.integrate_double_exponential_a_inf(integrand, a=a, N=N,c=1, tmax=4, xscale=a)
+        else: # We have a finite upper limit
+            print("Warning, convergence of finite upper apo-center limit has not been tested yet... Use with care")
+            b = np.clip(raporange[1], r, None)[...,np.newaxis]
+            I = integrals.integrate_double_exponential_a_b(integrand, a, b, N=N,c=1, tmax=4)
 
         return I
     
     def integrand_rp(rp):
         return integrate_ra_given_rp(f_of_el, pot, rp, r)
     
-    #I = integrals.integrate_tanh_a_b(integrand_rp, 0, r, N=N)
-    # I = integrals.integrate_exp_tanh_a_b(integrand_rp, r*1e-8, r, N=N, tmax=8)
-    I = integrals.integrate_double_exponential_a_b(integrand_rp, 0, r, N=N, tmax=4)
+    a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
+    #I = integrals.integrate_tanh_a_b(integrand_rp, a, b, N=N)
+    # I = integrals.integrate_exp_tanh_a_b(integrand_rp, a, b, N=N, tmax=8)
+    I = integrals.integrate_double_exponential_a_b(integrand_rp, a, b, N=N, tmax=4)
     return 4.*np.pi*I  / r**2
