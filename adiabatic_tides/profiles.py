@@ -204,6 +204,10 @@ class RadialProfile():
     def f_of_el(self, E, L):
         """Abstract: By default we assume an isotropic distribution"""
         return self.f_of_e(E)
+    
+    def f_of_rperi_rapo(self, rp, ra):
+        E, L = self.E_L_of_rperi_rapo(rp, ra)
+        return self.f_of_el(E, L)
 
     #----------- Functions that can be implemented on the abstract level already ----------# 
     def accr(self, r):

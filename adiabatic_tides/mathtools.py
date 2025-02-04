@@ -1318,16 +1318,18 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40):
         
         xynew = newton_raphson(F, Jac, xy0, niter=nsteps_newton)
 
-        failed = np.abs(F(xynew)) > np.abs(F(xy0))
+        failed = np.linalg.norm(F(xynew), axis=-1) > np.linalg.norm(F(xy0), axis=-1)
+        failed |= (xynew[...,0] < np.min(u)) | (xynew[...,0] > np.max(u)) | (xynew[...,1] < np.min(v)) | (xynew[...,1] > np.max(v))
         if np.sum(failed) > 0:
             print("Warning, Newton Raphson failed for %d/%d points" % (np.sum(failed), failed.size))
             xynew[failed] = xy0[failed]
+            #xynew[failed] = np.nan
 
         return rpra_of_uv(xynew[...,0], xynew[...,1])
     
     return rpra_of_jl
 
-def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40):
+def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None):
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
@@ -1340,7 +1342,18 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40):
 
     def f_of_rperi_rapo(rp, ra):
         u,v = uv_of_rpra(rp, ra)
-        return np.exp(ip.ev(u,v)) - f0
+        res = np.exp(ip.ev(u,v)) - f0
+
+        valid = (u >= 0) & (u <= 1) & (v >= 0) & (v <= 1)
+        res[~valid] = 0
+
+        if fpa_below is not None: 
+            # The contribution of orbits with pericenters below rpmin may be relevant
+            # it is possible to define a distribution function that we assume for those
+            shape = np.broadcast(rp,ra).shape
+            res[u < 0] = fpa_below(np.broadcast_to(rp, shape)[u < 0], np.broadcast_to(ra, shape)[u < 0])
+
+        return res
     
     return f_of_rperi_rapo
 
@@ -1365,10 +1378,12 @@ def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
     else:
         return np.abs(res)
 
-def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty)):
+def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), farguments_peri_apo=False):
     """Integrates a distribution function, discretizing the integral in "paspace"
     paspace is the space of possible peri- and apocenter radii and maps one to one
     to (E,L) space
+
+    f_of_el : function f(E,L) or f(rp, ra) if farguments_peri_apo is True
     """
     r = np.array(r)
     phir = pot(r)
@@ -1382,10 +1397,14 @@ def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0,
 
             valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
 
-            f = np.zeros_like(e)
-            f[valid] = f_of_el(e[valid], l[valid])
+            fval = np.zeros_like(e)
+            if farguments_peri_apo:
+                ones = np.ones(np.broadcast(rp[...,np.newaxis],ra).shape)
+                fval[valid] = f_of_el((rp[...,np.newaxis]*ones)[valid], (ra*ones)[valid])
+            else:
+                fval[valid] = f_of_el(e[valid], l[valid])
 
-            return np.divide(f * ldlde, vr, out=np.zeros_like(f), where=valid)
+            return np.divide(fval * ldlde, vr, out=np.zeros_like(fval), where=valid)
 
         a = np.clip(raporange[0], r, None)[...,np.newaxis]
         if raporange[1] == np.infty:
@@ -1451,8 +1470,8 @@ def E_L_vr_from_rp_r_ra(pot, rperi, r, rapo):
     
     e = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
     l = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
-
+    
     vr = np.sqrt(np.clip(2*e - 2*phi - l**2/r**2, 0, None))
     vr = vr * np.sign(np.random.uniform(-1,1,size=vr.shape))
-
+    
     return e, l, vr
