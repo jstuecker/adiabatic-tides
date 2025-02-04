@@ -609,7 +609,7 @@ def eddington_inversion_adaptive(ri, prof, nintegrate=None):
         return spl_d2rhodphi2(E) * (E <= phi[-1])
     
     vscale = prof.vcirc(ri)
-    I = integrals.integrate_exp_0_inf(integrand, nintegrate, xscale=vscale)
+    I = integrals.integrate_exp_a_inf(integrand, N=nintegrate, xscale=vscale)
 
     return phi, I / (2. * np.pi**2)
 
@@ -694,7 +694,7 @@ def integrate_f_to_density_adaptive(f_of_e, phi, nintegrate=200):
     fphi = f_of_e(phi)
     phiscale = np.interp(fphi*0.5, fphi[::-1], phi[::-1])
     
-    return integrals.integrate_exp_0_inf(integrand, nintegrate, xscale=phiscale)* (np.sqrt(2.)*4.*np.pi)
+    return integrals.integrate_exp_a_inf(integrand, N=nintegrate, xscale=phiscale)* (np.sqrt(2.)*4.*np.pi)
 
 def integrate_f_to_density_perisplit_adaptive(ri, pot, f_of_e, rp1=0, rp2=np.infty, nintegrate=None, rmaxfac=1e10):
     """Integrates a phase space distribution to obtain the density
@@ -1000,14 +1000,14 @@ def integrate_fofel_adaptive(f_of_el, phi, r, N=100):
             E = (phi(r)[...,np.newaxis] + 0.5*vr**2)[...,np.newaxis] + 0.5*vl**2
             L = vl*r[...,np.newaxis,np.newaxis]
             return 2.*np.pi*vl * f_of_el(E, L)
-        return integrals.integrate_exp_0_inf(integrand, N=N, xscale=vlscale)
+        return integrals.integrate_exp_a_inf(integrand, N=N, xscale=vlscale)
     
     def integrand(vr):
         return integrate_vl(f_of_el, phi, vr, r, N=N)
     
     vrscale = np.sqrt(phi(r*2.) - phi(r))
     
-    return 2.*integrals.integrate_exp_0_inf(integrand, N=N, xscale=vrscale)
+    return 2.*integrals.integrate_exp_a_inf(integrand, N=N, xscale=vrscale)
 
 def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=100):
     r = np.array(r)
@@ -1046,7 +1046,7 @@ def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=1
     vrscale = np.sqrt(phi(r*2.) - phi(r))
 
     
-    rho[sel] = 2.*integrals.integrate_exp_0_inf(integrand, N=N, xscale=vrscale)
+    rho[sel] = 2.*integrals.integrate_exp_a_inf(integrand, N=N, xscale=vrscale)
     
     return rho
 
