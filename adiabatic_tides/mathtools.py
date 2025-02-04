@@ -1405,3 +1405,54 @@ def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0,
     # I = integrals.integrate_exp_tanh_a_b(integrand_rp, a, b, N=N, tmax=8)
     I = integrals.integrate_double_exponential_a_b(integrand_rp, a, b, N=N, tmax=4)
     return 4.*np.pi*I  / r**2
+
+def sample_ra_rp_given_r_metropolis_perisplot(f_of_el, pot, accr, rs, nsteps_chain=40, rprange=(0., np.infty)):
+    """Samples particle's peri-apo-centers given their radii and an allowed range of peri-center"""
+    assert (np.min(rs) >= rprange[0]) & (rprange[1] >= rprange[0])
+
+    phis = pot(rs)
+    def likelihood_rpra(rp, ra):
+        e,l,ldlde = Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=True)
+        vr = np.sqrt(np.clip(2*e - 2*phis - l**2/rs**2, 0, None))
+
+        valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
+
+        f = np.zeros_like(e)
+        f[valid] = f_of_el(e[valid], l[valid])
+
+        return np.divide(f * ldlde, vr, out=np.zeros_like(f), where=valid)
+
+    # Morph space to a uniform space in (u,v) going from (-inf, inf) each
+    rpmin, rpmax = np.clip(rprange[0], 0, rs), np.clip(rprange[1], 0, rs)
+    def rp_ra(u,v):
+        rp = 0.5*(rpmax+rpmin) + 0.5*(rpmax-rpmin) * np.tanh(u)
+        ra = rs * (1. + np.exp(v))
+        return rp, ra
+    
+    def drp_x_dra_dudv(rp,ra):
+        drpdu = 2 * (rpmax - rp) * (rp - rpmin) / (rpmax - rpmin)
+        dradv = ra-rs
+
+        return drpdu * dradv
+
+    def likelihood_uv(uv):
+        rp, ra = rp_ra(uv[...,0], uv[...,1])
+        jacobian = drp_x_dra_dudv(rp, ra)
+
+        return likelihood_rpra(rp, ra) * jacobian
+    
+    uv0 = np.random.uniform(-2,2, size=rs.shape + (2,))
+    uv = sample_metropolis_hastings(likelihood_uv, uv0, stepsize=(4., 8.), nsteps=nsteps_chain, nhalf=nsteps_chain//4) # , nhalf=nsteps_chain//4
+    
+    return rp_ra(uv[...,0], uv[...,1])
+
+def E_L_vr_from_rp_r_ra(pot, rperi, r, rapo):
+    phip, phi, phia = pot(rperi), pot(r), pot(rapo)
+    
+    e = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
+    l = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
+
+    vr = np.sqrt(np.clip(2*e - 2*phi - l**2/r**2, 0, None))
+    vr = vr * np.sign(np.random.uniform(-1,1,size=vr.shape))
+
+    return e, l, vr
