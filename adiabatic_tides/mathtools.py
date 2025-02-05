@@ -1291,7 +1291,44 @@ def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, 
     uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_cosh(rpmin, rpmax, facmax)
+    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, rpoff=rpoff, pow=pow)
+    rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
+
+    return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
+
+def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax, rpoff=0., tmax=5):
+    def rpra_of_uv(u,v):
+        rp = (rpmin+rpoff) * ((rlmax+rpoff)/(rpmin+rpoff))**u - rpoff
+        
+        logramax = np.log(ramax_of_rp(rp))
+        t = (v - 0.5) * 2 * tmax
+        logra = 0.5*(logramax+np.log(rp)) + 0.5*(logramax-np.log(rp)) * np.tanh(t)
+        
+        return rp, np.exp(logra)
+    
+    def uv_of_rpra(rp, ra):
+        u = np.log((rp+rpoff)/(rpmin+rpoff)) / np.log((rlmax+rpoff)/(rpmin+rpoff))
+        
+        logramax = np.log(ramax_of_rp(rp))
+        t =  np.arctanh((np.log(ra) - 0.5*(logramax+np.log(rp))) / (0.5*(logramax-np.log(rp))))
+        v = 0.5*(t/tmax + 0.5)
+
+        return u,v
+    
+    return rpra_of_uv, uv_of_rpra
+
+def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_apo=None, rpoff=0.):
+    """like define_peri_apo_table, but for profiles where valid apo centers are limited"""
+    if nbins_apo is None:
+        nbins_apo = nbins
+
+    # Set up a uniform domain
+    u = np.linspace(0, 1, nbins)
+    v = np.linspace(0, 1, nbins_apo)
+    uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
+
+    # Set up functions that map between peri/apo centers and the uniform domain
+    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax, rpoff=rpoff, tmax=1+np.cbrt(nbins_apo))
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
