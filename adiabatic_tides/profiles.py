@@ -1748,7 +1748,7 @@ class NumericalProfile(RadialProfile):
         self.ri = ri
 
         assert np.all(rhoi > 0), "Density profile has to be positive"
-        assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic"
+        assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic decreasing"
         rdiffmin = np.min(0.5*(rhoi[:-1] - rhoi[1:])/(rhoi[1:] + rhoi[:-1]))
         if rdiffmin < 1e-10:
             print("Warning: I found that some consecutive points have only a relative difference of %.1e in density. This may lead to cancelation. I'll do my best to deal with this, but no warranties!" % rdiffmin)
@@ -2065,7 +2065,7 @@ class MonteCarloProfile(RadialProfile):
         mystr +=  "_mihash" + str(zlib.adler32(self.mi.data.tobytes()))
         
         return mystr
-        
+
 class RadialTidalProfile(RadialProfile):
     def __init__(self, alpha=0.):
         """A repulsive potential of form phi = -0.5*alpha*r**2
@@ -2078,6 +2078,7 @@ class RadialTidalProfile(RadialProfile):
         
         self.alpha = alpha
         self.rhoalpha = - 3.* self.alpha / (4.*np.pi*self.G)
+        self.warned = False
         
     def density(self, r):
         """Density in Msol/Mpc**3"""
@@ -2093,7 +2094,11 @@ class RadialTidalProfile(RadialProfile):
         return - 0.5 * self.alpha* r**2
     def daccdr(self, r):
         """The radial derivative of the acceleration"""
-        return 3.*self.alpha/self.G * r**2
+        if not self.warned:
+            print("Warning: this function was wrong previously... I have to check some things again! ")
+            self.warned = True
+        # return 3.*self.alpha/self.G * r**2 -- previous wrong version...
+        return self.alpha * np.ones_like(r)
     def to_string(self):
         return "tid_alpha=%.5e" % self.alpha
     
