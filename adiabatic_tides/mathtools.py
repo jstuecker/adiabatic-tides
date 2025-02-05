@@ -1161,7 +1161,7 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
 
     return es, ls, vrs
 
-def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, invalid_vr_to_zero=True):
     phip, phia = pot(rperi), pot(rapo)
     #E = (phia*rapo**2 - phip * rperi**2) / (rapo**2 - rperi**2)
     E = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
@@ -1170,9 +1170,14 @@ def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
     assert np.all(rapo > rperi)
     # assert np.all(E >= phia)
 
-    def integrand(r):
-        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
-        return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
+    if invalid_vr_to_zero:
+        def integrand(r):
+            vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
+            return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
+    else:
+        def integrand(r):
+            vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
+            return np.sqrt(vr2)
     
     I = integrals.integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
@@ -1198,17 +1203,18 @@ def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
     f0 = f(x0, **kwargs)
     f2 = f(x2, **kwargs)
 
-    #assert np.all(np.sign(f0*f2) <= 0)
+    assert np.all(np.sign(f0*f2) <= 0)
 
     for i in range(0, niter):
         x1 = (x0 + x2)/2
         f1 = f(x1, **kwargs)
 
-        x3 = x1 + (x1 - x0) * np.sign(f0) * f1 / np.sqrt(f1**2 - f0*f2)
+        sqr = np.sqrt(f1**2 - f0*f2)
+        x3 = x1 + (x1 - x0) * np.sign(f0) * np.divide(f1, sqr, out=np.ones_like(f1)*0.5, where=sqr > 0.)
         f3 = f(x3, **kwargs)
 
         keep1 = np.sign(f1*f3) < 0
-        keep0 = (~keep1) & (np.sign(f0*f3) < 0)
+        keep0 = (~keep1) & (np.sign(f0*f3) <= 0)
         keep2 = (~keep1) & (~keep0)
 
         x0 = x0*keep0 + x1*keep1 + x2*keep2
@@ -1217,12 +1223,14 @@ def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
         x2 = x3
         f2 = f3
 
+    assert np.all(f2*f0 <= 0)
+
     if mode == "both":
         return x0, x2
     elif mode == "positive":
-        return np.where(f2 > 0, x2, x0)
+        return np.where(f2 >= 0, x2, x0)
     elif mode == "negative":
-        return np.where(f2 < 0, x2, x0)
+        return np.where(f2 <= 0, x2, x0)
     else:
         raise ValueError("Unknown mode")
     
@@ -1476,3 +1484,115 @@ def E_L_vr_from_rp_r_ra(pot, rperi, r, rapo):
     vr = vr * np.sign(np.random.uniform(-1,1,size=vr.shape))
     
     return e, l, vr
+
+def find_single_root(acc, r0=1., maxiter=100, eps=1e-8, warning=True, mode="negative"):
+    """Assume acc is a function that is < 0 at small radii and > 0 at large radii"""
+    r = r0
+
+    # Find a radius where the sign of the acceleration is positive and negative
+    if acc(r) == 0.:
+        return r
+    elif acc(r) > 0.:
+        rpos = r
+        for i in range(0, maxiter):
+            r = r / 2.
+            if acc(r) < 0.:
+                rneg = r
+                break
+            if i == maxiter-1:
+                raise ValueError("I couldn't find any radius where the profile is attractive")
+    else:
+        rneg = r
+        for i in range(0, maxiter):
+            r = r * 2.
+            if acc(r) > 0.:
+                rpos = r
+                break
+            if i == maxiter-1:
+                if warning:
+                    print("Warning, I couldn't find any radius where the profile is repulsive, rtid=infty")
+                
+                return np.infty
+
+    for i in range(0, maxiter):
+        r = 0.5*(rpos + rneg)
+        if acc(r) > 0.:
+            rpos = r
+        else:
+            rneg = r
+            
+        if (rpos-rneg)/r < eps:
+            break
+    
+    if mode == "negative":
+        return rneg
+    elif mode == "positive":
+        return rpos
+    elif mode =="both":
+        return rneg, rpos
+    else:
+        raise ValueError("mode has to be either negative, positive or both")
+
+def find_rlmax(accr, daccdr, r0=1.):
+    # vcirc : np.sqrt(r*accr(r))
+    # lcirc : sqrt(r*acc(r)) *r
+    # lc2 = r**3 * acc
+    # dlc2dr = 3*r**2 * acc + r**3 * daccdr
+    def myfL(r):
+        return 3.*accr(r) + daccdr(r)*r
+    return find_single_root(myfL, r0, eps=1e-10, mode="negative")
+
+def find_rphimax(accr, r0=1.):
+    return find_single_root(accr, r0, eps=1e-10, mode="negative", warning=False)
+
+def rperi_rapo_valid(pot, accr, rperi, rapo):
+    """To have a valid apo-center we need to fulfill two conditions
+    (1) pot(rapo) >= pot(rperi)
+    (2) acc(rapo) + L**2/rapo**3 <= 0
+    """
+
+    # Check for circular obits, these can be a problem...
+    # We slightly perturb ther apo-center to avoid having to deal
+    # with the exact solution, that requires a higher derivative
+    circ = rperi == rapo
+    if np.sum(circ) > 0:
+        rapo = np.copy(rapo)
+        rapo[circ] = rperi[circ] * (1. + 1e-8)
+
+    phip, phia = pot(rperi), pot(rapo)
+
+    valid = rapo > rperi
+    valid = valid & (phia >= phip) & (rapo >= rperi)
+    if np.sum(valid) > 0:
+        L2 = 2. * (phia[valid] - phip[valid]) / (rperi[valid]**-2 - rapo[valid]**-2)
+        valid[valid] = valid[valid] & (accr(rapo[valid]) + L2/rapo[valid]**3 <= 0)
+
+    return valid
+
+def rperi_rapo_valid_continuous(pot, accr, rperi, rapo):
+    """Like rperi_rapo_valid but returns a float that is >= 0 if valid and < 0 if not"""
+    phip, phia = pot(rperi), pot(rapo)
+
+    f1 = phia - phip
+    # L2 = np.clip(2. * save_divide(phia - phip, rperi**-2 - rapo**-2), 0, None)
+    L2 = np.clip(2. * save_divide((phia - phip)*rperi**2*rapo**2, rapo**2 - rperi**2), 0, None)
+    f2 = -(accr(rapo) + L2/rapo**3)
+
+    f = f1*f2 * (0.5 - 1.0*((f1 < 0)&(f2<0)))
+    return f #f2 * (0.5 - 1.0*((f2 > 0)&(f1<0)))
+
+def rapo_max_of_rperi(pot, accr, rperi, rlmax, rtid):
+    def valid(rapo):
+        return rperi_rapo_valid_continuous(pot, accr, rperi, rapo)
+    
+    return ridders_method(valid, np.sqrt(rperi*rlmax), rtid*1.1, mode="positive", niter=10)
+
+def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e-6):
+    rlmax, rtid = find_rlmax(accr, daccdr), find_rphimax(accr)
+    rperi = np.geomspace(rpmin, rlmax, nbins)
+    rapo = np.append(rapo_max_of_rperi(pot, accr, rperi[:-1], rlmax, rtid), rlmax)
+    
+    def ramax_of_rp(rp):
+        return np.interp(rp, rperi, rapo)
+
+    return rperi, rapo, rlmax, rtid, ramax_of_rp
