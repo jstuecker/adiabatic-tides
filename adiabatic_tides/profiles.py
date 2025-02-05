@@ -2075,6 +2075,9 @@ class RadialTidalProfile(RadialProfile):
                 alpha < 0 does not make much sense in this context"""
 
         super().__init__()
+
+        if alpha < 0:
+            raise ValueError("Probably you want to use a positive alpha... If you don't, just comment this!")
         
         self.alpha = alpha
         self.rhoalpha = - 3.* self.alpha / (4.*np.pi*self.G)

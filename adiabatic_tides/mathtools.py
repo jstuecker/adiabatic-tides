@@ -1162,13 +1162,15 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
     return es, ls, vrs
 
 def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, invalid_vr_to_zero=True):
+    I = np.zeros(np.broadcast(rperi, rapo).shape)
+    I[rapo < rperi] = np.nan
+    sel = rapo > rperi
+    rperi, rapo = rperi[sel], rapo[sel]
+
     phip, phia = pot(rperi), pot(rapo)
     #E = (phia*rapo**2 - phip * rperi**2) / (rapo**2 - rperi**2)
     E = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
     L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
-
-    assert np.all(rapo > rperi)
-    # assert np.all(E >= phia)
 
     if invalid_vr_to_zero:
         def integrand(r):
@@ -1179,7 +1181,7 @@ def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, inval
             vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
             return np.sqrt(vr2)
     
-    I = integrals.integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
+    I[sel] = integrals.integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
 
 def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
@@ -1296,9 +1298,9 @@ def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, 
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
 
-def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax, rpoff=0., tmax=5):
+def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tmax=5):
     def rpra_of_uv(u,v):
-        rp = (rpmin+rpoff) * ((rlmax+rpoff)/(rpmin+rpoff))**u - rpoff
+        rp = (rpmin+rpoff) * ((rpmax+rpoff)/(rpmin+rpoff))**u - rpoff
         
         logramax = np.log(ramax_of_rp(rp))
         t = (v - 0.5) * 2 * tmax
@@ -1307,11 +1309,11 @@ def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax, rpoff=0., tma
         return rp, np.exp(logra)
     
     def uv_of_rpra(rp, ra):
-        u = np.log((rp+rpoff)/(rpmin+rpoff)) / np.log((rlmax+rpoff)/(rpmin+rpoff))
+        u = np.log((rp+rpoff)/(rpmin+rpoff)) / np.log((rpmax+rpoff)/(rpmin+rpoff))
         
         logramax = np.log(ramax_of_rp(rp))
         t =  np.arctanh((np.log(ra) - 0.5*(logramax+np.log(rp))) / (0.5*(logramax-np.log(rp))))
-        v = 0.5*(t/tmax + 0.5)
+        v = 0.5*(t/tmax + 1.)
 
         return u,v
     
@@ -1328,7 +1330,7 @@ def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_ap
     uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax, rpoff=rpoff, tmax=1+np.cbrt(nbins_apo))
+    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=1+np.cbrt(nbins_apo))
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
@@ -1438,10 +1440,11 @@ def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0,
 
     def integrate_ra_given_rp(f_of_el, phi, rp, r, N=N2):
         def integrand(ra):
-            e,l,ldlde = Jacobian_ldlde_drpdra(phi, accr, rp[...,np.newaxis], ra, get_el=True)
-            vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                e,l,ldlde = Jacobian_ldlde_drpdra(phi, accr, rp[...,np.newaxis], ra, get_el=True)
+                vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
 
-            valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
+                valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
 
             fval = np.zeros_like(e)
             if farguments_peri_apo:
@@ -1587,6 +1590,7 @@ def rperi_rapo_valid(pot, accr, rperi, rapo):
     (1) pot(rapo) >= pot(rperi)
     (2) acc(rapo) + L**2/rapo**3 <= 0
     """
+    rperi, rapo = np.broadcast_arrays(rperi, rapo)
 
     # Check for circular obits, these can be a problem...
     # We slightly perturb ther apo-center to avoid having to deal
@@ -1599,7 +1603,7 @@ def rperi_rapo_valid(pot, accr, rperi, rapo):
     phip, phia = pot(rperi), pot(rapo)
 
     valid = rapo > rperi
-    valid = valid & (phia >= phip) & (rapo >= rperi)
+    valid = valid & (phia >= phip)
     if np.sum(valid) > 0:
         L2 = 2. * (phia[valid] - phip[valid]) / (rperi[valid]**-2 - rapo[valid]**-2)
         valid[valid] = valid[valid] & (accr(rapo[valid]) + L2/rapo[valid]**3 <= 0)
