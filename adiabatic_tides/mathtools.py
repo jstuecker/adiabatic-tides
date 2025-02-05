@@ -1426,32 +1426,32 @@ def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
     else:
         return np.abs(res)
 
-def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), farguments_peri_apo=False):
+def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), farguments_peri_apo=False):
     """Integrates a distribution function, discretizing the integral in "paspace"
     paspace is the space of possible peri- and apocenter radii and maps one to one
     to (E,L) space
 
-    f_of_el : function f(E,L) or f(rp, ra) if farguments_peri_apo is True
+    f : function f(E,L) or f(rp, ra) if farguments_peri_apo is True
     """
     r = np.array(r)
     phir = pot(r)
     if N2 is None:
         N2 = N
 
-    def integrate_ra_given_rp(f_of_el, phi, rp, r, N=N2):
+    def integrate_ra_given_rp(rp):
         def integrand(ra):
             with np.errstate(divide='ignore', invalid='ignore'):
-                e,l,ldlde = Jacobian_ldlde_drpdra(phi, accr, rp[...,np.newaxis], ra, get_el=True)
+                e,l,ldlde = Jacobian_ldlde_drpdra(pot, accr, rp[...,np.newaxis], ra, get_el=True)
                 vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
 
                 valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
 
             fval = np.zeros_like(e)
             if farguments_peri_apo:
-                ones = np.ones(np.broadcast(rp[...,np.newaxis],ra).shape)
-                fval[valid] = f_of_el((rp[...,np.newaxis]*ones)[valid], (ra*ones)[valid])
+                rps, ras = np.broadcast_arrays(rp[...,np.newaxis], ra)
+                fval[valid] = f(rps[valid], ras[valid])
             else:
-                fval[valid] = f_of_el(e[valid], l[valid])
+                fval[valid] = f(e[valid], l[valid])
 
             return np.divide(fval * ldlde, vr, out=np.zeros_like(fval), where=valid)
 
@@ -1465,13 +1465,8 @@ def integrate_fofel_paspace(f_of_el, pot, accr, r, N=32, N2=None, rperirange=(0,
 
         return I
     
-    def integrand_rp(rp):
-        return integrate_ra_given_rp(f_of_el, pot, rp, r)
-    
     a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
-    #I = integrals.integrate_tanh_a_b(integrand_rp, a, b, N=N)
-    # I = integrals.integrate_exp_tanh_a_b(integrand_rp, a, b, N=N, tmax=8)
-    I = integrals.integrate_double_exponential_a_b(integrand_rp, a, b, N=N, tmax=4)
+    I = integrals.integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
     return 4.*np.pi*I  / r**2
 
 def sample_ra_rp_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):

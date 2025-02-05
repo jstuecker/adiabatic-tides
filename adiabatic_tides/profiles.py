@@ -158,7 +158,7 @@ class RadialProfile():
         if (rpmin is not None) or (rpmax is not None):
             ri = ri[ri >= rpmin]
 
-            rho = mathtools.integrate_fofel_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
+            rho = mathtools.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
             rs,ms = mathtools.sample_rimi_from_density(ri, rho, ntot)
 
             ra, rp = mathtools.sample_ra_rp_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs, rperirange=(rpmin, rpmax), nsteps_chain=nsteps_chain)
