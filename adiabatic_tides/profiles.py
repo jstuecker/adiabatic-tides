@@ -1673,11 +1673,12 @@ class PlummerProfile(RadialProfile):
 
     def potential(self, r, zero_at_zero=False):
         phi = - self.G * self.M / np.sqrt(r**2 + self.a**2)
+
         if zero_at_zero:
             phi -= self.phi0
             # At small radii put expansion to avoid cancelation erros
-            sel = r < 1e-4*self.a
-            phi[sel] = 1.5 * self.G * self.M * r[sel]**2 / self.a**3
+            sel = r < 1e-3*self.a
+            phi[sel] = 0.5 * self.G * self.M * r[sel]**2 / self.a**3
         return phi
     
     def r0(self):
@@ -1781,7 +1782,7 @@ class NumericalProfile(RadialProfile):
 
     def self_potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
-        assert not zero_at_zero, "mode not implemented"
+        # assert not zero_at_zero, "mode not implemented"
         dphi = np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["phi"])
         if self.ancorphi == "rmax":
             return dphi - self.q["phi"][-1]

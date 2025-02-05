@@ -1269,31 +1269,32 @@ def coshspace_map(fmax, pow=1.):
         return (np.arccosh(x)/np.arccosh(fmax))**(1./pow)
     return x_of_u, u_of_x
 
-def map_peri_apo_space_log_cosh(rpmin, rpmax, facmax=None, rpoff=0., pow=1.):
+def map_peri_apo_space_log_log(rpmin, rpmax, facmax=None, rpoff=0., facmin=1e-4):
     if facmax is None:
         facmax = rpmax/rpmin
 
     def rpra_of_uv(u,v):
         rp = (rpmin+rpoff) * ((rpmax+rpoff)/(rpmin+rpoff))**u - rpoff
-        fac = np.cosh(v**pow*np.arccosh(facmax))
+        fac = 1. + facmin*np.exp(v*np.log(facmax/facmin))
         return rp, rp*fac
     def uv_of_rpra(rp, ra):
         u = np.log((rp+rpoff)/(rpmin+rpoff)) / np.log((rpmax+rpoff)/(rpmin+rpoff))
-        v = (np.arccosh(ra/rp)/np.arccosh(facmax))**(1./pow)
+        x = np.clip(ra/rp - 1., facmin, None)
+        v = np.log(x/facmin) / np.log(facmax/facmin)
         return u,v
     return rpra_of_uv, uv_of_rpra
 
-def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., pow=1.):
+def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., facmin=1e-4):
     if nbins_apo is None:
         nbins_apo = nbins
 
     # Set up a uniform domain
     u = np.linspace(0, 1, nbins)
-    v = np.linspace(0, 1, nbins_apo+1)[1:]
+    v = np.linspace(0, 1, nbins_apo)
     uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_cosh(rpmin, rpmax, facmax, rpoff=rpoff, pow=pow)
+    rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_log(rpmin, rpmax, facmax, rpoff=rpoff, facmin=facmin)
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
@@ -1330,28 +1331,28 @@ def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_ap
     uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=1+np.cbrt(nbins_apo))
+    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=4) # 1+np.cbrt(nbins_apo)
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
 
-def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40):
+def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=3):
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
     l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
 
-    j0, l0 = np.min(j[j>0]), np.min(l[l>0])
+    l0, j0, facl = np.min(l[l>0]), np.min(j[j>0]), 1e-5
 
-    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1).reshape(-1,2), uvgrid.reshape(-1,2))
+    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0+l*facl),np.log(l+l0)), axis=-1).reshape(-1,2), uvgrid.reshape(-1,2))
     
-    logj_spline = RectBivariateSpline(u, v, np.log(j+j0))
-    logl_spline = RectBivariateSpline(u, v, np.log(l+l0))
+    logj_spline = RectBivariateSpline(u, v, np.log(j+j0+l*facl), kx=k, ky=k)
+    logl_spline = RectBivariateSpline(u, v, np.log(l+l0), kx=k, ky=k)
 
     def rpra_of_jl(j, l):
         # Use NN interpolator for first guess
-        ftarget, gtarget = np.log(j+j0), np.log(l+l0)
+        ftarget, gtarget = np.log(j+l*facl+j0), np.log(l+l0)
         xy0 = xy_nn(np.stack((ftarget, gtarget), axis=-1))
 
         if nsteps_newton == 0:
@@ -1377,7 +1378,7 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40):
     
     return rpra_of_jl
 
-def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None):
+def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None, k=3):
     ui,vi,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
@@ -1386,7 +1387,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     f = f_of_jl(j,l)
     f0 = np.min(f[f>0])
 
-    ip = RectBivariateSpline(ui, vi, np.log(f+f0))
+    ip = RectBivariateSpline(ui, vi, np.log(f+f0), kx=k, ky=k)
 
     def f_of_rperi_rapo(rp, ra):
         u,v = uv_of_rpra(rp, ra)
@@ -1462,6 +1463,42 @@ def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty)
             print("Warning, convergence of finite upper apo-center limit has not been tested yet... Use with care")
             b = np.clip(raporange[1], r, None)[...,np.newaxis]
             I = integrals.integrate_double_exponential_a_b(integrand, a, b, N=N,c=1, tmax=4)
+
+        return I
+    
+    a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
+    I = integrals.integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
+    return 4.*np.pi*I  / r**2
+
+def integrate_f_limited_paspace(f_of_rpra, pot, accr, ramax_of_rp, r, N=32, N2=None, rperirange=(0, np.infty)):
+    """
+    f : function f(rp, ra) 
+    """
+    r = np.array(r)
+    phir = pot(r)
+    if N2 is None:
+        N2 = N
+
+    def integrate_ra_given_rp(rp):
+        def integrand(ra):
+            rps, ras = np.broadcast_arrays(rp[...,np.newaxis], ra)
+            valid = (r[...,np.newaxis,np.newaxis] > rps) & (r[...,np.newaxis,np.newaxis] < ras)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                e,l,ldlde = Jacobian_ldlde_drpdra(pot, accr, rp[...,np.newaxis], ra, get_el=True)
+                vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
+
+                valid = valid & (ldlde > 0.) & (vr > 0.) & (l > 0.)
+
+            fval = np.zeros_like(e)
+            
+            fval[valid] = f_of_rpra(rps[valid], ras[valid])
+
+            return np.divide(fval * ldlde, vr, out=np.zeros_like(fval), where=valid)
+
+        b = np.clip(ramax_of_rp(rp), r[...,np.newaxis], None)
+
+        # I = integrals.integrate_exp_tanh_a_b(integrand, rp, b, N=N)
+        I = integrals.integrate_double_exponential_a_b(integrand, rp, b, N=N,c=1, tmax=4)
 
         return I
     
@@ -1597,8 +1634,7 @@ def rperi_rapo_valid(pot, accr, rperi, rapo):
 
     phip, phia = pot(rperi), pot(rapo)
 
-    valid = rapo > rperi
-    valid = valid & (phia >= phip)
+    valid = (rapo > rperi) & (phia >= phip)
     if np.sum(valid) > 0:
         L2 = 2. * (phia[valid] - phip[valid]) / (rperi[valid]**-2 - rapo[valid]**-2)
         valid[valid] = valid[valid] & (accr(rapo[valid]) + L2/rapo[valid]**3 <= 0)
