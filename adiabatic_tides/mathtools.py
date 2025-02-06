@@ -1299,7 +1299,7 @@ def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, 
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
 
-def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tmax=5):
+def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tmax=4):
     def rpra_of_uv(u,v):
         rp = (rpmin+rpoff) * ((rpmax+rpoff)/(rpmin+rpoff))**u - rpoff
         
@@ -1501,11 +1501,15 @@ def integrate_f_limited_paspace(f_of_rpra, pot, accr, ramax_of_rp, r, N=32, N2=N
         b = np.clip(ramax_of_rp(rp), r[...,np.newaxis], None)
 
         # This method converges exponentially at r->0 and quadrtically around the tidal radius
-        I = integrals.integrate_double_exponential_a_infb(integrand, a=a, b=b, N=N2, xscale=a)
+        #I = integrals.integrate_double_exponential_a_infb(integrand, a=a, b=b, N=N2, xscale=a)
         # This one converges exponentially at both locations, but it takes much longer to catch on
         # at small radii... for robustness, I prefer the one above, but this might change in later
         # evaluation
-        # I = integrals.integrate_double_exponential_a_b(integrand, a, b, N=N2,c=1, tmax=3.7)
+        #I = integrals.integrate_double_exponential_a_b(integrand, a, b, N=N2,c=1, tmax=4)
+
+        # I = integrals.integrate_exp_tanh_a_b(integrand, a, b, N=N2)
+        I = integrals.integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
+        
 
         return I
     

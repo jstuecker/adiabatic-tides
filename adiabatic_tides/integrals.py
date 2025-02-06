@@ -81,6 +81,16 @@ def integrate_double_exponential_a_b(f, a, b, N=100, tmax=4., c=1.):
         
     return I
 
+def integrate_exp_double_exp_a_b(f, a, b, N=100, tmax=4., c=1.):
+    """Like integrate_tanh_a_b, but in log-space"""
+    loga, logb = np.log(a), np.log(b)
+
+    def newf(t):
+        x = np.exp(t)
+        return f(x)*x
+    
+    return integrate_double_exponential_a_b(newf, loga, logb, N, tmax, c)
+
 def integrate_exp_a_inf(f, a=0., N=100, xscale=1.):
     """ Integrates f over the interval (a,inf) using a log/exp substitution.
     x = exp(t)
