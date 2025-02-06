@@ -1500,24 +1500,13 @@ def integrate_f_limited_paspace(f_of_rpra, pot, accr, ramax_of_rp, r, N=32, N2=N
         a = r[...,np.newaxis]
         b = np.clip(ramax_of_rp(rp), r[...,np.newaxis], None)
 
-        # This method converges exponentially at r->0 and quadrtically around the tidal radius
-        #I = integrals.integrate_double_exponential_a_infb(integrand, a=a, b=b, N=N2, xscale=a)
-        # This one converges exponentially at both locations, but it takes much longer to catch on
-        # at small radii... for robustness, I prefer the one above, but this might change in later
-        # evaluation
-        #I = integrals.integrate_double_exponential_a_b(integrand, a, b, N=N2,c=1, tmax=4)
-
-        # I = integrals.integrate_exp_tanh_a_b(integrand, a, b, N=N2)
         I = integrals.integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
-        
 
         return I
     
     a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
     I = integrals.integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
-    # I = integrals.integrate_exp_a_b(integrate_ra_given_rp, np.clip(a, 1e-10,None), np.clip(b, 1e-9,None), N=N)
-    # I = integrals.integrate_tanh_a_b(integrate_ra_given_rp, a, b, N=N)
-    # I = integrals.integrate_double_exponential_a_inf(integrate_ra_given_rp, a=a, N=N,tmax=4, xscale=a)
+
     return 4.*np.pi*I  / r**2
 
 def sample_ra_rp_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
