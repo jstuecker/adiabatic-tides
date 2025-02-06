@@ -95,6 +95,17 @@ def integrate_exp_a_inf(f, a=0., N=100, xscale=1.):
     
     return np.trapz(f(x+a)*dxdt, t, axis=-1)
 
+def integrate_exp_a_b(f, a=1e-3, b=1., N=100):
+    """ Integrates f over the interval (a>0,b) using a log/exp substitution.
+    x = exp(t)
+    dxdt = x
+    """
+    t = np.linspace(np.log(a), np.log(b), N, axis=-1)
+    x = np.exp(t)
+    dxdt = x
+    
+    return np.trapz(f(x)*dxdt, t, axis=-1)
+
 def integrate_double_exponential_a_inf(f, a=0, N=100, tmax=4., c=1., xscale=1.):
     """ Double exponential integration of f(x) from a to infinity
     See Numerical Recipes 4.5.3
@@ -112,6 +123,31 @@ def integrate_double_exponential_a_inf(f, a=0, N=100, tmax=4., c=1., xscale=1.):
     dxdt = 2*c*q*np.cosh(t)*xscale
 
     return np.sum(f(q*xscale + a) * dxdt, axis=-1) * (t[1]-t[0])
+
+def integrate_double_exponential_a_infb(f, a=0, b=1, N=100, tmax=4., c=1., xscale=1.):
+    """ Double exponential integration of f(x) from a to b which lies almost at infinity
+    this is different to integrate_double_exponential_a_b in that it does not place
+    many points near b. This only makes sense if f is 0 beyond b!
+    This function is almost equivalent to integrate_double_exponential_a_inf, but places 
+    no points beyond b
+    See Numerical Recipes 4.5.3
+    
+    x = exp(2 c sinh(t)) + a
+    dxdt = 2c exp(2c sinh(t)) cosh(t)
+
+    tmax : 4 -> xmax ~ 1e23, 5 -> xmax ~ 1e64 
+    """
+    a,b,xscale = np.array(a), np.array(b), np.array(xscale)
+
+    with np.errstate(divide='ignore'):
+        tmaxup = np.nan_to_num(np.arcsinh(np.log((b - a)/xscale) / (2.*c)), tmax)
+
+    t = np.linspace(-tmax, np.clip(tmaxup, -tmax+0.1, tmax), N, axis=-1)
+
+    q = np.exp(2*c*np.sinh(t))
+    dxdt = 2*c*q*np.cosh(t)*xscale[...,np.newaxis]
+
+    return np.sum(f(q*xscale[...,np.newaxis] + a[...,np.newaxis]) * dxdt, axis=-1) * (t[...,1]-t[...,0])
 
 def integrate_double_exponential_inf_inf(f, N=100, tmax=4.5, c=1., xscale=1.):
     """ Double exponential integration of f(x) from -inf to inf
