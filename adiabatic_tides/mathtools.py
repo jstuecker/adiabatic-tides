@@ -1380,11 +1380,29 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=
     
     return rpra_of_jl
 
+def e_l_of_rp_ra(pot, rp, ra, perturb_circular=False, eps=1e-6):
+    if perturb_circular:
+        # for circular orbits the formula below don't work
+        # However, in a "finite-diffrences" sense they are stll correct, so we can
+        # get aways by perturbing ra a little
+        circular = (ra > rp) & (ra <= rp*(1+eps))
+        ra = np.copy(ra)
+        ra[circular] = rp[circular]*(1+eps) 
+
+    phip, phia = pot(rp), pot(ra)
+    E = phip + (phia - phip)*ra**2 / (ra**2 - rp**2)
+    L = np.sqrt(2. * (phia - phip) / (rp**-2 - ra**-2))
+
+    assert np.all(~np.isnan(L))
+
+    return E,L
+
 def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None, k=3):
     ui,vi,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
-    l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
+    # l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
+    e,l = e_l_of_rp_ra(pot, rpgrid, ragrid, perturb_circular=True)
     
     f = f_of_jl(j,l)
     f0 = np.min(f[f>0])
