@@ -949,23 +949,26 @@ def sample_conditional_L_vr_perisplit(r, E, pot, rp1, rp2):
 
     return np.sqrt(L2), vr
 
-def integrate_radial_orbits(acc_func, r, vr, L, t, nsteps=1000):
+def integrate_radial_orbits(acc_func, r, vr, L, t, nsteps=1000, time_dependent_acc=False, t0=0.):
     # Hamiltonian = phi(r) + 0.5 vr**2 + 0.5 L**2 / r**2
     # dvr/dt = -dphi/dr - L**2 / r**3
     
     dt = t/nsteps
 
-    for i in range(nsteps):    
+    for i in range(nsteps):
         # Drift Kick Drift Integrator
         r = r + vr*dt*0.5
-        vr = vr + (acc_func(r) + L**2/r**3) * dt
+        if time_dependent_acc:
+            vr = vr + (acc_func(r, t=t0+i*dt) + L**2/r**3) * dt
+        else:
+            vr = vr + acc_func(r) * dt
         r = r + vr*dt*0.5
 
     return r, vr
 
-def integrate_radial_orbits_with_snaps(acc_func, r, vr, L, t, nsnaps=10, nsteps_per_snap=100):
+def integrate_radial_orbits_with_snaps(acc_func, r, vr, L, t, nsnaps=10, nsteps_per_snap=100, time_dependent_acc=False):
     for i in range(0, nsnaps):
-        r, vr = integrate_radial_orbits(acc_func, r, vr, L, t/nsnaps, nsteps=nsteps_per_snap)
+        r, vr = integrate_radial_orbits(acc_func, r, vr, L, t/nsnaps, t0=i*(t/nsnaps), nsteps=nsteps_per_snap, time_dependent_acc=time_dependent_acc)
         yield r, vr
 
 def integrate_to_density_of_states(ri, phii, rmax=np.infty):

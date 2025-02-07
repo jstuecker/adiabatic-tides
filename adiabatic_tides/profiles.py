@@ -1748,11 +1748,6 @@ class NumericalProfile(RadialProfile):
         """
         self.ri = ri
 
-        assert np.all(rhoi > 0), "Density profile has to be positive"
-        assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic decreasing"
-        rdiffmin = np.min(0.5*(rhoi[:-1] - rhoi[1:])/(rhoi[1:] + rhoi[:-1]))
-        if rdiffmin < 1e-10:
-            print("Warning: I found that some consecutive points have only a relative difference of %.1e in density. This may lead to cancelation. I'll do my best to deal with this, but no warranties!" % rdiffmin)
 
         self.q["rho"] = rhoi
 
@@ -1836,6 +1831,14 @@ class NumericalProfile(RadialProfile):
         mode : can be "fixed", "adaptive" or "fixed_diff_last". "fixed" is recommended for robustness and 
                small n whereas "adaptive" is more accurate and recommended for faster convergence at larger n
         """
+
+        rhoi = self.q["rho"]
+        assert np.all(rhoi > 0), "Density profile has to be positive"
+        assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic decreasing"
+        rdiffmin = np.min(0.5*(rhoi[:-1] - rhoi[1:])/(rhoi[1:] + rhoi[:-1]))
+        if rdiffmin < 1e-10:
+            print("Warning: I found that some consecutive points have only a relative difference of %.1e in density. This may lead to cancelation. I'll do my best to deal with this, but no warranties!" % rdiffmin)
+
 
         if self.beta == 0:
             if mode == "fixed":
@@ -2066,6 +2069,60 @@ class MonteCarloProfile(RadialProfile):
         mystr +=  "_mihash" + str(zlib.adler32(self.mi.data.tobytes()))
         
         return mystr
+    
+class ParticleProfile(NumericalProfile):
+    def __init__(self, particles, rbins):
+        """ This class is going to replace MonteCarloProfile and will ahve additional options
+        particles -- can either be (r,m) or (r,m,vr,L) or (pos,vel,m)
+        """
+        self.rbins = rbins
+        self.ri = np.sqrt(rbins[1:]*rbins[:-1])
+
+        self.set_particles(particles, update=False)
+
+        rho, mprof = mathtools.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
+
+        super().__init__(self.ri, rho, mprof, boundary="constant")
+
+    def _update_mass_profile(self):
+        rho, mprof = mathtools.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
+        super().set_density_profile(self.ri, rho)
+
+    def set_particles(self, particles, update=True):
+        """
+        particles -- can either be (r,m) or (r,m,vr,l) or (pos,vel,m)
+        """
+        self.p = {}
+        if len(particles) == 2:
+            self.p["r"], self.p["m"] = particles
+            self.p["vr"], self.p["l"] = None, None
+        elif len(particles) == 4:
+            self.p["r"], self.p["m"], self.p["vr"], self.p["l"] = particles
+        elif len(particles) == 3:
+            assert 0, "not tested"
+            pos, vel, self.p["m"] = particles
+            self.p["r"] = np.linalg.norm(pos, axis=-1)
+            self.p["vr"] = np.sum(vel*pos, axis=-1)/self.p["r"]
+            self.p["l"] = np.linalg.norm(np.cross(pos, vel), axis=-1)
+        
+        if update:
+            self._update_mass_profile()
+
+    def integrate_orbits_in_other_potential(self, accr, tmax, nsteps=1000, update=True):
+        self.p["r"], self.p["vr"] = mathtools.integrate_radial_orbits(accr, self.p["r"], self.p["vr"], self.p["l"], tmax, nsteps=nsteps)
+
+        self._update_mass_profile()
+    
+    def to_dict(self):
+        """Returns a dictionary with all variables that describe the current state"""
+        d = {}
+        d["rbins"] = self.rbins
+        d["p"] = self.p
+        return d
+
+    def from_dict(self, d):
+        """Load a state  extracted from a previos '.to_dict()' call"""
+        raise NotImplementedError("Not implemented yet")
 
 class RadialTidalProfile(RadialProfile):
     def __init__(self, alpha=0.):
