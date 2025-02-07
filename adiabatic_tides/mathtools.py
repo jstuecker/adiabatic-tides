@@ -1031,7 +1031,7 @@ def integrate_radial_orbits(acc_func, r, vr, L, t, nsteps=1000, time_dependent_a
         if time_dependent_acc:
             vr = vr + (acc_func(r, t=t0+i*dt) + L**2/r**3) * dt
         else:
-            vr = vr + acc_func(r) * dt
+            vr = vr + (acc_func(r) + L**2/r**3) * dt
         r = r + vr*dt*0.5
 
     return r, vr
