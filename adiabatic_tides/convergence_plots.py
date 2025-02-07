@@ -1,6 +1,7 @@
 import adiabatic_tides as at
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import PchipInterpolator
 
 def plot_profile_rel(axs, rbins, rhoi, rhoref, **kwargs):
     rcent = np.sqrt(rbins[1:]*rbins[:-1])
@@ -120,3 +121,49 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=64, n
     res = {"r": rcent, "rbeta":rcentaniso, "rhos": rhos, "betas": betas, "betamean": betamean}
     
     return fig,axs,res
+
+def plot_poisson_convergence(prof, spline_class=PchipInterpolator, title="Interpolation Convergence", **kwargs):
+    """Makes a convergence plot of the poisson solver + interpolators against a given profile
+    prof: a Radial profile
+    spline_class: can be any interpolator from scipy.interpolate that implements .antiderivative,
+        for example Akima1DInterpolator, CubicSpline, UnivariateSpline
+    """
+    rtest = np.logspace(-13,12,733)
+
+    fig, axs=plt.subplots(2,3, figsize=(8,5), sharex=True)
+
+    for n in 50,100,200,400:
+        ri = np.logspace(-10,10,n)
+        rho,m,phi = at.mathtools.solve_poisson_via_spline_with_smart_boundaries(ri, prof.density(ri), spline_class, **kwargs)
+
+        axs[0,0].loglog(rtest, rho(rtest), label="N=%d"%n)
+        axs[1,0].loglog(rtest, np.abs(rho(rtest)/prof.density(rtest)-1.))
+
+        axs[0,1].loglog(rtest, m(rtest), label="N=%d"%n)
+        axs[1,1].loglog(rtest, np.abs(m(rtest)/prof.m_of_r(rtest)-1.))
+
+        axs[0,2].loglog(rtest, phi(rtest), label="N=%d"%n)
+        axs[1,2].loglog(rtest, np.abs(phi(rtest)/prof.potential(rtest, zero_at_zero=True) -1))
+
+    axs[0,0].plot(rtest, prof.density(rtest), ls="dashed", color="black", label="ip. domain")
+    axs[0,1].plot(rtest, prof.m_of_r(rtest), ls="dashed", color="black")
+    axs[0,2].plot(rtest, prof.potential(rtest, zero_at_zero=True), ls="dashed", color="black")
+    for j in range(0,3):
+        axs[1,j].set_ylim(1e-6, 2)
+        for i in(0,1):
+            axs[i,j].axvline(ri[0], color="black", ls="dotted")
+            axs[i,j].axvline(ri[-1], color="black", ls="dotted")
+            axs[i,j].grid("on")
+
+    axs[0,0].set_title("density")
+    axs[0,1].set_title("mass")
+    axs[0,2].set_title("potential")
+
+    axs[0,0].set_ylabel("Value")
+    axs[1,0].set_ylabel("Relative Error")
+    axs[0,0].legend()
+
+    if title is not None:
+        fig.suptitle(title)
+
+    return fig,axs

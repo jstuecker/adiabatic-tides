@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline, NearestNDInterpolator
 from scipy.integrate import simps, trapezoid
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import CubicSpline, PchipInterpolator
 from . import integrals
 
 def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
@@ -559,6 +559,73 @@ def solve_poisson(ri, rho, boundary="powerlaw", integration_mode="trapez", G=43.
         raise ValueError("Unknown integration mode %s" % integration_mode)
     
     return m, phi
+
+def solve_poisson_via_spline(ri, rhoi, spline_class=PchipInterpolator, mbelow=0., phibelow=0., G=43.0071057317063e-10, **kwargs):
+    """ Fits a spline to the density profile and evaluates the parent function through the spline class
+    spline_class: has to be a interpolator as in scipy.interpolate -- needs to define the .antiderivative() method
+    recommended for robustness is scipy.interpolate.PchipInterpolator (3rd order, preserves monotonicity)
+    you might improve convergence, e.g. with something like scipy.interpolate.UnivariateSpline, k=5,
+    but I do not recommend this as it may fail catastrophically for some cases
+    """
+    spl_dm_dr = spline_class(ri, 4*np.pi*rhoi*ri**2, **kwargs)
+    spl_m = spl_dm_dr.antiderivative()
+    spl_dphdir = spline_class(ri, G * (spl_m(ri)+mbelow) / ri**2, **kwargs)
+    spl_phi = spl_dphdir.antiderivative()
+    
+    # For the density it is much better to interpolate rho*r**2 than rho
+    # since this removes effectively any singularities in the function
+    rho = lambda r: spl_dm_dr(r) / (4*np.pi*r**2)
+    m = lambda r: spl_m(r) + mbelow
+    phi = lambda r: spl_phi(r) + phibelow
+
+    return rho, m, phi
+
+def describe_lower_boundary(ri, rhoi, mode="powerlaw", G=43.0071057317063e-10):
+    if mode == "powerlaw":
+        rhoc, alpha = fit_powerlaw(ri[0], ri[1], rhoi[0], rhoi[1])
+        rho = lambda r: rhoc * r**alpha
+        m = lambda r: 4.*np.pi * rhoc  / (3. + alpha) * r**(3.+alpha)
+        phi = lambda r: 4.*np.pi * G * rhoc / ( (3. + alpha) * (2. + alpha) ) * r**(2.+alpha)
+    elif mode =="zero":
+        rho = lambda r: 0.*r
+        m = lambda r: 0.*r
+        phi = lambda r: 0.*r
+    elif mode =="constant":
+        rho = lambda r: rhoi[0] + 0.*r
+        m = lambda r: 4*np.pi/3. * np.clip(r, 0., ri[0])**3
+        phi = lambda r: G * m(r) / r
+    else:
+        raise ValueError("Unknown lower boundary mode")
+
+    return rho, m, phi
+
+def describe_upper_boundary(rho, m, phi, ri, mode="vacuum", G=43.0071057317063e-10):
+    assert mode == "vacuum"
+
+    rmax = ri[-1]
+    mmax, phimax = m(rmax), phi(rmax)
+    rho = lambda r: 0.*r
+    m = lambda r: mmax + 0.*r
+    phi = lambda r: phimax + G * mmax * (1./np.clip(r, rmax, None) - 1./np.clip(r, rmax, None))
+
+    return rho, m, phi
+
+def solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, spline_class=PchipInterpolator, lower_boundary="powerlaw", upper_boundary="vacuum", G=43.0071057317063e-10, **kwargs):
+    """
+    Solves the Poisson equation with splines and assuming smart boundary conditions
+    returns functions rho, m, phi that implement the smart boundary conditions
+    lower_boundary : can be "powerlaw", "zero", "constant"
+    upper_boundary : so far, can only be "vacuum"
+    """
+    rhobelow, mbelow, phibelow = describe_lower_boundary(ri, rhoi, mode=lower_boundary, G=G)
+    spl_rho, spl_m, spl_phi = solve_poisson_via_spline(ri, rhoi, spline_class=spline_class, mbelow=mbelow(ri[0]), phibelow=phibelow(ri[0]), G=G, **kwargs)
+    rhoabove, mabove, phiabove = describe_upper_boundary(spl_rho, spl_m, spl_phi, ri, mode=upper_boundary, G=G)
+    
+    rho = lambda r: np.where(r<ri[0], rhobelow(r), np.where(r>ri[-1], rhoabove(r), spl_rho(r)))
+    m = lambda r: np.where(r<ri[0], mbelow(r), np.where(r>ri[-1], mabove(r), spl_m(r)))
+    phi = lambda r: np.where(r<ri[0], phibelow(r), np.where(r>ri[-1], phiabove(r), spl_phi(r)))
+
+    return rho,m,phi
 
 def cosh_space(fmax, n, pow=1.):
     x = np.linspace(0., np.arccosh(fmax), n)
