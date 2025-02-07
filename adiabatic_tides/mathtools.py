@@ -581,6 +581,9 @@ def solve_poisson_via_spline(ri, rhoi, spline_class=PchipInterpolator, mbelow=0.
     return rho, m, phi
 
 def describe_lower_boundary(ri, rhoi, mode="powerlaw", G=43.0071057317063e-10):
+    if ri[0] == 0.:
+        return lambda r: 0.*r, lambda r: 0.*r, lambda r: 0.*r
+
     if mode == "powerlaw":
         rhoc, alpha = fit_powerlaw(ri[0], ri[1], rhoi[0], rhoi[1])
         rho = lambda r: rhoc * r**alpha

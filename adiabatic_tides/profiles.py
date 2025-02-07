@@ -15,7 +15,7 @@ class RadialProfile():
         # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
         self.G = 43.0071057317063e-10
         self.is_disrupted = False
-        self.potential_zero_at_infty = True
+        self.potential_zero_at_infty = True # should replace this by a function that returns the potential zero-point
         
         self.reset_interpolators()
 
@@ -1711,13 +1711,12 @@ class NumericalProfile(RadialProfile):
         """
         super().__init__()
         
-        self.potential_profile = potential_profile
+        self.potential_profile = potential_profile 
         self.beta = anisotropy
         
         self.q = {}
-        
-        assert ancorphi in ("rmax", "rmin", "infty"), "Invalid value for ancorphi=%s" % ancorphi
-        self.ancorphi = ancorphi
+
+        assert ancorphi == "rmin", "Only rmin is support from now on"
         
         if from_dict:
             self.from_dict(from_dict)
@@ -1730,11 +1729,6 @@ class NumericalProfile(RadialProfile):
         self.base_radius = r0
 
         self.boundary = boundary
-
-        # offset for non-diverging interpolation at 0
-        self.q["roff"] = np.min(ri)
-        if self.q["roff"] == 0:
-            self.q["roff"] = np.min(ri[1:] - ri[:-1])
         
         self.set_density_profile(ri, rhoi)
             
@@ -1748,17 +1742,15 @@ class NumericalProfile(RadialProfile):
         """
         self.ri = ri
 
-
-        self.q["rho"] = rhoi
-
-        self.q["mofr"], self.q["phi"] = mathtools.solve_poisson(ri, rhoi, boundary=self.boundary, integration_mode=integration_mode)
+        self.ip_rho, self.ip_m, self.ip_phi = mathtools.solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, lower_boundary=self.boundary, G=self.G)
+        self.q["rho"], self.q["mofr"], self.q["phi"] = rhoi, self.ip_m(self.ri), self.ip_phi(self.ri)
 
         self.phasespace_initialized = False
         self.potential_zero_at_infty = False
 
     def self_density(self, r):
         """Density in Msol/Mpc**3"""
-        return np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["rho"])
+        return self.ip_rho(r)
         
     def density(self, r):
         """Density in Msol/Mpc**3"""
@@ -1766,7 +1758,7 @@ class NumericalProfile(RadialProfile):
     
     def self_m_of_r(self, r):
         """The mass contained inside radius r"""
-        return np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["mofr"])
+        return self.ip_m(r)
     
     def m_of_r(self, r):
         """The mass contained inside radius r"""
@@ -1778,11 +1770,7 @@ class NumericalProfile(RadialProfile):
     def self_potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
         # assert not zero_at_zero, "mode not implemented"
-        dphi = np.interp(np.log10(r+self.q["roff"]), np.log10(self.ri+self.q["roff"]), self.q["phi"])
-        if self.ancorphi == "rmax":
-            return dphi - self.q["phi"][-1]
-        else: # ancored at 0
-            return dphi
+        return self.ip_phi(r)
 
     def potential(self, r, zero_at_zero=False):
         """The gravitational  potential"""
