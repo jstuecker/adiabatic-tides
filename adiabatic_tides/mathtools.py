@@ -580,20 +580,23 @@ def solve_poisson_via_spline(ri, rhoi, spline_class=PchipInterpolator, mbelow=0.
 
     return rho, m, phi
 
-def describe_lower_boundary(ri, rhoi, mode="powerlaw", G=43.0071057317063e-10):
+def describe_lower_boundary(ri, rhoi, boundary="powerlaw", G=43.0071057317063e-10):
     if ri[0] == 0.:
         return lambda r: 0.*r, lambda r: 0.*r, lambda r: 0.*r
 
-    if mode == "powerlaw":
+    if isinstance(boundary, (list, tuple)) and len(boundary) == 3 and all(callable(f) for f in boundary):
+        rho, m, phi = boundary
+        return rho, m, phi
+    elif boundary == "powerlaw":
         rhoc, alpha = fit_powerlaw(ri[0], ri[1], rhoi[0], rhoi[1])
         rho = lambda r: rhoc * r**alpha
         m = lambda r: 4.*np.pi * rhoc  / (3. + alpha) * r**(3.+alpha)
         phi = lambda r: 4.*np.pi * G * rhoc / ( (3. + alpha) * (2. + alpha) ) * r**(2.+alpha)
-    elif mode =="zero":
+    elif boundary =="zero":
         rho = lambda r: 0.*r
         m = lambda r: 0.*r
         phi = lambda r: 0.*r
-    elif mode =="constant":
+    elif boundary =="constant":
         rho = lambda r: rhoi[0] + 0.*r
         m = lambda r: 4*np.pi/3. * np.clip(r, 0., ri[0])**3
         phi = lambda r: G * m(r) / r
@@ -617,10 +620,10 @@ def solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, spline_class=PchipI
     """
     Solves the Poisson equation with splines and assuming smart boundary conditions
     returns functions rho, m, phi that implement the smart boundary conditions
-    lower_boundary : can be "powerlaw", "zero", "constant"
+    lower_boundary : can be "powerlaw", "zero", "constant" or a tuple of 3 functions rho,m,phi
     upper_boundary : so far, can only be "vacuum"
     """
-    rhobelow, mbelow, phibelow = describe_lower_boundary(ri, rhoi, mode=lower_boundary, G=G)
+    rhobelow, mbelow, phibelow = describe_lower_boundary(ri, rhoi, boundary=lower_boundary, G=G)
     spl_rho, spl_m, spl_phi = solve_poisson_via_spline(ri, rhoi, spline_class=spline_class, mbelow=mbelow(ri[0]), phibelow=phibelow(ri[0]), G=G, **kwargs)
     rhoabove, mabove, phiabove = describe_upper_boundary(spl_rho, spl_m, spl_phi, ri, mode=upper_boundary, G=G)
     
@@ -1445,9 +1448,8 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=
         failed = np.linalg.norm(F(xynew), axis=-1) > np.linalg.norm(F(xy0), axis=-1)
         failed |= (xynew[...,0] < np.min(u)) | (xynew[...,0] > np.max(u)) | (xynew[...,1] < np.min(v)) | (xynew[...,1] > np.max(v))
         if np.sum(failed) > 0:
-            print("Warning, Newton Raphson failed for %d/%d points" % (np.sum(failed), failed.size))
+            # print("Warning, Newton Raphson failed for %d/%d points" % (np.sum(failed), failed.size))
             xynew[failed] = xy0[failed]
-            #xynew[failed] = np.nan
 
         return rpra_of_uv(xynew[...,0], xynew[...,1])
     
@@ -1752,6 +1754,12 @@ def rapo_max_of_rperi(pot, accr, rperi, rlmax, rtid):
         return rperi_rapo_valid_continuous(pot, accr, rperi, rapo)
     
     return ridders_method(valid, np.sqrt(rperi*rlmax), rtid*1.1, mode="positive", niter=10)
+
+def profile_is_disrupted(accr, rpmin=1e-10):
+    return (accr(rpmin) > 0)
+def profile_is_limited(accr, rpmin=1e-10):
+    rtid = find_single_root(accr, rpmin, warning=False)
+    return (rtid < np.infty)
 
 def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e-6):
     rlmax, rtid = find_rlmax(accr, daccdr), find_rphimax(accr)

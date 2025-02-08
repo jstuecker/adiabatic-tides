@@ -215,11 +215,17 @@ class RadialProfile():
         return  -self.G * self.m_of_r(r) / r**2
     
     
-    def daccdr(self, r, h=None):
+    def daccdr_old(self, r, h=None):
         """Radial derivative of the acceleration. Infered numerically"""
         if h is None:
             h = r*self.scale("drfac_finitediff")
         return (self.accr(r+h) - self.accr(r-h))/(2.*h)
+
+    def daccdr(self, r):
+        """ accr = -G m(r) / r^2
+        daccr/dr = 2 G m(r) / r^3 - G m'(r) / r^2 = -2 G accr(r) / r - G rho(r) 4 pi
+        """
+        return -2 * self.accr(r) / r - 4.*np.pi * self.density(r) * self.G
     
     def m0(self):
         """The mass contained inside r0"""
