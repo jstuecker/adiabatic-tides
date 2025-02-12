@@ -167,3 +167,24 @@ def plot_poisson_convergence(prof, spline_class=PchipInterpolator, title="Interp
         fig.suptitle(title)
 
     return fig,axs
+
+def plot_adiabatic_iterations(prof, rt0, title=None, verbose=1, **kwargs):
+    res = at.mathtools.adiabatic_tidal_reconstruction(prof, np.abs(prof.accr(rt0)/rt0), rpmin=1e-20, eps=1e-3, get_all=True, verbose=verbose, **kwargs)
+
+    fig,ax = plt.subplots(1,1, figsize=(6,5))
+    for i in range(0, len(res), 5):
+        r, rho, frho, fm, fphi = res[i]
+        eps = np.abs((res[i-1][2](r) - rho)/prof.density(r)).max()
+        ax.semilogx(r, rho/prof.density(r), color=plt.get_cmap("rainbow")(i/len(res)), label=f"i = {i} eps = {eps:.1%}")
+    ax.set_xlabel("r")
+    ax.set_ylabel(r"$\rho/\rho_0$")
+    ax.set_title(title)
+    ax.legend()
+    ax.axhline(1., color='black', ls='dotted')
+
+    r, rho, frho, fm, fphi = res[-1]
+    reldiff0 = np.abs((rho/prof.density(r) - 1))
+    rsel = np.max(r[reldiff0 < 1e-3])
+    ax.set_xlim(rsel, rt0*2)
+
+    return fig,ax

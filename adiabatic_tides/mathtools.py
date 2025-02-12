@@ -1781,7 +1781,7 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
 
     return rperi, rapo, rlmax, rtid, ramax_of_rp
 
-def adiabatic_reconstruction_with_tide(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10):
+def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10):
     assert tide > 0, "Tide must be positive"
     
     def m_tot(r): return m(r) - tide/G * r**3
@@ -1799,3 +1799,46 @@ def adiabatic_reconstruction_with_tide(f_of_jl, rho, m, phi, tide, fpa_below=Non
     rhonew = integrate_f_limited_paspace(f_of_rperi_rapo, phi_tot, accr_tot, ramax_of_rp, rnew, rperirange=(0, rlmax), N=nintegrate)
 
     return rnew, rhonew
+
+def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial"):
+    #Define Initial profile phase space
+    # table = at.mathtools.define_peri_apo_table(rpmin, rpmax, nbins=nbins_fini)
+    def accr_t(r): return prof.accr(r) + tide*r
+    rt0 = find_rphimax(accr_t)
+    if verbose:
+        print(f"Initial Tidal Radius {rt0:.2e}")
+    rpmax = rt0*10
+
+    table = define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=nbins_fini)
+    rp_ra_of_jl = setup_rperi_rapo_of_jl(prof.potential, table)
+
+    if rpmin2 is None:
+        rpmin2 = rpmin*1e1
+
+    def f_of_jl(j, l):
+        rperi,rapo = rp_ra_of_jl(j,l)
+
+        return prof.f_of_el(*prof.E_L_of_rperi_rapo(rperi, rapo))
+    
+    rho, m, phi = prof.density, prof.m_of_r, prof.potential
+    if lower_boundary == "initial":
+        lower_boundary = prof.density, prof.m_of_r, prof.potential
+        fpa_below = prof.f_of_rperi_rapo
+    else:
+        fpa_below = None
+    profiles = []
+    for i in range(0,iter_max):
+        rnew, rhonew = adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide=tide,  fpa_below=fpa_below, nr=nr, nintegrate=nintegrate, ninterp=ninterp, rpmin=rpmin2)
+        rel_error = np.max(np.abs((rhonew-rho(rnew))/prof.density(rnew)))
+        if verbose:
+            print(f"iteration {i} relative diff {rel_error:.2%}")
+        rho, m, phi = solve_poisson_via_spline_with_smart_boundaries(rnew, np.clip(rhonew, 0, None), lower_boundary=lower_boundary, upper_boundary="vacuum")
+        if rel_error < eps:
+            break
+        if get_all:
+            profiles.append((rnew, rhonew, rho, m, phi))
+    
+    if get_all:
+        return profiles
+    else:
+        return rnew, rhonew, rho, m, phi
