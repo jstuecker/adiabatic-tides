@@ -569,6 +569,7 @@ def solve_poisson_via_spline(ri, rhoi, spline_class=PchipInterpolator, mbelow=0.
     """
     spl_dm_dr = spline_class(ri, 4*np.pi*rhoi*ri**2, **kwargs)
     spl_m = spl_dm_dr.antiderivative()
+
     spl_dphdir = spline_class(ri, G * (spl_m(ri)+mbelow) / ri**2, **kwargs)
     spl_phi = spl_dphdir.antiderivative()
     
@@ -605,28 +606,35 @@ def describe_lower_boundary(ri, rhoi, boundary="powerlaw", G=43.0071057317063e-1
 
     return rho, m, phi
 
-def describe_upper_boundary(rho, m, phi, ri, mode="vacuum", G=43.0071057317063e-10):
-    assert mode == "vacuum"
-
+def describe_upper_boundary(rho, m, phi, ri, mode="exp", G=43.0071057317063e-10):
     rmax = ri[-1]
-    mmax, phimax = m(rmax), phi(rmax)
-    rho = lambda r: 0.*r
-    m = lambda r: mmax + 0.*r
-    phi = lambda r: phimax + G * mmax * (1./np.clip(r, rmax, None) - 1./np.clip(r, rmax, None))
+    rhomax, mmax, phimax = rho(rmax),m(rmax), phi(rmax)
+    if mode =="vacuum":
+        def rho(r): return 0.*r
+        def m(r): return mmax + 0.*r
+        def phi(r): return phimax + G * mmax * (1./np.clip(r, rmax, None) - 1./np.clip(r, rmax, None))
+    elif mode =="exp":
+        def rho(r): return rhomax*np.exp((-r + rmax)/rmax)
+        def m(r): return mmax + 20*np.pi*rhomax*rmax**3 + (-4*np.pi*r**2*rhomax*rmax - 8*np.pi*r*rhomax*rmax**2 - 8*np.pi*rhomax*rmax**3)*np.exp((-r + rmax)/rmax)
+        def phi(r): return phimax + G *(12*np.pi*rhomax*rmax**2 + (mmax + 20*np.pi*rhomax*rmax**3)/rmax - (mmax + 20*np.pi*rhomax*rmax**3)/r + (4*np.pi*r*rhomax*rmax**2 + 8*np.pi*rhomax*rmax**3)*np.exp((-r + rmax)/rmax)/r)
+        # def rho(r): return rhomax * np.exp(-np.clip(r,rmax, None)/rmax)
+        # def m(r): return mmax + 0.*r
+    else:
+        raise ValueError("Unknown upper boundary mode")
 
     return rho, m, phi
 
-def solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, spline_class=PchipInterpolator, lower_boundary="powerlaw", upper_boundary="vacuum", G=43.0071057317063e-10, **kwargs):
+def solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, spline_class=PchipInterpolator, lower_boundary="powerlaw", upper_boundary="exp", G=43.0071057317063e-10, **kwargs):
     """
     Solves the Poisson equation with splines and assuming smart boundary conditions
     returns functions rho, m, phi that implement the smart boundary conditions
     lower_boundary : can be "powerlaw", "zero", "constant" or a tuple of 3 functions rho,m,phi
-    upper_boundary : so far, can only be "vacuum"
+    upper_boundary : so far, can be "vacuum" or "exp" (recommended)
     """
     rhobelow, mbelow, phibelow = describe_lower_boundary(ri, rhoi, boundary=lower_boundary, G=G)
     spl_rho, spl_m, spl_phi = solve_poisson_via_spline(ri, rhoi, spline_class=spline_class, mbelow=mbelow(ri[0]), phibelow=phibelow(ri[0]), G=G, **kwargs)
     rhoabove, mabove, phiabove = describe_upper_boundary(spl_rho, spl_m, spl_phi, ri, mode=upper_boundary, G=G)
-    
+
     rho = lambda r: np.where(r<ri[0], rhobelow(r), np.where(r>ri[-1], rhoabove(r), spl_rho(r)))
     m = lambda r: np.where(r<ri[0], mbelow(r), np.where(r>ri[-1], mabove(r), spl_m(r)))
     phi = lambda r: np.where(r<ri[0], phibelow(r), np.where(r>ri[-1], phiabove(r), spl_phi(r)))
@@ -1555,9 +1563,8 @@ def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty)
         if raporange[1] == np.infty:
             I = integrals.integrate_double_exponential_a_inf(integrand, a=a, N=N2,c=1, tmax=4, xscale=a)
         else: # We have a finite upper limit
-            print("Warning, convergence of finite upper apo-center limit has not been tested yet... Use with care")
             b = np.clip(raporange[1], r, None)[...,np.newaxis]
-            I = integrals.integrate_double_exponential_a_b(integrand, a, b, N=N2,c=1, tmax=4)
+            I = integrals.integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
 
         return I
     
