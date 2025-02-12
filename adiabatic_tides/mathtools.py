@@ -1741,9 +1741,12 @@ def rperi_rapo_valid_continuous(pot, accr, rperi, rapo):
     """Like rperi_rapo_valid but returns a float that is >= 0 if valid and < 0 if not"""
     phip, phia = pot(rperi), pot(rapo)
 
+    assert np.all(rapo > rperi)
+
     f1 = phia - phip
     # L2 = np.clip(2. * save_divide(phia - phip, rperi**-2 - rapo**-2), 0, None)
     L2 = np.clip(2. * save_divide((phia - phip)*rperi**2*rapo**2, rapo**2 - rperi**2), 0, None)
+    assert np.all(L2 > 0)
     f2 = -(accr(rapo) + L2/rapo**3)
 
     f = f1*f2 * (0.5 - 1.0*((f1 < 0)&(f2<0)))
@@ -1770,3 +1773,22 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
         return np.interp(rp, rperi, rapo)
 
     return rperi, rapo, rlmax, rtid, ramax_of_rp
+
+def adiabatic_reconstruction_with_tide(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10):
+    assert tide > 0, "Tide must be positive"
+    
+    def m_tot(r): return m(r) - tide/G * r**3
+    def rho_tot(r): return rho(r) - 3.* tide / (4.*np.pi*G)
+    def phi_tot(r): return phi(r) - 0.5 * tide* r**2
+    def accr_tot(r): return -G * m_tot(r) / r**2
+    def daccdr_tot(r): return 2 * G * m_tot(r) / r**3 - 4.*np.pi * rho_tot(r) * G
+
+    assert profile_is_limited(accr_tot, rpmin), "Profile with tide is not limited... this should not happen"
+    
+    rperi, rapo, rlmax, rtid, ramax_of_rp = define_paspace_boundaries(phi_tot, accr_tot, daccdr_tot, rpmin=rpmin)
+    table = define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=ninterp)
+    f_of_rperi_rapo = setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi_tot, table, fpa_below=fpa_below)
+    rnew = np.geomspace(rpmin,rtid,nr)
+    rhonew = integrate_f_limited_paspace(f_of_rperi_rapo, phi_tot, accr_tot, ramax_of_rp, rnew, rperirange=(0, rlmax), N=nintegrate)
+
+    return rnew, rhonew

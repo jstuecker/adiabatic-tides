@@ -1683,8 +1683,8 @@ class PlummerProfile(RadialProfile):
         if zero_at_zero:
             phi -= self.phi0
             # At small radii put expansion to avoid cancelation erros
-            sel = r < 1e-3*self.a
-            phi[sel] = 0.5 * self.G * self.M * r[sel]**2 / self.a**3
+            phi_expansion = 0.5 * self.G * self.M * r**2 / self.a**3
+            phi = np.where(r < 1e-3*self.a, phi_expansion, phi)
         return phi
     
     def r0(self):
