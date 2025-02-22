@@ -480,7 +480,7 @@ def second_deriv_avoid_cancelation(f, x, degree=1e-10):
         h1, h2 = x[ic] - x[il], x[ir] - x[ic]
         with np.errstate(divide='ignore', invalid='ignore'):
             f2d = 2*(f[il]*h2 + f[ir]*h1 - f[ic]*(h1+h2)) / (h1+h2)
-        return np.nanmin((np.abs(f2d)/(f[ic]), np.abs((h1+h2)/np.abs(x[ic]))), axis=0)
+            return np.nanmin((np.abs(f2d)/(f[ic]), np.abs((h1+h2)/np.abs(x[ic]))), axis=0)
 
     for i in range(0, len(x)//2):
         sel = cancelation_degree() < degree
@@ -1869,7 +1869,7 @@ def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator,
     def integrand(phi):
         return save_divide(ip_d2rb2(phi), np.clip(phi - Ei[...,np.newaxis], 0, None)**(0.5 - beta))
 
-    f = integrals.integrate_exp_double_exp_a_b(integrand, Ei,  phi[-1], N=nintegrate)
+    f = integrals.integrate_exp_double_exp_a_b(integrand, Ei,  phi[-1], N=nintegrate, tmax=4.)
 
     Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
     fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
@@ -1891,3 +1891,20 @@ def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator,
 #     fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) * (0.5 + beta)
 
 #     return phi, f*fac
+
+def define_interpolator(x, y, method="pchip", bounds="constant", **kwargs):
+    if method == "pchip":
+        ip = PchipInterpolator(x, y, extrapolate=False, **kwargs)
+    elif method == "linear":
+        ip = lambda xev : np.interp(xev, x, y, left=np.nan, right=np.nan)
+    else:
+        raise ValueError("Method not recognized")
+    
+    if bounds == "nan":
+        return ip
+    elif bounds == "constant":
+        return lambda xev: ip(np.clip(xev, x[0], x[-1]))
+    elif bounds == "zero":
+        return lambda xev: np.nan_to_num(ip(xev), 0)
+    else:
+        raise ValueError("bounds has to be nan, constant or zero")
