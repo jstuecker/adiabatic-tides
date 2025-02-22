@@ -1530,7 +1530,7 @@ def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
     else:
         return np.abs(res)
 
-def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), farguments_peri_apo=False):
+def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), farguments_peri_apo=False, vrmoment=0, vtmoment=0, vmoment=0):
     """Integrates a distribution function, discretizing the integral in "paspace"
     paspace is the space of possible peri- and apocenter radii and maps one to one
     to (E,L) space
@@ -1557,11 +1557,20 @@ def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty)
             else:
                 fval[valid] = f(e[valid], l[valid])
 
+
+            if vmoment != 0:
+                v = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis], 0, None))
+                fval *= v**vmoment
+            if vrmoment != 0:
+                fval *= vr**vrmoment
+            if vtmoment != 0:
+                fval *= (l/r[...,np.newaxis,np.newaxis])**vtmoment
+
             return np.divide(fval * ldlde, vr, out=np.zeros_like(fval), where=valid)
 
         a = np.clip(raporange[0], r, None)[...,np.newaxis]
         if raporange[1] == np.infty:
-            I = integrals.integrate_double_exponential_a_inf(integrand, a=a, N=N2,c=1, tmax=4, xscale=a)
+            I = integrals.integrate_double_exponential_a_inf(integrand, a=a, N=N2,c=1, tmax=4., xscale=a)
         else: # We have a finite upper limit
             b = np.clip(raporange[1], r, None)[...,np.newaxis]
             I = integrals.integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
