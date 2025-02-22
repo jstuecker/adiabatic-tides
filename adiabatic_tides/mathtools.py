@@ -2,6 +2,7 @@ import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline, NearestNDInterpolator
 from scipy.integrate import simps, trapezoid
 from scipy.interpolate import CubicSpline, PchipInterpolator
+from scipy.special import gamma
 from . import integrals
 
 def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
@@ -722,7 +723,7 @@ def eddington_inversion_diff_last(ri, rho, phi=None, integrator=None):
 
     return phi, -np.gradient(fparent, phi, edge_order=1)
 
-def anisotropic_inversion(ri, rho, phi=None, beta=0.):
+def anisotropic_inversion_old(ri, rho, phi=None, beta=0.):
     """Assuming a profile with constant anisotropy beta, calculates f1(E)
     assuming that f(E,L) = f1(E) * L**(-2beta)
     
@@ -1851,3 +1852,42 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
         return profiles
     else:
         return rnew, rhonew, rho, m, phi
+    
+def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator, nintegrate=100):
+    """Assuming a profile with constant anisotropy beta, calculates f1(E)
+    assuming that f(E,L) = f1(E) * L**(-2beta)
+    """
+    if np.min(phi) <= 0:
+        raise ValueError("Please normalize potential to 0 at 0")
+
+    rho_rbeta2 = rho * ri**(2*beta)
+    Ei = phi
+
+    d2rb2 = second_deriv_avoid_cancelation(rho_rbeta2, Ei)
+    ip_d2rb2 = spline_class(Ei, d2rb2)
+
+    def integrand(phi):
+        return save_divide(ip_d2rb2(phi), np.clip(phi - Ei[...,np.newaxis], 0, None)**(0.5 - beta))
+
+    f = integrals.integrate_exp_double_exp_a_b(integrand, Ei,  phi[-1], N=nintegrate)
+
+    Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
+    fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
+    fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) #* (0.5 + beta)
+
+    return Ei, f*fac
+
+# def anisotropic_inversion_old(ri, rho, phi=None, beta=0.):
+
+#     f = np.zeros_like(phi)
+#     for i,E in enumerate(phi):
+#         t = (np.clip(phi - E, 0, None))**(0.5 - beta)
+#         f[i] = trapezoid(integrand, x=t)
+
+#     from scipy.special import gamma
+
+#     Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
+#     fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
+#     fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) * (0.5 + beta)
+
+#     return phi, f*fac
