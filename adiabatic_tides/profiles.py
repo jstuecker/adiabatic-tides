@@ -4,52 +4,113 @@ from scipy.integrate import simps
 from scipy.interpolate import  RectBivariateSpline, NearestNDInterpolator, LinearNDInterpolator
 from . import mathtools
 from . import phasespace
+import yaml
+from dataclasses import dataclass, asdict
 
 import time
 
-default_config = {
-    "nintegrate" : 200,
-    "rmin" : 1e-15,
-    "rmax" : 1e10,
-    "nr" : 1000
-}
+@dataclass
+class GeneralConfig:
+    scale_accuracy: float = 1
+    scale_geometry: float = 1
+    rmin: float = 1e-20
+    rmax: float = 1e10
 
-# accurate_config = {
-#     "rmin" : 1e-25,
-#     "rmax" : 1e12,
-#     "nr" : 4000
-# }
+@dataclass
+class PhaseSpaceConfig:
+    nintegrate: int = 100
+    nr: float = 2000
 
-class RadialProfile():
-    def __init__(self, anisotropy=0., config=default_config):
+@dataclass
+class ActionsConfig:
+    nintegrate: int = 100
+
+class Configureable():
+    DEFAULT_CONFIG = {}
+
+    def __init__(self, **configs):
         """This is an abstract class defining the interface of RadialProfiles,
         don't initialize!"""
-        
+
+        self.cfg = {}
+        for group, default_instance in self.DEFAULT_CONFIG.items():
+            updated_values = {**asdict(default_instance), **configs.get(group, {})}
+            self.cfg[group] = type(default_instance)(**updated_values)
+
+        self.allow_config_change = True
+
+    def config_to_dict(self):
+        """ Convert all config groups to a dictionary. """
+        return {group: asdict(config) for group, config in self.cfg.items()}
+    
+    def update_config_groups(self, **configs):
+        """ Update configuration values dynamically. """
+        if not self.allow_config_change:
+            raise ValueError("Config changes are not allowed anymore. Please only change the config during initialization.")
+
+        for group, updates in configs.items():
+            if group in self.cfg:
+                updated_values = {**asdict(self.cfg[group]), **updates}
+                self.cfg[group] = type(self.cfg[group])(**updated_values)
+            else:
+                raise ValueError(f"Unknown config group: {group}")
+            
+    def update_config(self, group: str, **kwargs):
+        """ Update a single parameter within a config group. """
+        if not self.allow_config_change:
+            raise ValueError("Config changes are not allowed anymore. Please only change the config during initialization.")
+
+        if group not in self.cfg:
+            raise ValueError(f"Unknown config group: {group}")
+
+        updated_values = asdict(self.cfg[group])
+
+        for key in kwargs:
+            if not hasattr(self.cfg[group], key):
+                raise ValueError(f"Unknown parameter '{key}' in group '{group}'")
+            updated_values[key] = kwargs[key]
+        self.cfg[group] = type(self.cfg[group])(**updated_values)  # Recreate instance
+
+    def update_from_yaml(self, file_path: str):
+        """ Load configuration updates from a YAML file and apply them. """
+        if not self.allow_config_change:
+            raise ValueError("Config changes are not allowed anymore. Please only change the config during initialization.")
+
+        with open(file_path, "r") as f:
+            file_config = yaml.safe_load(f) or {}
+        self.update_config(**file_config)
+
+class RadialProfile(Configureable):
+    DEFAULT_CONFIG = {
+        "general": GeneralConfig(),
+        "phasespace": PhaseSpaceConfig(),
+        "actions": ActionsConfig()
+    }
+
+    def __init__(self, anisotropy=0., rmin=None, rmax=None, **configs):
+        """This is an abstract class defining the interface of RadialProfiles,
+        don't initialize!"""
+
         # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
         self.anisotropy = anisotropy
         self.G = 43.0071057317063e-10
         self.is_disrupted = False
         self.potential_zero_at_infty = True # should replace this by a function that returns the potential zero-point
         self._f_initialized = False
-        
-        self.reset_interpolators()
+
+        super().__init__(**configs)
+        if rmin is not None:
+            self.cfg["general"].rmin = rmin
+        if rmax is not None:
+            self.cfg["general"].rmax = rmax
 
         self.q = {}
         self.ip = {}
+        
+        self.reset_interpolators()
 
         self._sc = None
 
-        self.cfg = config
-
-    def numerical_parameter(self, name, category=None, val=None):
-        if val is not None:
-            return val
-        else:
-            return self.cfg[name]
-    
-    def _discrete_radii(self):
-        return np.geomspace(self.numerical_parameter("rmin"), self.numerical_parameter("rmax"), self.numerical_parameter("nr"))
-        
     def reset_interpolators(self):
         """Resets the interpolators, like j_of_el, e_of_kl etc...
         
@@ -216,24 +277,29 @@ class RadialProfile():
         else:
             return rs, es, ls, vrs, ms
 
-    def f_of_e(self, E, nintegrate=None):
-        """Dependencies: discrete radii and nintegrate"""
-        nintegrate = self.numerical_parameter("nintegrate", val=nintegrate)
+    def setup_phasespace(self):
+        self.allow_config_change = False
 
-        assert np.all(E > 0), "Energies have to be positive... please make sure to normalize to 0 at 0"
+        if "f1" in self.ip:
+            # already initialized, check that the config is consistent
+            print("Have to validate here (later)")
+            return
 
-        if not "f1" in self.ip:
-            ri = self._discrete_radii()
-            e,f1 = mathtools.anisotropic_inversion(ri, self.density(ri), self.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=nintegrate)
-            self.q["e_f1"] = e,f1
-            self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
+        cfg_ps : PhaseSpaceConfig = self.cfg["phasespace"]
+        cfg_gen : GeneralConfig = self.cfg["general"]
+        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
+        self.q["phasespace_r"] = ri
         
-        f1 = self.ip["f1"](E)
+        e,f1 = mathtools.anisotropic_inversion(ri, self.density(ri), self.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        self.q["phasespace_e"] = e
+        self.q["phasespace_f"] = f1
 
-        if np.max(E) > np.max(self.q["e_f1"]):
-            raise ValueError("Energy is too high for the interpolation range")
-        
-        return f1
+        self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
+
+    def f_of_e(self, E):
+        self.setup_phasespace()
+
+        return self.ip["f1"](E)
     
     def f_of_el(self, E, L):
         return self.f_of_e(E) * L**(-2*self.anisotropy)
@@ -1737,7 +1803,7 @@ class PlummerProfile(RadialProfile):
 
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw", anisotropy=0.):
+    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw", anisotropy=0., **configs):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
@@ -1751,7 +1817,7 @@ class NumericalProfile(RadialProfile):
                    two smallest radii. This is the recommended mode if applicable.
         from_dict : load a previous profile from a dict created by .to_dict()
         """
-        super().__init__(anisotropy=anisotropy)
+        super().__init__(anisotropy=anisotropy, rmin=ri[0], rmax=ri[-1], **configs)
         
         self.potential_profile = potential_profile 
         
