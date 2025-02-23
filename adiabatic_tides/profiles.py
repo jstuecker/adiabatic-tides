@@ -2093,7 +2093,7 @@ def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, war
         return r
     
     
-class AdiabaticProfile(RadialProfile):
+class OldAdiabaticProfile(RadialProfile):
     def __init__(self, prof_initial=None, prof_pert=None, tide=None, tidfac_rvir=None, tidfac_rs=None, norm_at_zero=False, rmin=None, rmax=None, nbins=150, ri=None, niter=0, h5cache=None, resetcache=False, verbose=False, store_every_step=False):
         """Adiabatically transformed profile
         

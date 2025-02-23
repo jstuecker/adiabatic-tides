@@ -89,6 +89,19 @@ class ActionsConfig:
     rafac_max: float = 1e10
 
 @dataclass
+class AdiabaticConfig:
+    # Performance critical parameters
+    nr : int = 200
+    ninterp : int = 50 
+    nintegrate : int = 32
+    # how to deal with contributions from radii < rmin
+    lower_boundary : str = "initial" # "initial", "powerlaw" or "constant"
+    rminfac : float = 1e2 # offset minimal reconstruction radius a little to avoid numerical issues
+    # When to stop iterating:
+    nitermax : int = 100
+    eps_done : float = 1e-3
+
+@dataclass
 class SamplingConfig:
     nintegrate: int = 40
     ninterp : int = 1001
