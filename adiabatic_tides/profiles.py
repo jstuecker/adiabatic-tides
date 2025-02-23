@@ -6,6 +6,7 @@ from . import mathtools
 from . import phasespace
 import yaml
 from dataclasses import dataclass, asdict
+from typing import Any, Dict, Callable, List
 
 import time
 
@@ -25,57 +26,62 @@ class PhaseSpaceConfig:
 class ActionsConfig:
     nintegrate: int = 100
 
-class Configureable():
+def only_on_change(groups: List[str]):
+    """Decorator to execute a method only on the first call or when any specified config group changes."""
+    def decorator(method: Callable):
+        def wrapper(self: 'Configureable', *args, **kwargs):
+            current_configs = {group: asdict(self.cfg[group]) for group in groups}
+            
+            if not hasattr(self, f'_{method.__name__}_last_configs'):
+                # If it's the first call, execute the method and store the configs
+                result = method(self, *args, **kwargs)
+                setattr(self, f'_{method.__name__}_last_configs', current_configs)
+                return result
+            
+            last_configs = getattr(self, f'_{method.__name__}_last_configs')
+            # Check if any of the groups have changed
+            if any(current_configs[group] != last_configs[group] for group in groups):
+                # If any config has changed, execute the method and update the stored configs
+                result = method(self, *args, **kwargs)
+                setattr(self, f'_{method.__name__}_last_configs', current_configs)
+                return result
+
+            return None  # No changes, so no execution
+        
+        return wrapper
+    return decorator
+
+class Configureable:
     DEFAULT_CONFIG = {}
-
+    
     def __init__(self, **configs):
-        """This is an abstract class defining the interface of RadialProfiles,
-        don't initialize!"""
-
+        """Initialize the configurable with default values and provided configs."""
         self.cfg = {}
+        
         for group, default_instance in self.DEFAULT_CONFIG.items():
             updated_values = {**asdict(default_instance), **configs.get(group, {})}
             self.cfg[group] = type(default_instance)(**updated_values)
 
-        self.allow_config_change = True
-
-    def config_to_dict(self):
-        """ Convert all config groups to a dictionary. """
+    def config_to_dict(self) -> Dict[str, Any]:
+        """Convert all config groups to a dictionary."""
         return {group: asdict(config) for group, config in self.cfg.items()}
-    
-    def update_config_groups(self, **configs):
-        """ Update configuration values dynamically. """
-        if not self.allow_config_change:
-            raise ValueError("Config changes are not allowed anymore. Please only change the config during initialization.")
 
-        for group, updates in configs.items():
-            if group in self.cfg:
-                updated_values = {**asdict(self.cfg[group]), **updates}
-                self.cfg[group] = type(self.cfg[group])(**updated_values)
-            else:
-                raise ValueError(f"Unknown config group: {group}")
-            
     def update_config(self, group: str, **kwargs):
-        """ Update a single parameter within a config group. """
-        if not self.allow_config_change:
-            raise ValueError("Config changes are not allowed anymore. Please only change the config during initialization.")
-
+        """Update a single parameter within a config group."""
         if group not in self.cfg:
             raise ValueError(f"Unknown config group: {group}")
 
         updated_values = asdict(self.cfg[group])
 
         for key in kwargs:
-            if not hasattr(self.cfg[group], key):
+            if key not in updated_values:
                 raise ValueError(f"Unknown parameter '{key}' in group '{group}'")
             updated_values[key] = kwargs[key]
+
         self.cfg[group] = type(self.cfg[group])(**updated_values)  # Recreate instance
 
     def update_from_yaml(self, file_path: str):
-        """ Load configuration updates from a YAML file and apply them. """
-        if not self.allow_config_change:
-            raise ValueError("Config changes are not allowed anymore. Please only change the config during initialization.")
-
+        """Load configuration updates from a YAML file and apply them."""
         with open(file_path, "r") as f:
             file_config = yaml.safe_load(f) or {}
         self.update_config(**file_config)
@@ -277,13 +283,9 @@ class RadialProfile(Configureable):
         else:
             return rs, es, ls, vrs, ms
 
-    def setup_phasespace(self):
-        self.allow_config_change = False
-
-        if "f1" in self.ip:
-            # already initialized, check that the config is consistent
-            print("Have to validate here (later)")
-            return
+    @only_on_change(['phasespace', 'general'])
+    def _setup_phasespace(self):
+        print("Recalculating Phasespace")
 
         cfg_ps : PhaseSpaceConfig = self.cfg["phasespace"]
         cfg_gen : GeneralConfig = self.cfg["general"]
@@ -297,7 +299,8 @@ class RadialProfile(Configureable):
         self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
 
     def f_of_e(self, E):
-        self.setup_phasespace()
+        """Depends on cfg["phasespace"] and cfg["general"]"""
+        self._setup_phasespace()
 
         return self.ip["f1"](E)
     
