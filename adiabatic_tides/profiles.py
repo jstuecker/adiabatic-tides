@@ -3,9 +3,10 @@ import os
 from scipy.integrate import simps
 from scipy.interpolate import  RectBivariateSpline, NearestNDInterpolator, LinearNDInterpolator
 from . import mathtools
-from .phasespace import PhaseSpace, EddingtonPhaseSpace
+from .phasespace import PhaseSpace, EddingtonPhaseSpace, ActionMap, InterpolatorActionMap
 from .config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 import time
+
 
 class RadialProfile(Configureable):
     DEFAULT_CONFIG = {
@@ -43,6 +44,13 @@ class RadialProfile(Configureable):
             self.phase_space = phase_space(self, anisotropy=anisotropy, **configs)
         else:
             raise ValueError("phase_space must be a subclass of PhaseSpace or None")
+        
+        self.action_map = InterpolatorActionMap(self)
+
+    def rmin(self):
+        return self.cfg["general"].rmin / self.cfg["general"].scale_geometry
+    def rmax(self):
+        return self.cfg["general"].rmax * self.cfg["general"].scale_geometry
 
     def reset_interpolators(self):
         """Resets the interpolators, like j_of_el, e_of_kl etc...
@@ -162,8 +170,8 @@ class RadialProfile(Configureable):
         cfg : SamplingConfig = self.cfg["sampling"]
         cfg_gen : GeneralConfig = self.cfg["general"]
 
-        if rmax is None: rmax = cfg_gen.rmax
-        if rpmin is None: rpmin = cfg_gen.rmin
+        if rmax is None: rmax = self.rmax()
+        if rpmin is None: rpmin = self.rmin()
         if rpmax is None: rpmax = rmax
 
         if nintegrate is None: nintegrate = int(cfg.nintegrate * cfg_gen.scale_accuracy)
@@ -215,7 +223,6 @@ class RadialProfile(Configureable):
         else:
             return outputs
 
-
     def f_of_e(self, E):
         assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_e(E)
@@ -227,6 +234,10 @@ class RadialProfile(Configureable):
     def f_of_rperi_rapo(self, rp, ra):
         E, L = self.E_L_of_rperi_rapo(rp, ra)
         return self.f_of_el(E, L)
+    
+    def f_of_jl(self, j, l):
+        rp,ra = self.action_map.rp_ra_of_jl(j, l)
+        return self.f_of_rperi_rapo(rp, ra)
 
     #----------- Functions that can be implemented on the abstract level already ----------# 
     def accr(self, r):
@@ -364,8 +375,8 @@ class RadialProfile(Configureable):
             return e - 0.5*l**2/r**2 - self.potential(r)
 
         if niter is None: niter = self.cfg["actions"].niter_pa
-        if rlow is None: rlow = self.cfg["general"].rmin
-        if rup is None: rup = self.cfg["general"].rmax
+        if rlow is None: rlow = self.rmin()
+        if rup is None: rup = self.rmax()
         if search_method is None: search_method = self.cfg["actions"].search_method
 
         if search_method == "binary":

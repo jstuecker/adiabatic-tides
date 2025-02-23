@@ -77,9 +77,16 @@ class EddingtonConfig:
 
 @dataclass
 class ActionsConfig:
+    # For finding peri/apocenter radii:
     niter_pa : int = 30
     search_method : str = "ridders"
+    # For Action integral:
     nintegrate: int = 40
+    # For mapping rp_ra(j, l):
+    nbins_rp: int = 250
+    nbins_ra: int = 100 # zero means that it uses the same as rp
+    nsteps_newton: int = 5
+    rafac_max: float = 1e10
 
 @dataclass
 class SamplingConfig:

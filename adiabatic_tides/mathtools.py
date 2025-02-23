@@ -1379,7 +1379,7 @@ def map_peri_apo_space_log_log(rpmin, rpmax, facmax=None, rpoff=0., facmin=1e-4)
     return rpra_of_uv, uv_of_rpra
 
 def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., facmin=1e-4):
-    if nbins_apo is None:
+    if (nbins_apo is None) or (nbins_apo == 0):
         nbins_apo = nbins
 
     # Set up a uniform domain
@@ -1418,7 +1418,7 @@ def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tma
 
 def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_apo=None, rpoff=0.):
     """like define_peri_apo_table, but for profiles where valid apo centers are limited"""
-    if nbins_apo is None:
+    if (nbins_apo is None) or (nbins_apo == 0):
         nbins_apo = nbins
 
     # Set up a uniform domain
@@ -1886,20 +1886,6 @@ def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator,
 
     return Ei, f*fac
 
-# def anisotropic_inversion_old(ri, rho, phi=None, beta=0.):
-
-#     f = np.zeros_like(phi)
-#     for i,E in enumerate(phi):
-#         t = (np.clip(phi - E, 0, None))**(0.5 - beta)
-#         f[i] = trapezoid(integrand, x=t)
-
-#     from scipy.special import gamma
-
-#     Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
-#     fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
-#     fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) * (0.5 + beta)
-
-#     return phi, f*fac
 
 def define_interpolator(x, y, method="pchip", bounds="constant", **kwargs):
     if method == "pchip":

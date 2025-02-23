@@ -29,7 +29,7 @@ class EddingtonPhaseSpace(PhaseSpace):
         cfg_ps : EddingtonConfig = self.profile.cfg["eddington"]
         cfg_gen : GeneralConfig = self.profile.cfg["general"]
 
-        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
+        ri = np.geomspace(self.profile.rmin(), self.profile.rmax(), int(cfg_ps.nr*cfg_gen.scale_accuracy))
         phi = self.profile.potential(ri, zero_at_zero=True)
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
@@ -49,3 +49,34 @@ class EddingtonPhaseSpace(PhaseSpace):
         self._setup_f()
 
         return self.ip["f1"](e) * l**(-2*self.anisotropy)
+
+class ActionMap():
+    def __init__(self, profile):
+        self.profile = profile
+        self.cfg = profile.cfg
+
+    def rp_ra_of_jl(self, j, l):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
+
+class InterpolatorActionMap(ActionMap):
+    def __init__(self, profile):
+        super().__init__(profile)
+
+        self.q = {}
+        self.ip = {}
+
+    @only_on_change(['actions', 'general'])
+    def setup_rp_ra_of_jl(self):
+        cfg_gen : GeneralConfig = self.cfg["general"]
+        cfg_act : ActionsConfig = self.cfg["actions"]
+
+        rpmin, rpmax, facmax = self.profile.rmin(), self.profile.rmax(), cfg_act.rafac_max*cfg_gen.scale_geometry
+
+        # table = mathtools.define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra)
+        table = mathtools.define_peri_apo_table(rpmin, rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra, facmax=facmax)
+        self.ip["rp_ra_of_jl"] = mathtools.setup_rperi_rapo_of_jl(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, nintegrate_action=cfg_act.nintegrate)
+
+    def rp_ra_of_jl(self, j, l):
+        self.setup_rp_ra_of_jl()
+
+        return self.ip["rp_ra_of_jl"](j, l)
