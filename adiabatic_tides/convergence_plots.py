@@ -16,9 +16,9 @@ def plot_profile_rel(axs, rbins, rhoi, rhoref, **kwargs):
     axs[0].set_ylabel(r"$\rho$")
     axs[1].set_ylabel(r"$\rho/\rho_0$")
 
-def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, rpmax=1.0, norb=100, steps_per_orb=100):
+def plot_perisplit_integration(prof, npart=100000, nsteps_metropolis=64, rpmin=0.1, rpmax=1.0, norb=100, steps_per_orb=100):
 
-    rs0,Es0,Ls0,vrs0,ms,ri,rho = prof.sample_r_E_L_vr_m_metropolis(npart, rpmin=rpmin, rpmax=rpmax, nsteps_chain=nsteps_chain, get_rho=True, rmax=1e4)
+    rs0,Es0,Ls0,vrs0,ms,ri,rho = prof.sample_particles(npart, mode="r_rp_l_vr_m_rrho_rho", rpmin=rpmin, rpmax=rpmax, nsteps_metropolis=nsteps_metropolis, rmax=1e4)
 
     tmax = prof.tcirc(rpmin)
     
@@ -45,10 +45,10 @@ def plot_perisplit_integration(prof, npart=100000, nsteps_chain=64, rpmin=0.1, r
     
     return fig,axs
 
-def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=64, norb=40, steps_per_orb=100, rpsplits=None):
+def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_metropolis=64, norb=40, steps_per_orb=100, rpsplits=None):
     if rpsplits is None:
         rpsplits = np.insert(np.logspace(-3,3,7), 0, 1e-6)
-    rs0,Es0,Ls0,vrs0,ms = prof.sample_r_E_L_vr_m_metropolis_perisplits(n_per_split, rpsplits=rpsplits, flat=False, nsteps_chain=nsteps_chain)
+    rs0,Es0,Ls0,vrs0,ms = prof.sample_particles_perisplits(n_per_split, rpsplits=rpsplits, flat=False, nsteps_metropolis=nsteps_metropolis)
     iperilow = np.arange(rs0.shape[0])[:,np.newaxis] * np.ones(rs0.shape[1], dtype=np.int64)
     tmax = prof.tcirc(rpsplits[iperilow.flat].reshape(rs0.shape))
 
@@ -90,7 +90,7 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=64, n
 
         axs[2].semilogx(rcentaniso, beta, color="black", label=label, **kwargs)
 
-    axs[2].axhline(prof.anisotropy(), color="red", ls="dashed", alpha=0.5, label="True")
+    axs[2].axhline(prof.phase_space.anisotropy, color="red", ls="dashed", alpha=0.5, label="True")
 
     plot_all(rhos[0],betas[0], alpha=0.5, label="Initial", label_peris=True)
     plot_all(rhos[-1],betas[-1], alpha=0.5, ls="dashed", label="Final", lw=2)
@@ -106,7 +106,7 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_chain=64, n
 
     axs[0].set_ylim(np.min(rhoref), np.max(rhoref)*2)
     axs[1].set_ylim(-0.1,1.5)
-    axs[2].set_ylim(prof.anisotropy()-0.45,prof.anisotropy()+0.45)
+    axs[2].set_ylim(prof.phase_space.anisotropy-0.45,prof.phase_space.anisotropy+0.45)
 
     axs[0].set_ylabel(r"$\rho(r)$")
     axs[1].set_ylabel(r"$\rho(r)/\rho_0(r)$")

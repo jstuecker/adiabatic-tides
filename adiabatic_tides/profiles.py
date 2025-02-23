@@ -331,7 +331,7 @@ class RadialProfile(Configureable):
             return res
 
     
-    def sample_particles_perisplits(self, size_per_split=10000, rpsplits=(None, None), flat=True, **kwargs):
+    def sample_particles_perisplits(self, size_per_split=10000, rpsplits=(None, None), mode="r_e_l_vr_m", rmax=None, flat=True, **kwargs):
         """See sample_r_E_L_vr_m_metropolis for a detailed description of optional keyword parameters
 
         size_per_split : number of particles in each split
@@ -339,17 +339,20 @@ class RadialProfile(Configureable):
         flat : whether to return particles in form (nsplits, nper_split) or as a flat array
         """
         
-        nsplits = len(rpsplits)-1
-        shape = (nsplits, size_per_split)
-        rs, es, ls, vrs, ms = np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape)
+        res = []
 
-        for i in range(nsplits):
-            rs[i], es[i], ls[i], vrs[i], ms[i] = self.sample_particles(size_per_split, rpmin=rpsplits[i], rpmax=rpsplits[i+1], **kwargs)
+        for i in range(len(rpsplits)-1):
+            res.append(self.sample_particles(size_per_split, mode=mode, rpmin=rpsplits[i], rpmax=rpsplits[i+1], rmax=rmax, **kwargs))
 
+        outputs = []
+        ncol = len(res[0])
+        for j in range(ncol):
+            outputs.append(np.stack([r[j] for r in res], axis=0))
         if flat:
-            return rs.flatten(), es.flatten(), ls.flatten(), vrs.flatten(), ms.flatten()
+            return [o.flatten() for o in outputs]
         else:
-            return rs, es, ls, vrs, ms
+            return outputs
+
 
     def f_of_e(self, E):
         assert self.phase_space is not None, "No phase space defined"
