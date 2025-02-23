@@ -18,7 +18,7 @@ class GeneralConfig:
     rmax: float = 1e10
 
 @dataclass
-class PhaseSpaceConfig:
+class EddingtonConfig:
     nintegrate: int = 100
     nr: float = 2000
 
@@ -86,20 +86,64 @@ class Configureable:
             file_config = yaml.safe_load(f) or {}
         self.update_config(**file_config)
 
+
+class PhaseSpace():
+    def __init__(self, profile):
+        self.profile = profile
+        self.cfg = profile.cfg
+        self.anisotropy = np.nan
+        
+    def f_of_e(self):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
+
+    def f_of_el(self):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
+
+class EddingtonPhaseSpace(PhaseSpace):
+    def __init__(self, profile, anisotropy=0.):
+        super().__init__(profile)
+        self.anisotropy = anisotropy
+
+        self.q = {}
+        self.ip = {}
+
+    @only_on_change(['eddington', 'general'])
+    def _setup_f(self):
+        print("Recalculating phasespace")
+
+        cfg_ps : EddingtonConfig = self.profile.cfg["eddington"]
+        cfg_gen : GeneralConfig = self.profile.cfg["general"]
+        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
+        self.q["phasespace_r"] = ri
+        
+        e,f1 = mathtools.anisotropic_inversion(ri, self.profile.density(ri), self.profile.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        self.q["phasespace_e"] = e
+        self.q["phasespace_f"] = f1
+
+        self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
+
+    def f_of_e(self, e):
+        self._setup_f()
+
+        return self.ip["f1"](e)
+
+    def f_of_el(self, e, l):
+        self._setup_f()
+
+        return self.ip["f1"](e) * l**(-2*self.anisotropy)
+
 class RadialProfile(Configureable):
     DEFAULT_CONFIG = {
         "general": GeneralConfig(),
-        "phasespace": PhaseSpaceConfig(),
+        "eddington": EddingtonConfig(),
         "actions": ActionsConfig()
     }
 
-    def __init__(self, anisotropy=0., rmin=None, rmax=None, **configs):
+    def __init__(self, rmin=None, rmax=None, phase_space=EddingtonPhaseSpace, anisotropy=0., **configs):
         """This is an abstract class defining the interface of RadialProfiles,
         don't initialize!"""
 
-        # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
-        self.anisotropy = anisotropy
-        self.G = 43.0071057317063e-10
+        self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
         self.is_disrupted = False
         self.potential_zero_at_infty = True # should replace this by a function that returns the potential zero-point
         self._f_initialized = False
@@ -116,6 +160,13 @@ class RadialProfile(Configureable):
         self.reset_interpolators()
 
         self._sc = None
+
+        if phase_space is None:
+            self.phase_space = None
+        elif isinstance(phase_space, type) and issubclass(phase_space, PhaseSpace):
+            self.phase_space = phase_space(self, anisotropy=anisotropy, **configs)
+        else:
+            raise ValueError("phase_space must be a subclass of PhaseSpace or None")
 
     def reset_interpolators(self):
         """Resets the interpolators, like j_of_el, e_of_kl etc...
@@ -283,29 +334,26 @@ class RadialProfile(Configureable):
         else:
             return rs, es, ls, vrs, ms
 
-    @only_on_change(['phasespace', 'general'])
-    def _setup_phasespace(self):
-        print("Recalculating Phasespace")
+    # @only_on_change(['phasespace', 'general'])
+    # def _setup_phasespace(self):
+    #     print("Recalculating Phasespace")
 
-        cfg_ps : PhaseSpaceConfig = self.cfg["phasespace"]
-        cfg_gen : GeneralConfig = self.cfg["general"]
-        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
-        self.q["phasespace_r"] = ri
+    #     cfg_ps : PhaseSpaceConfig = self.cfg["phasespace"]
+    #     cfg_gen : GeneralConfig = self.cfg["general"]
+    #     ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
+    #     self.q["phasespace_r"] = ri
         
-        e,f1 = mathtools.anisotropic_inversion(ri, self.density(ri), self.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
-        self.q["phasespace_e"] = e
-        self.q["phasespace_f"] = f1
+    #     e,f1 = mathtools.anisotropic_inversion(ri, self.density(ri), self.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+    #     self.q["phasespace_e"] = e
+    #     self.q["phasespace_f"] = f1
 
-        self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
+    #     self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
 
     def f_of_e(self, E):
-        """Depends on cfg["phasespace"] and cfg["general"]"""
-        self._setup_phasespace()
-
-        return self.ip["f1"](E)
+        return self.phase_space.f_of_e(E)
     
     def f_of_el(self, E, L):
-        return self.f_of_e(E) * L**(-2*self.anisotropy)
+        return self.phase_space.f_of_el(E, L)
     
     def f_of_rperi_rapo(self, rp, ra):
         E, L = self.E_L_of_rperi_rapo(rp, ra)
