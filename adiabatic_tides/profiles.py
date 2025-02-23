@@ -10,21 +10,6 @@ from typing import Any, Dict, Callable, List
 
 import time
 
-@dataclass
-class GeneralConfig:
-    scale_accuracy: float = 1
-    scale_geometry: float = 1
-    rmin: float = 1e-20
-    rmax: float = 1e10
-
-@dataclass
-class EddingtonConfig:
-    nintegrate: int = 100
-    nr: float = 2000
-
-@dataclass
-class ActionsConfig:
-    nintegrate: int = 100
 
 def only_on_change(groups: List[str]):
     """Decorator to execute a method only on the first call or when any specified config group changes."""
@@ -86,6 +71,24 @@ class Configureable:
             file_config = yaml.safe_load(f) or {}
         self.update_config(**file_config)
 
+
+@dataclass
+class GeneralConfig:
+    scale_accuracy: float = 1
+    scale_geometry: float = 1
+    rmin: float = 1e-20
+    rmax: float = 1e20
+
+@dataclass
+class EddingtonConfig:
+    nintegrate: int = 100
+    nr: float = 2000
+
+@dataclass
+class ActionsConfig:
+    niter_pa : int = 30
+    search_method : str = "ridders"
+    nintegrate: int = 40
 
 class PhaseSpace():
     def __init__(self, profile):
@@ -500,6 +503,8 @@ class RadialProfile(Configureable):
         
         returns : an arrray with the peri-center radius for each particle
         """
+        assert 0, "Function deprecated, use rperi_rapo_of_r_e_l instead"
+
         if niter is None:
             niter = self.scale("niter_apoperi")
         
@@ -544,6 +549,8 @@ class RadialProfile(Configureable):
                     
         returns : an arrray with the apo-center radius for each particle
         """
+        assert 0, "Function deprecated, use rperi_rapo_of_r_e_l instead"
+
         if niter is None:
             niter = self.scale("niter_apoperi")
         
@@ -601,6 +608,8 @@ class RadialProfile(Configureable):
         
         returns : the radial action jr
         """
+        assert 0, "Function deprecated, use radial_action_of_r_e_l instead"
+
         if nbins is None:
             nbins = self.scale("nbins_jr")
 
@@ -661,6 +670,35 @@ class RadialProfile(Configureable):
         
         return Jr
     
+    def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True):
+        def energy_permitted(r):
+            return e - 0.5*l**2/r**2 - self.potential(r)
+
+        if niter is None: niter = self.cfg["actions"].niter_pa
+        if rlow is None: rlow = self.cfg["general"].rmin
+        if rup is None: rup = self.cfg["general"].rmax
+        if search_method is None: search_method = self.cfg["actions"].search_method
+
+        if search_method == "binary":
+            rp = mathtools.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+            ra = mathtools.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+        elif search_method == "ridders":
+            rp = mathtools.ridders_method(energy_permitted, rlow*np.ones_like(r), r, mode="positive", niter=niter, logspace=True)
+            ra = mathtools.ridders_method(energy_permitted, r, rup*np.ones_like(r), mode="positive", niter=niter, logspace=True)
+        else:
+            raise ValueError("Unknown mode %s" % search_method)
+        
+        return rp, ra
+    
+    def radial_action_of_r_e_l(self, r, e, l):
+        rp, ra = self.rperi_rapo_of_r_e_l(r, e, l)
+        return self.radial_action_of_rp_ra(rp, ra)
+
+    def radial_action_of_rp_ra(self, rp, ra, nintegrate=None, invalid_vr_to_zero=True):
+        if nintegrate is None:
+            nintegrate = int(self.cfg["actions"].nintegrate * self.cfg["general"].scale_accuracy)
+        return mathtools.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, invalid_vr_to_zero=invalid_vr_to_zero)
+
     def density_of_states(self, energy):
         """Returns the density of states g(E) associated with some energy.
         
@@ -1372,7 +1410,13 @@ class RadialProfile(Configureable):
         
 
 class NFWProfile(RadialProfile):
-    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rmin=1e-15, rmax=1e10, **config):
+    DEFAULT_CONFIG = {
+        "general": GeneralConfig(),
+        "eddington": EddingtonConfig(),
+        "actions": ActionsConfig()
+    }
+
+    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rminrs=1e-15, rmaxrs=1e15, **config):
         """Set up an NFW profile with a given mass and concentration
         
         conc : concentration -- so that the scale radius is rs = r200c / c
@@ -1383,8 +1427,7 @@ class NFWProfile(RadialProfile):
         h : reduced hubble parameter. Set to 1 to use units where masses
             are measured in Msol/h and lengths in units of Mpc/h
         """
-        super().__init__(anisotropy=anisotropy, rmin=rmin, rmax=rmax, **config)
-        
+
         self.conc = conc
         
         if m200c is not None:
@@ -1398,6 +1441,8 @@ class NFWProfile(RadialProfile):
             raise ValueError("You have to provide either m200c or r200c")
 
         self.rs = self.r200c / self.conc
+        super().__init__(anisotropy=anisotropy, rmin=rminrs*self.rs, rmax=rmaxrs*self.rs, **config)
+
         self.rhoc = self.m200c/(4.*np.pi*self.rs**3 * (np.log(1.+self.conc) - self.conc/(1.+self.conc)))
         self.phi0 = - 4.*np.pi*self.G*self.rhoc*self.rs**2
         

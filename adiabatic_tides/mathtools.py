@@ -1282,15 +1282,21 @@ def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
     I = integrals.integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
 
-def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
+def ridders_method(f, x0, x2, niter=10, mode="both", logspace=False, **kwargs):
     """Finds the root f(x) = 0 using Ridder's method.
     mode : can be "both", "positive" or "negative"
     """
+    if logspace:
+        x0, x2 = np.log(x0), np.log(x2)
+        fin = f
+        def f(x, **kwargs): return fin(np.exp(x), **kwargs)
 
     f0 = f(x0, **kwargs)
     f2 = f(x2, **kwargs)
 
     assert np.all(np.sign(f0*f2) <= 0)
+
+    assert np.all(np.abs(x0) >= 1e-12 * np.abs(x2)), "Initial interval too large, expecting cancellation..."
 
     for i in range(0, niter):
         x1 = (x0 + x2)/2
@@ -1311,6 +1317,9 @@ def ridders_method(f, x0, x2, niter=10, mode="both", **kwargs):
         f2 = f3
 
     assert np.all(f2*f0 <= 0)
+
+    if logspace:
+        x0, x2 = np.exp(x0), np.exp(x2)
 
     if mode == "both":
         return x0, x2
