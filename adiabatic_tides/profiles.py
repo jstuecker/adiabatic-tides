@@ -113,10 +113,13 @@ class EddingtonPhaseSpace(PhaseSpace):
 
         cfg_ps : EddingtonConfig = self.profile.cfg["eddington"]
         cfg_gen : GeneralConfig = self.profile.cfg["general"]
+
         ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
-        self.q["phasespace_r"] = ri
+        phi = self.profile.potential(ri, zero_at_zero=True)
+        sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
-        e,f1 = mathtools.anisotropic_inversion(ri, self.profile.density(ri), self.profile.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        e,f1 = mathtools.anisotropic_inversion(ri[sel], self.profile.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        self.q["phasespace_r"] = ri[sel]
         self.q["phasespace_e"] = e
         self.q["phasespace_f"] = f1
 
@@ -334,25 +337,12 @@ class RadialProfile(Configureable):
         else:
             return rs, es, ls, vrs, ms
 
-    # @only_on_change(['phasespace', 'general'])
-    # def _setup_phasespace(self):
-    #     print("Recalculating Phasespace")
-
-    #     cfg_ps : PhaseSpaceConfig = self.cfg["phasespace"]
-    #     cfg_gen : GeneralConfig = self.cfg["general"]
-    #     ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
-    #     self.q["phasespace_r"] = ri
-        
-    #     e,f1 = mathtools.anisotropic_inversion(ri, self.density(ri), self.potential(ri, zero_at_zero=True), beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
-    #     self.q["phasespace_e"] = e
-    #     self.q["phasespace_f"] = f1
-
-    #     self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
-
     def f_of_e(self, E):
+        assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_e(E)
     
     def f_of_el(self, E, L):
+        assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_el(E, L)
     
     def f_of_rperi_rapo(self, rp, ra):
@@ -1382,7 +1372,7 @@ class RadialProfile(Configureable):
         
 
 class NFWProfile(RadialProfile):
-    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0.):
+    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rmin=1e-15, rmax=1e10, **config):
         """Set up an NFW profile with a given mass and concentration
         
         conc : concentration -- so that the scale radius is rs = r200c / c
@@ -1393,7 +1383,7 @@ class NFWProfile(RadialProfile):
         h : reduced hubble parameter. Set to 1 to use units where masses
             are measured in Msol/h and lengths in units of Mpc/h
         """
-        super().__init__(anisotropy=anisotropy)
+        super().__init__(anisotropy=anisotropy, rmin=rmin, rmax=rmax, **config)
         
         self.conc = conc
         
@@ -1587,7 +1577,7 @@ class EinastoProfile(RadialProfile):
 
 class PowerlawProfile(RadialProfile):
     def __init__(self, slope=-1., rhoc=None, rscale=1., m0=None):
-        super().__init__()
+        super().__init__(phase_space=None)
         
         self.slope = slope
         self.rscale = rscale
@@ -1683,6 +1673,9 @@ class PowerlawProfile(RadialProfile):
         assert(np.all(~np.isnan(val)))
 
         return self.f0 * energy**beta
+    
+    def f_of_el(self, e, l):
+        return self.f_of_e(e)
     
     def to_string(self):
         return "powerlaw_slope=%.3f_rscale=%.5e_rhoc=%.5e" % (self.slope, self.rscale, self.rhoc)
@@ -1817,7 +1810,7 @@ class PlummerProfile(RadialProfile):
     def __init__(self, M=1, a=1):
         """Set up a Plummer profile
         """
-        super().__init__()
+        super().__init__(phase_space=None)
         
         self.M = M
         self.a = a
@@ -1830,7 +1823,7 @@ class PlummerProfile(RadialProfile):
     def m_of_r(self, r):
         return r**3 / (r**2 + self.a**2)**1.5 * self.M
 
-    def potential(self, r, zero_at_zero=False):
+    def potential(self, r, zero_at_zero=True):
         phi = - self.G * self.M / np.sqrt(r**2 + self.a**2)
 
         if zero_at_zero:
@@ -1842,8 +1835,12 @@ class PlummerProfile(RadialProfile):
     
     def r0(self):
         return self.a
+    
+    def f_of_el(self, e, l):
+        return self.f_of_e(e)
 
     def f_of_e(self, E):
+        E = E+self.phi0
         f = np.zeros_like(E)
         f[E < 0] = 24.* np.sqrt(2.) / (7. * np.pi**3) * self.a**2 / (self.G**5 * self.M**4) * (-E[E < 0])**3.5
         f[E >= 0] = 0.
