@@ -243,13 +243,6 @@ class RadialProfile(Configureable):
     def accr(self, r):
         """Radial Acceleration (negative means pull towards center)"""
         return  -self.G * self.m_of_r(r) / r**2
-    
-    
-    def daccdr_old(self, r, h=None):
-        """Radial derivative of the acceleration. Infered numerically"""
-        if h is None:
-            h = r*self.scale("drfac_finitediff")
-        return (self.accr(r+h) - self.accr(r-h))/(2.*h)
 
     def daccdr(self, r):
         """ accr = -G m(r) / r^2
@@ -472,107 +465,6 @@ class RadialProfile(Configureable):
         Tr, err = quad(Tr_integrand, rperi, rapo, args=(E,L))
 
         return Tr
-    
-    def _initialize_j_of_el(self, nbinsE=None, nbinsL=None, reinit=False):
-        """Initializes an interpolator of the action as a function of energy and angular momentum
-        
-        see j_of_el for details"""
-        if self._j_of_el_initialized & (not reinit):
-            return
-        
-        if nbinsE is None:
-            nbinsE = self.scale("ip_j_of_el_nbinsE")
-        if nbinsL is None:
-            nbinsL = self.scale("ip_j_of_el_nbinsL")
-        
-        self._initialize_tidal_radius(reinit)
-        
-        try:
-            emin = self.phi0
-            emax = 0.
-        except:
-            emin = self.potential(self.scale("rmin"))
-            emax = self.potential(self.scale("rmax"))
-
-        if not self._has_tidal_radius:
-            de = emax-emin
-            E = mathtools.bins_log_lin_log(emin, emin+0.1*de, emax-0.1*de, emax, n1=nbinsE//3, n2=nbinsE//3, n3=nbinsE//3, dlogmin=self.scale("log_emin"), dlogmin_up=self.scale("log_emin_up"))
-        else:
-            assert self._elmax > emin
-            E = mathtools.bins_log_both_ends(emin, self._elmax, nbinsE//2, nbinsE//2, dlogmin=self.scale("log_emin"))
-        E = np.unique(E)
-        assert np.min(E[1:] > E[:-1]) == True, E
-
-        lfacs = np.logspace(self.scale("log_lmin"),0.,nbinsL)
-        
-        lmin, lmax = self.lminmax_of_e(E)
-        Em, Lfacm = np.meshgrid(E, lfacs, indexing="ij")
-        Lm = Lfacm * (lmax-lmin)[...,np.newaxis] + lmin[...,np.newaxis]
-        
-        Jrm = self.radial_action((Em.reshape(-1), Lm.reshape(-1)), exceptions="silent").reshape(Em.shape)
-        
-        assert np.min(Jrm) >= 0.
-        
-        spline_o3 = RectBivariateSpline(E, lfacs, Jrm, kx=3, ky=3)
-        spline_o1 = RectBivariateSpline(E, lfacs, Jrm, kx=1, ky=1)
-
-        elim = np.min(E), np.max(E)
-        lflim = np.min(lfacs), np.max(lfacs)
-        def j_of_el_func(E, lfacs):
-            valid = (E >= elim[0]) & (E <= elim[1])
-            valid &= (lfacs >= lflim[0]) & (lfacs <= lflim[1])
-            
-            res = spline_o3(E, lfacs, grid=False)
-            
-            # 3rd order interpolation can lead to (unphysical) slightly negative values
-            # in very few instances. We just replace by linear interpolation for these cases
-            # which is always >= 0.
-            res[res < 0.] = spline_o1(E[res < 0.], lfacs[res < 0.], grid=False)
-            res[~valid] = np.nan
-
-            return res
-        
-        
-        self.interp_j_of_el = j_of_el_func
-        self._j_of_el_initialized = True
-        
-    def j_of_el(self, E, L, reinit=False):
-        """radial action as a function of energy and angular momentum.
-        
-        On the first call this calculates an interpolation table through
-        ._initialize_j_of_el(). This interpolation table is a grid in energy E 
-        and Lfac where Lfac goes from 0 to 1 between Lmin(E) and Lmax(E). These
-        boundaries are the minimal and maximum angular momenta possible for
-        a given energy. Note that usually Lmin(E) = 0., but in cases of
-        potentials that are non-monothoneos (like those with a tidal field) it
-        can be Lmin(E) > 0
-        
-        E : energy
-        L : angular momentum
-        reinit : if given, reinitializes the interpolation table.
-
-        returns : the radial action
-        
-        -- very relevant numerical scales:
-        ip_j_of_el_nbinsE, ip_j_of_el_nbinsL, log_lmin, log_emin, log_emin_up
-        
-        -- weakly relevant numerical scales:
-        rmin, rmax, nbins_circ, rperimin, rapomax
-        """
-        
-        self._initialize_j_of_el(reinit=reinit)
-            
-        E = E*np.ones_like(L)
-        lmin, lmax = self.lminmax_of_e(E)
-        lfac = (L-lmin)/(lmax-lmin)
-        valid = (lfac >= 0.) & (lfac < 1.)  & (lmax > lmin)
-        
-        jres = np.ones_like(L) * np.nan
-        jres[valid] = self.interp_j_of_el(E[valid], lfac[valid])
-        
-        assert np.nanmin(jres) >= 0.
-            
-        return jres
     
     def vdispr2_via_jeans_integration(self, logr=None, anisotropy=0., density=None):
         """Obtain the radial velocity dispersion squared through integration of the 1st Jeans equation
