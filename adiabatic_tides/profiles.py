@@ -1006,60 +1006,6 @@ class NFWProfile(RadialProfile):
         """The virial radius"""
         return self.r200c
     
-    # def _initialize_phasespace(self):
-    #     """private function. Initializes phase space calculation"""
-    #     assert 0
-    #     self.phasespace_initialized = True
-    #     self.pss = phasespace.IsotropicPhaseSpaceSolver(self, rmin=self.scale("rmin"), rmax=self.scale("rmax"), rnorm=self.r200c, rbins=self.scale("pss_rbins"), nbinsE=self.scale("pss_ebins"), dlog_emin=np.log10(1+self.scale("pss_e_analytic_low")),  sample_profile_f=True)
-
-    # def f_of_e(self, energy):
-    #     """The phase space distribution function of the NFW without anisotropy
-        
-    #     energy : (vector-like) energies to evaluate the distribution at
-        
-    #     returns : phase space density f(E) = dN/d3x/d3v
-    #     """
-    #     assert 0
-
-    #     if not self.phasespace_initialized:
-    #         self._initialize_phasespace()
-        
-    #     # For very low energy the DF integral diverges. That's why we just use the
-    #     # asymptotic limit here. See also Widrow (2000)
-    #     E0 = np.abs(self.phi0)
-    #     #def extrap_lowenergy(E):
-    #     #    return (1. + E/E0)**(-2.5)
-    #     def f_widrow(e):
-    #         estar = -e/E0
-
-    #         f = (estar**1.5*(1-estar)**-2.5 *(-np.log(estar)/(1.-estar))**-2.7419
-    #              *np.exp(0.3620*estar-0.5639*estar**2. -0.0859*estar**3.-0.4912*estar**4.) )
-
-    #         return f
-        
-    #     too_low = energy / E0 < self.scale("pss_e_analytic_low")
-    #     too_high = energy / E0 > self._sc["pss_e_analytic_up"]
-        
-    #     #int_ok = (energy / E0 > self.scale("pss_e_analytic_low")) & (energy / E0 < self._sc["pss_e_analytic_up"])
-    #     res = np.array(self.pss.f_of_e(energy, interpolate=True))
-        
-    #     norm_low = self.pss.f_of_e(self.scale("pss_e_analytic_low")*E0, interpolate=True) / f_widrow(self.scale("pss_e_analytic_low")*E0)
-    #     norm_up = self.pss.f_of_e(self.scale("pss_e_analytic_up")*E0, interpolate=True) / f_widrow(self.scale("pss_e_analytic_up")*E0)
-    #     res[too_low] = f_widrow(energy[too_low]) * norm_low
-    #     res[too_high & (energy < 0)] = f_widrow(energy[too_high & (energy < 0)]) * norm_up
-    #     res[energy > 0] = 0.
-        
-    #     assert np.all(~np.isnan(res))
-        
-    #     return res * self.m_of_r(self.r0())
-
-    # def sample_particles(self, ntot=10000, rmax=None, seed=None):
-    #     """Sample particles' positions, velocities and masses consistent with the NFW profile"""
-    #     if not self.phasespace_initialized:
-    #         self._initialize_phasespace()
-        
-    #     return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed)
-
     def daccdr(self, r):
         """Radial derivative of the acceleration"""
         a = r/self.rs
@@ -1524,50 +1470,6 @@ class NumericalProfile(RadialProfile):
         
         return mystr
     
-    # def _initialize_phasespace(self,  mode="fixed", nintegrate=None):
-
-    #     assert 0
-
-    #     rhoi = self.q["rho"]
-    #     assert np.all(rhoi > 0), "Density profile has to be positive"
-    #     assert np.all(rhoi[:-1] >= rhoi[1:]), "Density profile is not monotonic decreasing"
-    #     rdiffmin = np.min(0.5*(rhoi[:-1] - rhoi[1:])/(rhoi[1:] + rhoi[:-1]))
-    #     if rdiffmin < 1e-10:
-    #         print("Warning: I found that some consecutive points have only a relative difference of %.1e in density. This may lead to cancelation. I'll do my best to deal with this, but no warranties!" % rdiffmin)
-
-
-    #     if self.beta == 0:
-    #         if mode == "fixed":
-    #             ei,self.q["f"] = mathtools.eddington_inversion(self.ri, self.q["rho"], self.q["phi"])
-    #         elif mode == "adaptive":
-    #             ei,self.q["f"] = mathtools.eddington_inversion_adaptive(self.ri, self, nintegrate=nintegrate)
-    #         elif mode == "fixed_diff_last":
-    #             ei,self.q["f"] = mathtools.eddington_inversion_diff_last(self.ri, self.q["rho"], self.q["phi"])
-    #         else:
-    #             raise ValueError("Unknown Mode")
-    #     else:
-    #         ei,self.q["f"] = mathtools.anisotropic_inversion(self.ri, self.q["rho"], self.q["phi"], beta=self.beta)
-        
-    #     self.q["g"] = mathtools.integrate_to_density_of_states(self.ri, self.q["phi"])
-        
-    #     self.phasespace_initialized = True
-
-    # def f_of_e(self, energy):
-    #     assert 0
-
-    #     if not self.phasespace_initialized:
-    #         self._initialize_phasespace()
-        
-    #     return np.interp(energy, self.q["phi"], self.q["f"], right=0.)
-    
-    # def f_of_el(self, E, L):
-    #     assert 0
-
-    #     if self.beta == 0:
-    #         return self.f_of_e(E)
-    #     else:
-    #         return self.f_of_e(E) * L**(-2.*self.beta)
-    
     def g_of_e(self, energy):
         """Density of states"""
         if not self.phasespace_initialized:
@@ -1577,57 +1479,6 @@ class NumericalProfile(RadialProfile):
     
     def n_of_e(self, energy):
         return self.g_of_e(energy) * self.f_of_e(energy)
-    
-    # def sample_r_E_L_vr_m(self, size, weight_func=None, rmax=None, nintegrate=1000):
-    #     if not self.phasespace_initialized:
-    #         self._initialize_phasespace()
-
-    #     if weight_func is None:
-    #         weights = None
-    #     else:
-    #         weights = weight_func(self.ri)
-            
-    #     rs,ms = mathtools.sample_rimi_from_density(self.ri, self.q["rho"], size, weights=weights, rmax=rmax)
-    #     phis = self.potential(rs)
-    #     Es = mathtools.sample_conditional_energy_adaptive(phis, self.f_of_e, emax=np.max(self.q["phi"]), nintegrate=nintegrate)
-    #     assert np.all(Es >= phis), "Energy should never be smaller than potential"
-    #     vrs, Ls = mathtools.sample_conditional_vr_L_isotropic(rs, Es - phis)
-        
-    #     return rs, Es, Ls, vrs, ms
-    
-    # def sample_r_E_L_vr_m_perisplit(self, size_per_split, rpsplits=(0,np.infty), nintegrate=1000, flat=True):
-    #     assert len(rpsplits) >= 2, "Need at least two split points to define one population"
-
-    #     def sample_perisplit(rp1,rp2):
-    #         # Make sure the lowest peri-center is contained so we don't get particles at r<rp1 due to interpolation errors
-    #         ri =  np.insert(self.ri[self.ri > rp1], 0, rp1)
-
-    #         rhops = mathtools.integrate_f_to_density_perisplit_adaptive(ri, self.potential, self.f_of_e, rp1, rp2, nintegrate=nintegrate)
-    #         rs,ms = mathtools.sample_rimi_from_density(ri, rhops, size_per_split)
-    #         es = mathtools.sample_conditional_energy_perisplit_adaptive(rs, self.potential, self.f_of_e, rp1, rp2)
-    #         Ls, vrs = mathtools.sample_conditional_L_vr_perisplit(rs, es, self.potential, rp1, rp2)
-
-    #         return rs, es, Ls, vrs, ms
-        
-    #     nsplits = len(rpsplits)-1
-    #     shape = (nsplits, size_per_split)
-    #     rs, es, ls, vrs, ms = np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape)
-
-    #     for i in range(nsplits):
-    #         rs[i], es[i], ls[i], vrs[i], ms[i] = sample_perisplit(rpsplits[i], rpsplits[i+1])
-
-    #     if flat:
-    #         return rs.flatten(), es.flatten(), ls.flatten(), vrs.flatten(), ms.flatten()
-    #     else:
-    #         return rs, es, ls, vrs, ms
-
-    # def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None):
-    #     """Sample particles' positions, velocities and masses consistent with the Numerical profile
-    #     for more info see PhaseSpaceSolver.sample_particles"""
-    #     if not self.phasespace_initialized:
-    #         self._initialize_phasespace()
-        
-    #     return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed, res_of_r=res_of_r)
     
 class MonteCarloProfile(RadialProfile):
     def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
