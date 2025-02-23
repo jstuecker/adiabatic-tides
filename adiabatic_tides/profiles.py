@@ -90,6 +90,13 @@ class ActionsConfig:
     search_method : str = "ridders"
     nintegrate: int = 40
 
+@dataclass
+class SamplingConfig:
+    nintegrate: int = 40
+    ninterp : int = 1001
+    nintegrate : int = 32
+    nsteps_metropolis : int = 64
+
 class PhaseSpace():
     def __init__(self, profile):
         self.profile = profile
@@ -142,7 +149,8 @@ class RadialProfile(Configureable):
     DEFAULT_CONFIG = {
         "general": GeneralConfig(),
         "eddington": EddingtonConfig(),
-        "actions": ActionsConfig()
+        "actions": ActionsConfig(),
+        "sampling": SamplingConfig()
     }
 
     def __init__(self, rmin=None, rmax=None, phase_space=EddingtonPhaseSpace, anisotropy=0., **configs):
@@ -268,12 +276,8 @@ class RadialProfile(Configureable):
         """Abstract: The gravitational potential. By default normed to 0 at infinity"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
-    #----------- Optional features, that can be helpful in some situations ----------#
-    def sample_particles(self, ntot=10000, rmax=None, seed=42):
-        """Abstract: Sample particles' positions, velocities and masses"""
-        raise NotImplementedError("This optional function has not been implemented")
     
-    def sample_r_E_L_vr_m_metropolis(self, ntot=10000, rmin=1e-10, rmax=1e10, rpmin=None, rpmax=None, ninterp=1001, nintegrate=32, nsteps_chain=64, get_rho=False):
+    def sample_particles(self, ntot=10000, mode="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -281,7 +285,6 @@ class RadialProfile(Configureable):
 
         --- important parameters ---
         ntot : number of particles
-        rmin : minimal radius to sample
         rmax : maximal radius to sample
         rpmin : If given, all particles have a peri-center rp > rpmin
         rpmax : If given, all particles have a peri-center rp < rpmax
@@ -294,33 +297,41 @@ class RadialProfile(Configureable):
         nsteps_chain : number of steps in the metropolis chain (to be safe use 32 or higher)
                        sampling time scales linear with this parameter
         """
-        # if rpmin is not None:
-        #    rmin = max(rmin, rpmin)
+        cfg : SamplingConfig = self.cfg["sampling"]
+        cfg_gen : GeneralConfig = self.cfg["general"]
 
-        ri = np.logspace(np.log10(rmin), np.log10(rmax), ninterp)
-        if (rpmin is not None) or (rpmax is not None):
-            ri = ri[ri >= rpmin]
+        if rmax is None: rmax = cfg_gen.rmax
+        if rpmin is None: rpmin = cfg_gen.rmin
+        if rpmax is None: rpmax = rmax
 
-            rho = mathtools.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
-            rs,ms = mathtools.sample_rimi_from_density(ri, rho, ntot)
+        if nintegrate is None: nintegrate = int(cfg.nintegrate * cfg_gen.scale_accuracy)
+        if ninterp is None: ninterp = int(cfg.ninterp * cfg_gen.scale_accuracy)
+        if nsteps_metropolis is None: nsteps_metropolis = int(cfg.nsteps_metropolis * cfg_gen.scale_accuracy)
 
-            ra, rp = mathtools.sample_ra_rp_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, rs, rperirange=(rpmin, rpmax), nsteps_chain=nsteps_chain)
-            Es,Ls,vrs = mathtools.E_L_vr_from_rp_r_ra(self.potential, rp, rs, ra)
+        ri = np.logspace(np.log10(rpmin), np.log10(rmax), ninterp)
 
-            if get_rho:
-                return rs,Es,Ls,vrs,ms,ri,rho
-            else:
-                return rs,Es,Ls,vrs,ms
+        p = {}
+
+        rho = mathtools.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
+        p["r"],p["m"] = mathtools.sample_rimi_from_density(ri, rho, ntot)
+
+        p["ra"], p["rp"] = mathtools.sample_ra_rp_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
+        p["e"],p["l"],p["vr"] = mathtools.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
+
+        p["rrho"] = ri
+        p["rho"] = rho
+
+        if mode == "dict":
+            return p
         else:
-            rs = mathtools.sample_radii(ri, self.m_of_r(ri), ntot)
-            ms = np.ones_like(rs) * self.m_of_r(rmax) / len(rs)
-            Es,Ls,vrs = mathtools.sample_E_L_vr_given_r_metropolis(self.f_of_el, self.potential, self.vcirc, rs, nsteps_chain=nsteps_chain)
-            if get_rho:
-                return rs,Es,Ls,vrs,ms,ri,self.density(ri)
-            else:
-                return rs,Es,Ls,vrs,ms
+            res = []
+            for key in mode.split("_"):
+                assert key in p, "Unknown key %s" % key
+                res.append(p[key])
+            return res
+
     
-    def sample_r_E_L_vr_m_metropolis_perisplits(self, size_per_split=10000, rpsplits=(None, None), flat=True, **kwargs):
+    def sample_particles_perisplits(self, size_per_split=10000, rpsplits=(None, None), flat=True, **kwargs):
         """See sample_r_E_L_vr_m_metropolis for a detailed description of optional keyword parameters
 
         size_per_split : number of particles in each split
@@ -333,7 +344,7 @@ class RadialProfile(Configureable):
         rs, es, ls, vrs, ms = np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape), np.zeros(shape)
 
         for i in range(nsplits):
-            rs[i], es[i], ls[i], vrs[i], ms[i] = self.sample_r_E_L_vr_m_metropolis(size_per_split, rpmin=rpsplits[i], rpmax=rpsplits[i+1], **kwargs)
+            rs[i], es[i], ls[i], vrs[i], ms[i] = self.sample_particles(size_per_split, rpmin=rpsplits[i], rpmax=rpsplits[i+1], **kwargs)
 
         if flat:
             return rs.flatten(), es.flatten(), ls.flatten(), vrs.flatten(), ms.flatten()
@@ -1225,11 +1236,6 @@ class RadialProfile(Configureable):
         
 
 class NFWProfile(RadialProfile):
-    DEFAULT_CONFIG = {
-        "general": GeneralConfig(),
-        "eddington": EddingtonConfig(),
-        "actions": ActionsConfig()
-    }
 
     def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rminrs=1e-15, rmaxrs=1e15, **config):
         """Set up an NFW profile with a given mass and concentration
