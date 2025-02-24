@@ -169,10 +169,12 @@ def plot_poisson_convergence(prof, spline_class=PchipInterpolator, title="Interp
     return fig,axs
 
 def plot_adiabatic_iterations(prof, rt0, title=None, verbose=1, **kwargs):
-    res = at.mathtools.adiabatic_tidal_reconstruction(prof, np.abs(prof.accr(rt0)/rt0), rpmin=1e-20, eps=1e-3, get_all=True, verbose=verbose, **kwargs)
+    # res = at.mathtools.adiabatic_tidal_reconstruction(prof, np.abs(prof.accr(rt0)/rt0), rpmin=1e-20, eps=1e-3, get_all=True, verbose=verbose, **kwargs)
+    att = at.adiabatic.AdiabaticTidalTransformation.from_rtid(prof, rt0, **kwargs)
+    res = att.run()
 
     fig,ax = plt.subplots(1,1, figsize=(6,5))
-    for i in range(0, len(res), 5):
+    for i in (0,1) + tuple(range(5, len(res), 5)):
         r, rho, frho, fm, fphi = res[i]
         eps = np.abs((res[i-1][2](r) - rho)/prof.density(r)).max()
         ax.semilogx(r, rho/prof.density(r), color=plt.get_cmap("rainbow")(i/len(res)), label=f"i = {i} eps = {eps:.1%}")

@@ -57,6 +57,7 @@ class AdiabaticTransformation(Configureable):
                 print(f"iteration {i} relative diff {rel_error:.2%} dt {time.time()-t0:.2f}s")
             if rel_error < eps:
                 break
+        return self.history
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1, **configs):

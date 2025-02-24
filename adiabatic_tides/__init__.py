@@ -4,3 +4,4 @@ from . import potentials
 from . import h5methods
 from . import integrals
 from . import mathtools
+from . import adiabatic
