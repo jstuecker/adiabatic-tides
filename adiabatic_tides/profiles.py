@@ -1694,10 +1694,10 @@ class RadialTidalProfile(RadialProfile):
         
     def density(self, r):
         """Density in Msol/Mpc**3"""
-        return self.rhoalpha
+        return self.rhoalpha * np.ones_like(r)
     def drhodr(self, r):
         """Radial derivative of the density"""
-        return 0.
+        return np.zeros_like(r)
     def m_of_r(self, r):
         """The mass contained inside radius r"""
         return - self.alpha/self.G * r**3
