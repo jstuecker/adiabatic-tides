@@ -1,4 +1,5 @@
 from .profiles import RadialProfile
+from .phasespace import EddingtonPhaseSpace
 import numpy as np
 
 class CompositeProfile(RadialProfile):
@@ -17,8 +18,10 @@ class CompositeProfile(RadialProfile):
         assert not set(profiles.keys()) & set(("alldict", "all", "total", "self", "external")), "Trying to use prohibited profile name"
 
         self.profiles = {}
+        self.phase_spaces = {}
         self.external = external
-        self.phase_space_mode = phase_space_mode
+
+        assert phase_space_mode == "joint_inversion", "Only joint inversion is supported"
 
         self.add_profiles(external=external, **profiles)
 
@@ -26,9 +29,41 @@ class CompositeProfile(RadialProfile):
         self.profiles.update(profiles)
         self.external += tuple(external)
 
-        # Phase space may be invalid now, reset it
+        # Phase space may invalidate when changing the potential... reset it
         self.phase_space_valid = False
+ 
+    def _combine_profiles(self, d, func_name, mode, *args, **kwargs):
+        if mode == "alldict":
+            return {label: getattr(d[label], func_name)(*args, **kwargs) for label in d}
+        elif mode == "all":
+            return (getattr(d[label], func_name)(*args, **kwargs) for label in d)
+        if mode == "total":
+            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in d], axis=0)
+        elif mode == "self":
+            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in d if label not in self.external], axis=0)
+        elif mode == "external":
+            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in d if label in self.external], axis=0)
+        elif mode in d:
+            return getattr(d[mode], func_name)(*args, **kwargs)
+        else:
+            valid_modes = tuple(d.keys()) + ("alldict", "all", "total", "self", "external")
+            raise ValueError("Invalid mode. Valid modes are: " + ", ".join(valid_modes))
+        
+    def density(self, r, mode="total"):
+        return self._combine_profiles(self.profiles, 'density', mode, r)
 
+    def drhodr(self, r, mode="total"):
+        return self._combine_profiles(self.profiles, 'drhodr', mode, r)
+
+    def m_of_r(self, r, mode="total"):
+        return self._combine_profiles(self.profiles, 'm_of_r', mode, r)
+
+    def potential(self, r, zero_at_zero=True, mode="total"):
+        return self._combine_profiles(self.profiles, 'potential', mode, r, zero_at_zero=zero_at_zero)
+
+    def daccdr(self, r, mode="total"):
+        return self._combine_profiles(self.profiles, 'daccdr', mode, r)
+    
     def _initialize_phasespace(self):
         if self.phase_space_valid:
             return
@@ -39,44 +74,12 @@ class CompositeProfile(RadialProfile):
         for label in self.profiles:
             if not label in self.external:
                 assert self.profiles[label].phase_space is not None, "Only external profiles can have undefined phase space"
-                self.profiles[label].phase_space.set_potential(potential)
-        
-    def _combine_profiles(self, func_name, mode, *args, **kwargs):
-        if mode == "alldict":
-            return {label: getattr(self.profiles[label], func_name)(*args, **kwargs) for label in self.profiles}
-        elif mode == "all":
-            return (getattr(self.profiles[label], func_name)(*args, **kwargs) for label in self.profiles)
-        if mode == "total":
-            return np.sum([getattr(self.profiles[label], func_name)(*args, **kwargs) for label in self.profiles], axis=0)
-        elif mode == "self":
-            return np.sum([getattr(self.profiles[label], func_name)(*args, **kwargs) for label in self.profiles if label not in self.external], axis=0)
-        elif mode == "external":
-            return np.sum([getattr(self.profiles[label], func_name)(*args, **kwargs) for label in self.profiles if label in self.external], axis=0)
-        elif mode in self.profiles:
-            return getattr(self.profiles[mode], func_name)(*args, **kwargs)
-        else:
-            valid_modes = tuple(self.profiles.keys()) + ("alldict", "all", "total", "self", "external")
-            raise ValueError("Invalid mode. Valid modes are: " + ", ".join(valid_modes))
-        
+                self.phase_spaces[label] = EddingtonPhaseSpace(self.profiles[label].density, self.potential, self.cfg, anisotropy=self.profiles[label].anisotropy)
+       
     def f_of_e(self, E, mode="self"):
         self._initialize_phasespace()
-        return self._combine_profiles('f_of_e', mode, E)
+        return self._combine_profiles(self.phase_spaces, 'f_of_e', mode, E)
     
     def f_of_el(self, E, L, mode="self"):
         self._initialize_phasespace()
-        return self._combine_profiles('f_of_el', mode, E, L)
-
-    def density(self, r, mode="total"):
-        return self._combine_profiles('density', mode, r)
-
-    def drhodr(self, r, mode="total"):
-        return self._combine_profiles('drhodr', mode, r)
-
-    def m_of_r(self, r, mode="total"):
-        return self._combine_profiles('m_of_r', mode, r)
-
-    def potential(self, r, zero_at_zero=True, mode="total"):
-        return self._combine_profiles('potential', mode, r, zero_at_zero=zero_at_zero)
-
-    def daccdr(self, r, mode="total"):
-        return self._combine_profiles(r, 'daccdr', mode)
+        return self._combine_profiles(self.phase_spaces, 'f_of_el', mode, E, L)

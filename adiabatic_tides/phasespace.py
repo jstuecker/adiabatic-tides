@@ -3,25 +3,30 @@ from . import mathtools
 from .config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 
 class PhaseSpace():
-    def __init__(self, profile):
-        self.profile = profile
-        self.cfg = profile.cfg
-        self.anisotropy = np.nan
+    def __init__(self, anisotropy=np.nan):
+        self.anisotropy = anisotropy
 
-    def set_potential(self, potential):
-        raise NotImplementedError("This is an abstract class, please implement a subclass")
-        
     def f_of_e(self):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
     def f_of_el(self):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
+class AnalyticPhaseSpace(PhaseSpace):
+    def __init__(self, f_of_e, f_of_el, anisotropy=np.nan):
+        super().__init__(anisotropy=anisotropy)
+
+        self.f_of_e = f_of_e
+        self.f_of_el = f_of_el
+
 class EddingtonPhaseSpace(PhaseSpace):
-    def __init__(self, profile, anisotropy=0., potential=None):
-        super().__init__(profile)
-        self.anisotropy = anisotropy
+    def __init__(self, density, potential, cfg, anisotropy=0.):
+        super().__init__()
+        self.density = density
         self.potential = potential
+
+        self.anisotropy = anisotropy
+        self.cfg = cfg
 
         self.q = {}
         self.ip = {}
@@ -29,22 +34,22 @@ class EddingtonPhaseSpace(PhaseSpace):
     def set_potential(self, potential):
         self.potential = potential
 
-    @only_on_change(attributes=("potential",), cfg_groups=('eddington', 'general'))
+    def set_density(self, density):
+        self.density = density
+
+    @only_on_change(attributes=("potential","density"), cfg_groups=('eddington', 'general'))
     def _setup_f(self):
         print("Recalculating phasespace")
 
-        cfg_ps : EddingtonConfig = self.profile.cfg["eddington"]
-        cfg_gen : GeneralConfig = self.profile.cfg["general"]
+        cfg_ps : EddingtonConfig = self.cfg["eddington"]
+        cfg_gen : GeneralConfig = self.cfg["general"]
 
-        ri = np.geomspace(self.profile.rmin(), self.profile.rmax(), int(cfg_ps.nr*cfg_gen.scale_accuracy))
-
-        if self.potential is not None:
-            phi = self.potential(ri)
-        else:
-            phi = self.profile.potential(ri, zero_at_zero=True)
+        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
+        phi = self.potential(ri)
+        
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
-        e,f1 = mathtools.anisotropic_inversion(ri[sel], self.profile.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        e,f1 = mathtools.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
         self.q["phasespace_r"] = ri[sel]
         self.q["phasespace_e"] = e
         self.q["phasespace_f"] = f1

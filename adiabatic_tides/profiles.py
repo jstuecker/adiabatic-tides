@@ -16,7 +16,7 @@ class RadialProfile(Configureable):
         "sampling": SamplingConfig()
     }
 
-    def __init__(self, rmin=None, rmax=None, phase_space=EddingtonPhaseSpace, anisotropy=0., **configs):
+    def __init__(self, rmin=None, rmax=None, phase_space="eddington", anisotropy=0., **configs):
         """This is an abstract class defining the interface of RadialProfiles,
         don't initialize!"""
 
@@ -38,12 +38,13 @@ class RadialProfile(Configureable):
 
         self._sc = None
 
-        if phase_space is None:
-            self.phase_space = None
-        elif isinstance(phase_space, type) and issubclass(phase_space, PhaseSpace):
-            self.phase_space = phase_space(self, anisotropy=anisotropy, **configs)
+        if phase_space == "eddington":
+            self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg, anisotropy=anisotropy)
         else:
-            raise ValueError("phase_space must be a subclass of PhaseSpace or None")
+            self.phase_space = phase_space
+        
+        if self.phase_space is not None:
+            self.anisotropy = self.phase_space.anisotropy
         
         self.action_map = InterpolatorActionMap(self)
 
