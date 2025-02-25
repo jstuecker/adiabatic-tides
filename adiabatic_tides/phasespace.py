@@ -13,9 +13,18 @@ class PhaseSpace():
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
 class AnalyticPhaseSpace(PhaseSpace):
-    def __init__(self, f_of_e, f_of_el, anisotropy=np.nan):
+    def __init__(self, f_of_e=None, f_of_el=None, anisotropy=np.nan):
         super().__init__(anisotropy=anisotropy)
 
+        assert f_of_e is not None or f_of_el is not None, "At least one of f_of_e or f_of_el must be defined"
+
+        if f_of_e is None:
+            def f_of_e(e): 
+                return f_of_el(e, 1.) 
+        if f_of_el is None:
+            assert self.anisotropy == 0., "Please define f_of_el if anisotropy is not zero"
+            def f_of_el(e, l): 
+                return f_of_e(e)
         self.f_of_e = f_of_e
         self.f_of_el = f_of_el
 

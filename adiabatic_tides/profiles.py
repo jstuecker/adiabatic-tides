@@ -3,7 +3,7 @@ import os
 from scipy.integrate import simps
 from scipy.interpolate import  RectBivariateSpline, NearestNDInterpolator, LinearNDInterpolator
 from . import mathtools
-from .phasespace import PhaseSpace, EddingtonPhaseSpace, ActionMap, InterpolatorActionMap
+from .phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
 from .config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 import time
 
@@ -38,6 +38,11 @@ class RadialProfile(Configureable):
 
         self._sc = None
 
+        self.set_phase_space(phase_space, anisotropy=anisotropy)
+        
+        self.action_map = InterpolatorActionMap(self)
+
+    def set_phase_space(self, phase_space="eddington", anisotropy=0.):
         if phase_space == "eddington":
             self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg, anisotropy=anisotropy)
         else:
@@ -45,8 +50,8 @@ class RadialProfile(Configureable):
         
         if self.phase_space is not None:
             self.anisotropy = self.phase_space.anisotropy
-        
-        self.action_map = InterpolatorActionMap(self)
+        else:
+            self.anisotropy = anisotropy
 
     def rmin(self):
         return self.cfg["general"].rmin / self.cfg["general"].scale_geometry
@@ -1203,7 +1208,7 @@ class AnisotropicPowerlawProfile(RadialProfile):
 
         free variables: either alpha or gamma, and beta
         """
-        super().__init__()
+        super().__init__(phase_space=None)
         
         def gamma_of_alpha_beta(alpha, beta=0.):
             return (3 - 0.5*alpha - 4.*beta + alpha*beta)/(2. - alpha)
@@ -1238,6 +1243,10 @@ class AnisotropicPowerlawProfile(RadialProfile):
         
         self.fc = self.rhoc / Cby / self.phic**(-gamma-beta+1.5)
 
+        def f_of_el(e, l):
+            return self.fc * e**-self.gamma * l**(-2.*self.beta)
+        
+        self.set_phase_space(AnalyticPhaseSpace(f_of_el=f_of_el, anisotropy=self.beta))
 
     def density(self, r):
         return self.rhoc*r**(-self.alpha)
@@ -1249,16 +1258,9 @@ class AnisotropicPowerlawProfile(RadialProfile):
         assert self.alpha < 2., "Have to check normalization for this case"
         
         return self.phic * r**(2.-self.alpha)
-    
-    def f_of_el(self, e, l):
-        """Binney and Tremaine"""
-        return self.fc * e**-self.gamma * l**(-2.*self.beta)
-    
+
     def r0(self):
         return 1.0
-    
-    def anisotropy(self):
-        return self.beta
     
     def _initialize_numerical_scales(self):
         super()._initialize_numerical_scales()
@@ -1321,6 +1323,15 @@ class PlummerProfile(RadialProfile):
 
         self.phi0 = - self.G * self.M / self.a
 
+        def f_of_e(e):
+            e = e+self.phi0
+            f = np.zeros_like(e)
+            f[e < 0] = 24.* np.sqrt(2.) / (7. * np.pi**3) * self.a**2 / (self.G**5 * self.M**4) * (-e[e < 0])**3.5
+            
+            return f
+
+        self.set_phase_space(AnalyticPhaseSpace(f_of_e=f_of_e, anisotropy=0.))
+
     def density(self, r):
         return 3*self.M/(4*np.pi) * (1 + (r/self.a)**2)**-2.5
     
@@ -1339,16 +1350,6 @@ class PlummerProfile(RadialProfile):
     
     def r0(self):
         return self.a
-    
-    def f_of_el(self, e, l):
-        return self.f_of_e(e)
-
-    def f_of_e(self, E):
-        E = E+self.phi0
-        f = np.zeros_like(E)
-        f[E < 0] = 24.* np.sqrt(2.) / (7. * np.pi**3) * self.a**2 / (self.G**5 * self.M**4) * (-E[E < 0])**3.5
-        f[E >= 0] = 0.
-        return f
     
     def phimax(self):
         return 0.
