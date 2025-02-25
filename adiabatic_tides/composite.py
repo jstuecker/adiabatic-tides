@@ -21,7 +21,7 @@ class CompositeProfile(RadialProfile):
         self.phase_spaces = {}
         self.external = external
 
-        assert phase_space_mode == "joint_inversion", "Only joint inversion is supported"
+        assert phase_space_mode == "joint_inversion", "Only joint inversion is supported currently"
 
         self.add_profiles(external=external, **profiles)
 

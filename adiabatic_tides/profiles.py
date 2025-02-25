@@ -1356,11 +1356,11 @@ class PlummerProfile(RadialProfile):
 
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri=None, rhoi=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw", anisotropy=0., **configs):
+    def __init__(self, ri=None, rho=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw", anisotropy=0., **configs):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
-        rhoi : densities
+        rho : density -- can be an array like ri or a function
         r0 : base radius, will be maximum radius of the profile if not provided
         ancorphi : where to set the potential to zero? Can be 'rmax', 'rmin' or "infty"
         potential_profile : can be passed to use the potential from another profile
@@ -1382,7 +1382,7 @@ class NumericalProfile(RadialProfile):
             self.from_dict(from_dict)
             return
         
-        assert (ri is not None) & (rhoi is not None)
+        assert (ri is not None) & (rho is not None)
 
         if r0 is None:
             r0 = np.max(ri)
@@ -1390,23 +1390,31 @@ class NumericalProfile(RadialProfile):
 
         self.boundary = boundary
         
-        self.set_density_profile(ri, rhoi)
+        self.set_density_profile(ri, rho)
 
     def _discrete_radii(self):
         return self.ri
             
-    def set_density_profile(self, ri, rhoi, update=True, integration_mode="trapez"):
+    def set_density_profile(self, ri, rho, update=True, integration_mode="trapez"):
         """Change the bins that are used to bin the mass and solve the forces
         
         ri : radius sampling points
-        rhoi : densities
+        rho : density -- can be an array like ri or a function
         update : whether to update the mass, potential and force-profiles. Should always 
                  be "True" unless you know what you are doing
         """
         self.ri = ri
 
+        if callable(rho):
+            rhoi = rho(ri)
+        else:
+            rhoi = rho
+
         self.ip_rho, self.ip_m, self.ip_phi = mathtools.solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, lower_boundary=self.boundary, G=self.G)
-        self.q["rho"], self.q["mofr"], self.q["phi"] = rhoi, self.ip_m(self.ri), self.ip_phi(self.ri)
+        self.q["rho"], self.q["mofr"], self.q["phi"] = rho, self.ip_m(self.ri), self.ip_phi(self.ri)
+
+        if callable(rho):
+            self.ip_rho = rho
 
         self.phasespace_initialized = False
         self.potential_zero_at_infty = False
