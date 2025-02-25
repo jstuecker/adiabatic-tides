@@ -1403,7 +1403,7 @@ class NumericalProfile(RadialProfile):
         return self.ip_rho(r)
     
     def m_of_r(self, r):
-        self.ip_m(r)
+        return self.ip_m(r)
 
     def potential(self, r, zero_at_zero=True):
         return self.ip_phi(r)

@@ -1,5 +1,6 @@
 from .profiles import RadialProfile
 from .phasespace import EddingtonPhaseSpace
+from .config import only_on_change
 import numpy as np
 
 class CompositeProfile(RadialProfile):
@@ -83,6 +84,8 @@ class CompositeProfile(RadialProfile):
                 assert self.profiles[label].phase_space is not None, "Only external profiles can have undefined phase space"
                 self.phase_spaces[label] = EddingtonPhaseSpace(self.profiles[label].density, self.potential, self.cfg, anisotropy=self.profiles[label].anisotropy)
        
+        self.phase_space_valid = True
+    
     def f_of_e(self, E, mode="self"):
         self._initialize_phasespace()
         return self._combine_profiles(self.phase_spaces, 'f_of_e', mode, E)
