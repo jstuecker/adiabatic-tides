@@ -64,6 +64,13 @@ class CompositeProfile(RadialProfile):
     def daccdr(self, r, mode="total"):
         return self._combine_profiles(self.profiles, 'daccdr', mode, r)
     
+    def vcirc(self, r, mode="total"):
+        return np.sqrt(np.clip(-self.accr(r, mode=mode) * r, 0., None))
+    
+    def accr(self, r, mode="total"):
+        """Radial Acceleration (negative means pull towards center)"""
+        return  -self.G * self.m_of_r(r, mode=mode) / r**2
+    
     def _initialize_phasespace(self):
         if self.phase_space_valid:
             return

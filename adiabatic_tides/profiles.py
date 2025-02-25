@@ -910,23 +910,6 @@ class RadialProfile(Configureable):
             raise ValueError("Unknown dmtype=%s, so far can only handle WDM or WIMP" % dmtype)
             
         return self.radius_of_f(fmax)
-        
-    
-    def self_density(self, r):
-        """Self-Density in Msol/Mpc**3, does not include tidal field contributions"""
-        return self.density(r)
-    def self_m_of_r(self, r):
-        """The mass contained inside radius r, does not include tidal field contributions"""
-        return self.m_of_r(r)
-    def self_accr(self, r):
-        """Radial Acceleration (negative means pull towards center)"""
-        return -self.G * self.self_m_of_r(r) / r**2
-    def self_potential(self, r, zero_at_zero=False):
-        """Self-Potential, does not include tidal field contributions"""
-        return self.potential(r, zero_at_zero=zero_at_zero)
-    def self_vcirc(self, r):
-        """Circular velocity at radius r, does not include tidal field contributions"""
-        return np.sqrt(np.clip(-self.self_accr(r) * r, 0., None))
     
     def to_string(self):
         raise NotImplementedError("to_string not implemented for this profile, need this for caching etc...")
@@ -1356,7 +1339,7 @@ class PlummerProfile(RadialProfile):
 
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri=None, rho=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, potential_profile=None, boundary="powerlaw", anisotropy=0., **configs):
+    def __init__(self, ri=None, rho=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, boundary="powerlaw", anisotropy=0., **configs):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
@@ -1371,8 +1354,6 @@ class NumericalProfile(RadialProfile):
         from_dict : load a previous profile from a dict created by .to_dict()
         """
         super().__init__(anisotropy=anisotropy, rmin=ri[0], rmax=ri[-1], **configs)
-        
-        self.potential_profile = potential_profile 
         
         self.q = {}
 
@@ -1395,7 +1376,7 @@ class NumericalProfile(RadialProfile):
     def _discrete_radii(self):
         return self.ri
             
-    def set_density_profile(self, ri, rho, update=True, integration_mode="trapez"):
+    def set_density_profile(self, ri, rho, update=True):
         """Change the bins that are used to bin the mass and solve the forces
         
         ri : radius sampling points
@@ -1416,39 +1397,16 @@ class NumericalProfile(RadialProfile):
         if callable(rho):
             self.ip_rho = rho
 
-        self.phasespace_initialized = False
         self.potential_zero_at_infty = False
 
-    def self_density(self, r):
-        """Density in Msol/Mpc**3"""
-        return self.ip_rho(r)
-        
     def density(self, r):
-        """Density in Msol/Mpc**3"""
-        return self.self_density(r)
-    
-    def self_m_of_r(self, r):
-        """The mass contained inside radius r"""
-        return self.ip_m(r)
+        return self.ip_rho(r)
     
     def m_of_r(self, r):
-        """The mass contained inside radius r"""
-        if self.potential_profile is not None:
-            return self.potential_profile.m_of_r(r)
-        else:
-            return self.self_m_of_r(r)
+        self.ip_m(r)
 
-    def self_potential(self, r, zero_at_zero=False):
-        """The gravitational  potential"""
-        # assert not zero_at_zero, "mode not implemented"
+    def potential(self, r, zero_at_zero=True):
         return self.ip_phi(r)
-
-    def potential(self, r, zero_at_zero=False):
-        """The gravitational  potential"""
-        if self.potential_profile is not None:
-            return self.potential_profile.potential(r)
-        else:
-            return self.self_potential(r, zero_at_zero=zero_at_zero)
         
     def phimax(self):
         return self.q["phi"][-1]
@@ -1479,16 +1437,6 @@ class NumericalProfile(RadialProfile):
         mystr +=  "_rhoihash" + str(zlib.adler32(self.q["rho"].data.tobytes()))
         
         return mystr
-    
-    def g_of_e(self, energy):
-        """Density of states"""
-        if not self.phasespace_initialized:
-            self._initialize_phasespace()
-        
-        return np.interp(energy, self.q["phi"], self.q["g"])
-    
-    def n_of_e(self, energy):
-        return self.g_of_e(energy) * self.f_of_e(energy)
     
 class MonteCarloProfile(RadialProfile):
     def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
@@ -1775,6 +1723,7 @@ def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, war
     
     returns : rtid or (rtid, phitid) if getphi is set
     """
+    assert 0
     
     if mode == "phimax":
         def acc(r):
@@ -1786,9 +1735,6 @@ def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, war
         # dMdr = 4 pi rho(r) * r**2
         def acc(r):
             return -4.*np.pi*profile.density(r)*r**3 + profile.m_of_r(r)
-    elif mode == "vmaxself":
-        def acc(r):
-            return -4.*np.pi*profile.self_density(r)*r**3 + profile.self_m_of_r(r)
     elif mode == "lmax":
         def acc(r):
             #return - 1./profile.vcirc(r) * (-3.*r*profile.accr(r) - profile.daccdr(r)*r**2)/2.
