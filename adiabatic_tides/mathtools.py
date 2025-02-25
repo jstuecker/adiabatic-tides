@@ -1800,7 +1800,7 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
 
     return rperi, rapo, rlmax, rtid, ramax_of_rp
 
-def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10):
+def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False):
     assert tide > 0, "Tide must be positive"
     
     def m_tot(r): return m(r) - tide/G * r**3
@@ -1817,7 +1817,10 @@ def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=
     rnew = np.geomspace(rpmin,rtid,nr)
     rhonew = integrate_f_limited_paspace(f_of_rperi_rapo, phi_tot, accr_tot, ramax_of_rp, rnew, rperirange=(0, rlmax), N=nintegrate)
 
-    return rnew, rhonew
+    if getf:
+        return rnew, rhonew, f_of_rperi_rapo
+    else:
+        return rnew, rhonew
 
 def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial"):
     #Define Initial profile phase space

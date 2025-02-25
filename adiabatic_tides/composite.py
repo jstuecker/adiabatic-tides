@@ -20,7 +20,7 @@ class CompositeProfile(RadialProfile):
 
         self.profiles = {}
         self.phase_spaces = {}
-        self.external = external
+        self.external = ()
 
         assert phase_space_mode == "joint_inversion", "Only joint inversion is supported currently"
 
@@ -32,6 +32,8 @@ class CompositeProfile(RadialProfile):
 
         # Phase space may invalidate when changing the potential... reset it
         self.phase_space_valid = False
+
+        self.internal = tuple(label for label in self.profiles if label not in self.external)
  
     def _combine_profiles(self, d, func_name, mode, *args, **kwargs):
         if mode == "alldict":
@@ -41,9 +43,9 @@ class CompositeProfile(RadialProfile):
         if mode == "total":
             return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in d], axis=0)
         elif mode == "self":
-            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in d if label not in self.external], axis=0)
+            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in self.internal], axis=0)
         elif mode == "external":
-            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in d if label in self.external], axis=0)
+            return np.sum([getattr(d[label], func_name)(*args, **kwargs) for label in self.external], axis=0)
         elif mode in d:
             return getattr(d[mode], func_name)(*args, **kwargs)
         else:
@@ -75,9 +77,6 @@ class CompositeProfile(RadialProfile):
     def _initialize_phasespace(self):
         if self.phase_space_valid:
             return
-        
-        def potential(r, zero_at_zero=True):
-            return self.potential(r, zero_at_zero=zero_at_zero, mode="total")
 
         for label in self.profiles:
             if not label in self.external:
@@ -93,3 +92,11 @@ class CompositeProfile(RadialProfile):
     def f_of_el(self, E, L, mode="self"):
         self._initialize_phasespace()
         return self._combine_profiles(self.phase_spaces, 'f_of_el', mode, E, L)
+    
+    def f_of_rperi_rapo(self, rp, ra, mode="self"):
+        e,l = self.E_L_of_rperi_rapo(rp,ra)
+        return self.f_of_el(e,l, mode=mode)
+    
+    def f_of_jl(self, j, l, mode="self"):
+        rp,ra = self.action_map.rp_ra_of_jl(j,l)
+        return self.f_of_rperi_rapo(rp,ra, mode=mode)

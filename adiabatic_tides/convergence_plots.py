@@ -171,7 +171,7 @@ def plot_poisson_convergence(prof, spline_class=PchipInterpolator, title="Interp
 def plot_adiabatic_iterations(prof, rt0, title=None, verbose=1, **kwargs):
     # res = at.mathtools.adiabatic_tidal_reconstruction(prof, np.abs(prof.accr(rt0)/rt0), rpmin=1e-20, eps=1e-3, get_all=True, verbose=verbose, **kwargs)
     att = at.adiabatic.AdiabaticTidalTransformation.from_rtid(prof, rt0, **kwargs)
-    res = att.run()
+    res = att.run().history
 
     fig,ax = plt.subplots(1,1, figsize=(6,5))
     for i in (0,1) + tuple(range(5, len(res), 5)):
