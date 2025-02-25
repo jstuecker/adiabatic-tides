@@ -7,6 +7,9 @@ class PhaseSpace():
         self.profile = profile
         self.cfg = profile.cfg
         self.anisotropy = np.nan
+
+    def set_potential(self, potential):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
         
     def f_of_e(self):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
@@ -15,14 +18,18 @@ class PhaseSpace():
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
 class EddingtonPhaseSpace(PhaseSpace):
-    def __init__(self, profile, anisotropy=0.):
+    def __init__(self, profile, anisotropy=0., potential=None):
         super().__init__(profile)
         self.anisotropy = anisotropy
+        self.potential = potential
 
         self.q = {}
         self.ip = {}
 
-    @only_on_change(['eddington', 'general'])
+    def set_potential(self, potential):
+        self.potential = potential
+
+    @only_on_change(attributes=("potential",), cfg_groups=('eddington', 'general'))
     def _setup_f(self):
         print("Recalculating phasespace")
 
@@ -30,7 +37,11 @@ class EddingtonPhaseSpace(PhaseSpace):
         cfg_gen : GeneralConfig = self.profile.cfg["general"]
 
         ri = np.geomspace(self.profile.rmin(), self.profile.rmax(), int(cfg_ps.nr*cfg_gen.scale_accuracy))
-        phi = self.profile.potential(ri, zero_at_zero=True)
+
+        if self.potential is not None:
+            phi = self.potential(ri)
+        else:
+            phi = self.profile.potential(ri, zero_at_zero=True)
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
         e,f1 = mathtools.anisotropic_inversion(ri[sel], self.profile.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
@@ -65,7 +76,7 @@ class InterpolatorActionMap(ActionMap):
         self.q = {}
         self.ip = {}
 
-    @only_on_change(['actions', 'general'])
+    @only_on_change(cfg_groups=('actions', 'general'))
     def setup_rp_ra_of_jl(self):
         cfg_gen : GeneralConfig = self.cfg["general"]
         cfg_act : ActionsConfig = self.cfg["actions"]

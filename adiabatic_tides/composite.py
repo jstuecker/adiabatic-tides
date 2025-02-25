@@ -2,7 +2,7 @@ from .profiles import RadialProfile
 import numpy as np
 
 class CompositeProfile(RadialProfile):
-    def __init__(self, external=(), configs={}, **profiles):
+    def __init__(self, external=(), configs={}, phase_space_mode="joint_inversion", **profiles):
         """Create a profile by combining several profiles.
         
         All functions where it makes sense (e.g. density, potential) 
@@ -16,8 +16,30 @@ class CompositeProfile(RadialProfile):
         super().__init__(phase_space=None, **configs)
         assert not set(profiles.keys()) & set(("alldict", "all", "total", "self", "external")), "Trying to use prohibited profile name"
 
-        self.profiles = profiles
+        self.profiles = {}
         self.external = external
+        self.phase_space_mode = phase_space_mode
+
+        self.add_profiles(external=external, **profiles)
+
+    def add_profiles(self, external=(), **profiles):
+        self.profiles.update(profiles)
+        self.external += tuple(external)
+
+        # Phase space may be invalid now, reset it
+        self.phase_space_valid = False
+
+    def _initialize_phasespace(self):
+        if self.phase_space_valid:
+            return
+        
+        def potential(r, zero_at_zero=True):
+            return self.potential(r, zero_at_zero=zero_at_zero, mode="total")
+
+        for label in self.profiles:
+            if not label in self.external:
+                assert self.profiles[label].phase_space is not None, "Only external profiles can have undefined phase space"
+                self.profiles[label].phase_space.set_potential(potential)
         
     def _combine_profiles(self, func_name, mode, *args, **kwargs):
         if mode == "alldict":
@@ -33,7 +55,16 @@ class CompositeProfile(RadialProfile):
         elif mode in self.profiles:
             return getattr(self.profiles[mode], func_name)(*args, **kwargs)
         else:
-            raise ValueError("Invalid mode")
+            valid_modes = tuple(self.profiles.keys()) + ("alldict", "all", "total", "self", "external")
+            raise ValueError("Invalid mode. Valid modes are: " + ", ".join(valid_modes))
+        
+    def f_of_e(self, E, mode="self"):
+        self._initialize_phasespace()
+        return self._combine_profiles('f_of_e', mode, E)
+    
+    def f_of_el(self, E, L, mode="self"):
+        self._initialize_phasespace()
+        return self._combine_profiles('f_of_el', mode, E, L)
 
     def density(self, r, mode="total"):
         return self._combine_profiles('density', mode, r)

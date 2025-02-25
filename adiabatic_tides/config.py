@@ -1,25 +1,32 @@
 import yaml
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Callable, List
+from collections.abc import Iterable
 
-def only_on_change(groups: List[str]):
+def only_on_change(attributes: Iterable[str] = (), cfg_groups: Iterable[str] = ()):
     """Decorator to execute a method only on the first call or when any specified config group changes."""
     def decorator(method: Callable):
         def wrapper(self: 'Configureable', *args, **kwargs):
-            current_configs = {group: asdict(self.cfg[group]) for group in groups}
+            current_configs = {group: asdict(self.cfg[group]) for group in cfg_groups}
+            current_var = {var: getattr(self, var) for var in attributes}
             
             if not hasattr(self, f'_{method.__name__}_last_configs'):
                 # If it's the first call, execute the method and store the configs
                 result = method(self, *args, **kwargs)
                 setattr(self, f'_{method.__name__}_last_configs', current_configs)
+                setattr(self, f'_{method.__name__}_last_vars', current_var)
                 return result
             
             last_configs = getattr(self, f'_{method.__name__}_last_configs')
+            last_vars = getattr(self, f'_{method.__name__}_last_vars')
+
             # Check if any of the groups have changed
-            if any(current_configs[group] != last_configs[group] for group in groups):
+            if (any(current_configs[group] != last_configs[group] for group in cfg_groups) 
+                or any(getattr(self, var) != last_vars[var] for var in attributes)):
                 # If any config has changed, execute the method and update the stored configs
                 result = method(self, *args, **kwargs)
                 setattr(self, f'_{method.__name__}_last_configs', current_configs)
+                setattr(self, f'_{method.__name__}_last_vars', current_var)
                 return result
 
             return None  # No changes, so no execution
