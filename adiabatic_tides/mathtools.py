@@ -1628,7 +1628,7 @@ def integrate_f_limited_paspace(f_of_rpra, pot, accr, ramax_of_rp, r, N=32, N2=N
 
     return 4.*np.pi*I  / r**2
 
-def sample_ra_rp_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
+def sample_rp_ra_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
     """Samples particle's peri-apo-centers given their radii and an allowed range of peri-center"""
     assert (np.min(rs) >= rperirange[0]) & (rperirange[1] >= rperirange[0])
 

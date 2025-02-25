@@ -185,7 +185,7 @@ class RadialProfile(Configureable):
         rho = mathtools.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
         p["r"],p["m"] = mathtools.sample_rimi_from_density(ri, rho, ntot)
 
-        p["ra"], p["rp"] = mathtools.sample_ra_rp_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
+        p["rp"], p["ra"] = mathtools.sample_rp_ra_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
         p["e"],p["l"],p["vr"] = mathtools.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
 
         p["rrho"] = ri
