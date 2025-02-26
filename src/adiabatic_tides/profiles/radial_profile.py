@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.interpolate import  RectBivariateSpline, NearestNDInterpolator, LinearNDInterpolator
 from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
 from ..config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 import time
@@ -68,7 +67,6 @@ class RadialProfile(Configureable):
         
     def _initialize_numerical_scales(self):
         """Sets some default values for numerical scales"""
-        # assert 0
         
         self._sc = {}
         self._sc["rmin"] = self.r0() * 1e-12
@@ -498,7 +496,7 @@ class RadialProfile(Configureable):
             return (density(r) * self.accr(r) - 2.*density(r) / r * sigr2 * faniso(r)) * r
 
         if logr is None:
-            logr = np.linspace(np.log(self.scale("rmax")*1e3),np.log(self.scale("rmin")), 10000)
+            logr = np.linspace(np.log(self.rmax()*1e3),np.log(self.rmin()), 10000)
         else:
             assert np.all(logr[1:] <= logr[:-1]), "logr has to be descending"
         rhosigr2 = np.zeros_like(logr)
@@ -547,8 +545,8 @@ class RadialProfile(Configureable):
                 
                 if log:
                     ip_l_of_e = numerics.interpolate.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale, kind=kind)
-                    ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), kind=kind)
-                    ip_r_of_l = numerics.interpolate.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), logx=True, eps_for_logx=1e-20*self._lscale, kind=kind)
+                    ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.rmin(), kind=kind)
+                    ip_r_of_l = numerics.interpolate.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.rmax(), logx=True, eps_for_logx=1e-20*self._lscale, kind=kind)
                 else:
                     ip_l_of_e = numerics.interpolate.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]), kind=kind)
                     ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=False, kind=kind)
@@ -567,7 +565,7 @@ class RadialProfile(Configureable):
             else:
                 rmax_asc = self.scale("rmax")
 
-            self.ri_asc = np.logspace(np.log10(self.scale("rmin")), np.log10(rmax_asc), self.scale("nbins_circ"))
+            self.ri_asc = np.logspace(np.log10(self.rmin()), np.log10(rmax_asc), self.scale("nbins_circ"))
             self.ip_lcirc_of_e_asc, self.ip_rcirc_of_e_asc, self.ip_rcirc_of_l_asc, _ = _rel_circ_interpolator(self.ri_asc, log=True)
 
             self._rel_circ_initialized = True
@@ -785,9 +783,9 @@ class RadialProfile(Configureable):
                 return self.density(ri)**2 * 4*np.pi*ri**3
 
         if rmin is None:
-            rmin = self.scale("rmin")
+            rmin = self.rmin()
         if rmax is None:
-            rmax = self.scale("rmax")
+            rmax = self.rmax()
         if nbins is None:
             nbins = self.scale("nbins_circ")
             
@@ -819,9 +817,9 @@ class RadialProfile(Configureable):
         def func(r):
             return self.f_of_e(self.potential(r)) - np.array(f)
         if rmin is None:
-            rmin = self.scale("rmin") #* 1e-8
+            rmin = self.rmin()
         if rmax is None:
-            rmax = self.scale("rmax") #* 1e8
+            rmax = self.rmax()
         emin, emax = self.potential(np.array((rmin, rmax)))
         
         rres = numerics.search.vectorized_binary_search(func, rmin, rmax, niter=100, mode="sqrt")
