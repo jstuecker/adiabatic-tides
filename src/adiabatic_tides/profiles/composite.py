@@ -1,6 +1,6 @@
-from .profiles import RadialProfile
-from .phasespace import EddingtonPhaseSpace
-from .config import only_on_change
+from .radial_profile import RadialProfile
+from ..phasespace import EddingtonPhaseSpace
+from ..config import only_on_change
 import numpy as np
 
 class CompositeProfile(RadialProfile):

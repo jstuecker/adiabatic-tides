@@ -12,7 +12,7 @@ def test_single_step_tidal_convergence(profile, embed_plot):
 
     rt = 5
     tprof = at.profiles.RadialTidalProfile(-prof.accr(rt)/rt)
-    prof_t = at.profiles.CompositeProfile(prof, tprof)
+    prof_t = at.profiles.CompositeProfile(dm=prof, tide=tprof)
 
     # Define Initial profile phase space
     table = at.mathtools.define_peri_apo_table(1e-12, 1e12, nbins=100, facmax=1e14)

@@ -62,7 +62,7 @@ def test_known_f_of_e(profile, embed_plot):
     prof = standard_profiles(profile)
     # nprof = at.profiles.NumericalProfile(rsetup, prof.density(rsetup), ancorphi="rmin")
     prof.update_config("eddington", nr=4000)
-    phasespace = at.profiles.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg, anisotropy=0.)
+    phasespace = at.phasespace.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg, anisotropy=0.)
 
     rtest = np.logspace(-8, 8, 7*33)
     
@@ -121,7 +121,7 @@ def test_rho_f_rho_adaptive(profile, embed_plot):
         tolerance = 1e-3
 
     prof = standard_profiles(profile)
-    prof.phase_space = at.profiles.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg, anisotropy=0.)
+    prof.phase_space = at.phasespace.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg, anisotropy=0.)
     # prof = at.profiles.NumericalProfile(rsetup, prof.density(rsetup))
 
     rev = np.logspace(-15,5, 7*31)

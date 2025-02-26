@@ -73,8 +73,8 @@ def test_boundaries(profile, embed_plot):
     
     nprof = at.profiles.NumericalProfile(rsetup, prof.density(rsetup))
     
-    prof_t = at.profiles.CompositeProfile(prof, tprof)
-    nprof_t = at.profiles.CompositeProfile(nprof, tprof)
+    prof_t = at.profiles.CompositeProfile(dm=prof, tide=tprof)
+    nprof_t = at.profiles.CompositeProfile(dm=nprof, tide=tprof)
 
     for p in (prof, nprof):
         rlmax, rtid = at.mathtools.find_rlmax(p.accr, p.daccdr), at.mathtools.find_rphimax(p.accr)
@@ -112,8 +112,8 @@ def test_boundaries_orbits(profile, embed_plot):
     rsetup = np.logspace(-10, 5, 6000)
     nprof = at.profiles.NumericalProfile(rsetup, prof.density(rsetup))
     
-    prof_t = at.profiles.CompositeProfile(prof, tprof)
-    nprof_t = at.profiles.CompositeProfile(nprof, tprof)
+    prof_t = at.profiles.CompositeProfile(dm=prof, tide=tprof)
+    nprof_t = at.profiles.CompositeProfile(dm=nprof, tide=tprof)
 
     rperi, rapo, rlmax, rtid, ramax_of_rp = at.mathtools.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
     nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.mathtools.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)

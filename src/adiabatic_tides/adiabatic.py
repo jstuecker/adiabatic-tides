@@ -2,8 +2,7 @@ import numpy as np
 from . import profiles
 from . import mathtools
 from .config import Configureable, AdiabaticConfig, GeneralConfig
-from .profiles import RadialProfile
-from .composite import CompositeProfile
+from .profiles import RadialProfile, CompositeProfile
 import time
 from functools import partial
 
