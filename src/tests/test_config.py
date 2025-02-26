@@ -39,16 +39,13 @@ def standard_profiles(name):
     elif name == "isotherm":
         return at.profiles.IsothermalSphere()
     elif name[0:8] == "powerlaw":
-        slope = -float(name[8:])
+        slope = float(name[8:])
         print("Powerlaw with slope = %.2f" % slope)
-        return at.profiles.PowerlawProfile(slope=slope, rhoc=1.)
-    elif name[0:8] == "powerlaw":
-        slope = -float(name[8:])
-        print("Powerlaw with slope = %.2f" % slope)
-        return at.profiles.PowerlawProfile(slope=slope, rhoc=1.)
+        return at.profiles.PowerlawProfile(alpha=slope, anisotropy=0.)
+        # return at.profiles.PowerlawProfile(slope=-slope, rhoc=1.)
     elif name[0:5] == "aniso":
         result = parse.parse("aniso{beta}pow{alpha}", name)
-        return at.profiles.AnisotropicPowerlawProfile(alpha=float(result["alpha"]), beta=float(result["beta"]), rhoc=1.)
+        return at.profiles.PowerlawProfile(alpha=float(result["alpha"]), anisotropy=float(result["beta"]), rhoc=1.)
     else:
         raise ValueError("Unknown profile %s" % name)
     

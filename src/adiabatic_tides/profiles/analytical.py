@@ -1,6 +1,7 @@
 import numpy as np
 from .import RadialProfile
 from ..phasespace import AnalyticPhaseSpace
+from scipy.special import gamma as GammaF
 
 # Helper functions
 
@@ -214,126 +215,13 @@ class EinastoProfile(RadialProfile):
         return self.rm2
 
 class PowerlawProfile(RadialProfile):
-    def __init__(self, slope=-1., rhoc=None, rscale=1., m0=None):
-        super().__init__(phase_space=None)
-        
-        self.slope = slope
-        self.rscale = rscale
-        if rhoc is not None:
-            self.rhoc = rhoc
-        elif m0 is not None:
-            assert 0
-        else:
-            raise ValueError("Pleas provide either rhoc or m0")
-            
-        self.phic = 4.*np.pi * self.G * self.rhoc * self.rscale**2 / ( (3. + self.slope) * (2. + self.slope)  )
-            
-        # Calculate the normalization of the phasespace distribution
-        from scipy.special import gamma
-
-        beta = -(6+self.slope)/(4.+2.*self.slope)
-        rhostar = 4.*np.pi*np.sqrt(2.) * 2. * np.sqrt(np.pi) * gamma(-beta-1.5) / (4. * gamma(-beta)) * self.phic**(beta+1.5)
-        self.f0 = self.rhoc / rhostar
-        
-    def _initialize_numerical_scales(self):
-        """Sets some default values for numerical scales"""
-        
-        super()._initialize_numerical_scales()
-        
-        self._sc["fintegration_nstepsE"] = 501
-        self._sc["fintegration_nstepsL"] = 201
-        self._sc["ip_e_of_jl_nbinsE"] = 2000
-        self._sc["ip_e_of_jl_nbinsL"] = 200
-
-        self._sc["log_emin"] = -18
-        self._sc["rmin"] = self.r0() * 1e-12
-        self._sc["rperimin"] = self.r0() * 1e-12
-        if self.slope >= -0.75:
-            self._sc["log_emin"] = -23
-            self._sc["rmin"] = self.r0() * 1e-15
-            self._sc["rperimin"] = self.r0() * 1e-15
-        if self.slope >= -0.5:
-            self._sc["log_emin"] = -34
-            self._sc["rmin"] = self.r0() * 1e-20
-            self._sc["rperimin"] = self.r0() * 1e-20
-
-        self._sc["niter_apoperi"] = 35
-        
-            
-        #self._sc["fintegration_nstepsE"] = 1001
-        
-    def density(self, r):
-        return self.rhoc * (r/self.rscale)**self.slope
-    
-    def drhodr(self, r):
-        return self.rhoc * (r/self.rscale)**(self.slope-1.) * self.slope / self.rscale
-    
-    def rho_of_phi(self, phi, deriv=0):
-        # phi = self.phic * (r/self.rscale)**(2.+self.slope)
-        # rho = self.rhoc * (r/self.rscale)**self.slope
-
-        # (r/self.rscale) = (phi/self.phic)**(1.(2.+self.slope))
-        assert deriv <= 2
-
-        alpha = self.slope/(2.+self.slope)
-        if deriv == 0:
-            return self.rhoc * (phi/self.phic)**alpha
-        elif deriv == 1:
-            return self.rhoc * (phi/self.phic)**alpha * alpha / phi
-        elif deriv == 2:
-            return self.rhoc * (phi/self.phic)**alpha * alpha * (alpha-1.) / phi**2
-    
-    def m_of_r(self, r):
-        return 4.*np.pi * self.rhoc / self.rscale**self.slope / (3. + self.slope) * r**(3.+self.slope)
-    
-    def potential(self, r, zero_at_zero=True):
-        """The gravitational  potential.
-        zero_at_zero: if True, norm to phi(r->0)=0. This can be useful
-        to avoid problems caused by roundoff errors as r->0"""
-        
-        assert self.slope > -2., "Have to check normalization for this case"
-        
-        return self.phic * (r/self.rscale)**(2.+self.slope)
-        
-    def r0(self):
-        return self.rscale
-    
-    def f_of_e(self, energy):
-        """The phase space distribution function 
-        
-        energy : (vector-like) energies to evaluate the distribution at
-        
-        returns : phase space density f(E) = dN/d3x/d3v
-        """
-        beta = -(6+self.slope)/(4.+2.*self.slope)
-        
-        val = self.f0 * energy**beta
-        assert(np.all(~np.isnan(val)))
-
-        return self.f0 * energy**beta
-    
-    def f_of_el(self, e, l):
-        return self.f_of_e(e)
-    
-    def to_string(self):
-        return "powerlaw_slope=%.3f_rscale=%.5e_rhoc=%.5e" % (self.slope, self.rscale, self.rhoc)
-    
-    def to_dict(self):
-        d = {}
-        
-        d["slope"] = self.slope
-        d["rscale"] = self.rscale
-        d["rhoc"] = self.rhoc
-        
-        return d
-    
-class AnisotropicPowerlawProfile(RadialProfile):
-    def __init__(self, alpha=None, beta=0., gamma=None, rhoc=1.):
+    def __init__(self, alpha=None, anisotropy=0., gamma=None, rhoc=1.):
         """
         Initialize a powerlaw profile with the given parameters.
 
         density profile: rho = rhoc * r**(-alpha)
         phase space profile: f(E,L) ~ E**-gamma L**-beta
+        where alpha is the slope and beta the anisotropy
 
         free variables: either alpha or gamma, and beta
         """
@@ -349,33 +237,38 @@ class AnisotropicPowerlawProfile(RadialProfile):
             raise ValueError("Please provide either alpha or gamma")
 
         if alpha is None:
-            alpha = alpha_of_gamma_beta(gamma, beta)
+            alpha = alpha_of_gamma_beta(gamma, anisotropy)
         elif gamma is None:
-            assert beta < alpha/2.
-            gamma = gamma_of_alpha_beta(alpha, beta)
+            assert anisotropy < alpha/2.
+            gamma = gamma_of_alpha_beta(alpha, anisotropy)
         else:
             raise ValueError("Please provide either alpha or gamma, not both")
         
-        #print(f"alpha={alpha}, beta={beta}, gamma={gamma}")
-
+        assert alpha < 2., "Potential is not well defined for alpha>=2, have to check this"
+        
         self.alpha = alpha
-        self.beta = beta
+        self.anisotropy = anisotropy
         self.gamma = gamma
 
         # Normalization constants:
         self.rhoc = rhoc
         self.phic = 4.*np.pi * self.G * self.rhoc / ( (3. - self.alpha) * (2. - self.alpha)  )
 
-        from scipy.special import gamma as GammaF
-
-        Cby = 2**(1.5 - beta) * np.pi**1.5 * GammaF(1. - beta) * GammaF(gamma + beta - 1.5) / GammaF(gamma)
+        Cby = 2**(1.5 - anisotropy) * np.pi**1.5 * GammaF(1. - anisotropy) * GammaF(gamma + anisotropy - 1.5) / GammaF(gamma)
         
-        self.fc = self.rhoc / Cby / self.phic**(-gamma-beta+1.5)
+        self.fc = self.rhoc / Cby / self.phic**(-gamma-anisotropy+1.5)
 
         def f_of_el(e, l):
-            return self.fc * e**-self.gamma * l**(-2.*self.beta)
+            return self.fc * e**-self.gamma * l**(-2.*self.anisotropy)
+
+        self.set_phase_space(AnalyticPhaseSpace(f_of_el=f_of_el, anisotropy=self.anisotropy))
+
+    @classmethod
+    def from_rscale(cls, rscale, rhoscale, alpha=None, anisotropy=None):
+        """Alternative initilization so that rho(rs) = rhoscale"""
+        rhoc = rhoscale * rscale**alpha
         
-        self.set_phase_space(AnalyticPhaseSpace(f_of_el=f_of_el, anisotropy=self.beta))
+        return cls(alpha=alpha, anisotropy=anisotropy, rhoc=rhoc)
 
     def density(self, r):
         return self.rhoc*r**(-self.alpha)
@@ -384,8 +277,6 @@ class AnisotropicPowerlawProfile(RadialProfile):
         return 4.*np.pi * self.rhoc / (3. - self.alpha) * r**(3.-self.alpha)
     
     def potential(self, r, zero_at_zero=True):
-        assert self.alpha < 2., "Have to check normalization for this case"
-        
         return self.phic * r**(2.-self.alpha)
 
     def r0(self):
@@ -398,13 +289,13 @@ class AnisotropicPowerlawProfile(RadialProfile):
         self._sc["rperimin"] = 1e-12
 
     def to_string(self):
-        return "alpha=%.3f_beta=%.5e_rhoc=%.5e" % (self.alpha, self.beta, self.rhoc)
+        return "alpha=%.3f_beta=%.5e_rhoc=%.5e" % (self.alpha, self.anisotropy, self.rhoc)
     
     def to_dict(self):
         d = {}
         
         d["alpha"] = self.alpha
-        d["beta"] = self.beta
+        d["beta"] = self.anisotropy
         d["rhoc"] = self.rhoc
         
         return d

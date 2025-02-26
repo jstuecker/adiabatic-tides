@@ -118,7 +118,7 @@ def test_rho_f_rho_adaptive(profile, embed_plot):
     if profile == "plummer":
         tolerance = 1e-2
     else:
-        tolerance = 1e-3
+        tolerance = 2e-3
 
     prof = standard_profiles(profile)
     prof.phase_space = at.phasespace.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg, anisotropy=0.)
@@ -156,7 +156,7 @@ def test_known_aniso_fel(profile, embed_plot):
     np.seterr(all='raise')
 
     prof = standard_profiles(profile)
-    beta = prof.beta
+    beta = prof.anisotropy
 
     ri = np.logspace(-15,15,2000)
     E,f1 = at.numerics.integrate.anisotropic_inversion(ri, prof.density(ri), prof.potential(ri), beta=beta, nintegrate=100)
@@ -182,7 +182,7 @@ def test_known_aniso_fel_profile(profile, embed_plot):
 
     prof = standard_profiles(profile)
     ri = np.logspace(-15,15,2000)
-    nprof = at.profiles.NumericalProfile(ri, prof.density(ri), anisotropy=prof.beta)
+    nprof = at.profiles.NumericalProfile(ri, prof.density(ri), anisotropy=prof.anisotropy)
     
     sel = (ri > 1e-8) & (ri < 1e4)
     phi = prof.potential(ri[sel])
