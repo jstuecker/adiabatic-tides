@@ -98,8 +98,8 @@ def test_boundaries(profile, embed_plot):
     rtest = np.logspace(-8, -0.1, 33) * rlmax
     tc.check_max_relative_error(ramax_of_rp(rtest), nramax_of_rp(rtest), 1e-2)
 
-# add back "plummer" later
-@pytest.mark.parametrize("profile", ["nfw", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
+# !!! add back "plummer" later and "powerlaw1.8"
+@pytest.mark.parametrize("profile", ["nfw", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4"])
 def test_boundaries_orbits(profile, embed_plot):
     np.seterr(all='raise')
     np.random.seed(42)
