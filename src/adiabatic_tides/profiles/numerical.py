@@ -1,6 +1,6 @@
-from .. import mathtools
 from .radial_profile import RadialProfile
 import numpy as np
+from .. import numerics
 
 class NumericalProfile(RadialProfile):
     def __init__(self, ri=None, rho=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, boundary="powerlaw", anisotropy=0., **configs):
@@ -55,7 +55,7 @@ class NumericalProfile(RadialProfile):
         else:
             rhoi = rho
 
-        self.ip_rho, self.ip_m, self.ip_phi = mathtools.solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, lower_boundary=self.boundary, G=self.G)
+        self.ip_rho, self.ip_m, self.ip_phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, lower_boundary=self.boundary, G=self.G)
         self.q["rho"], self.q["mofr"], self.q["phi"] = rho, self.ip_m(self.ri), self.ip_phi(self.ri)
 
         if callable(rho):
@@ -188,12 +188,12 @@ class MonteCarloProfile(RadialProfile):
         self.q["rho"], self.q["mofr"] = rho, m
         
         accr = - self.G * self.q["mofr"] / self.rbins**2
-        self.q["phi"] = - mathtools.trapez_integral_cumulative(self.rbins, accr)
+        self.q["phi"] = - numerics.integrate.trapez_integral_cumulative(self.rbins, accr)
 
     def _update(self):
         """Recalculate the density/mass/gravity profiles"""
         #self.q["rho"], self.q["mofr"] = mathtools.get_mass_profile(self.ri, self.mi, self.rbins)
-        rho, m = mathtools.get_mass_profile(self.ri, self.mi, self.rbins)
+        rho, m = numerics.sample.get_mass_profile(self.ri, self.mi, self.rbins)
         self._set_mass_profile(rho, m)
 
     def density(self, r):
@@ -253,12 +253,12 @@ class ParticleProfile(NumericalProfile):
 
         self.set_particles(particles, update=False)
 
-        rho, mprof = mathtools.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
+        rho, mprof = numerics.sample.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
 
         super().__init__(self.ri, rho, mprof, boundary="constant")
 
     def _update_mass_profile(self):
-        rho, mprof = mathtools.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
+        rho, mprof = numerics.sample.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
         super().set_density_profile(self.ri, rho)
 
     def set_particles(self, particles, update=True):
@@ -282,7 +282,7 @@ class ParticleProfile(NumericalProfile):
             self._update_mass_profile()
 
     def integrate_orbits_in_other_potential(self, accr, tmax, nsteps=1000, update=True):
-        self.p["r"], self.p["vr"] = mathtools.integrate_radial_orbits(accr, self.p["r"], self.p["vr"], self.p["l"], tmax, nsteps=nsteps)
+        self.p["r"], self.p["vr"] = numerics.sample.integrate_radial_orbits(accr, self.p["r"], self.p["vr"], self.p["l"], tmax, nsteps=nsteps)
 
         self._update_mass_profile()
     

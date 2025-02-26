@@ -1,7 +1,8 @@
-import adiabatic_tides as at
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import PchipInterpolator
+from . import numerics
+from . import adiabatic
 
 def plot_profile_rel(axs, rbins, rhoi, rhoref, **kwargs):
     rcent = np.sqrt(rbins[1:]*rbins[:-1])
@@ -29,8 +30,8 @@ def plot_perisplit_integration(prof, npart=100000, nsteps_metropolis=64, rpmin=0
 
     rhos,rs,vrs = [],rs0,vrs0
     for i in range(norb):
-        rhos.append(at.mathtools.get_mass_profile(rs, ms, rbins)[0])
-        rs, vrs = at.mathtools.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=steps_per_orb)
+        rhos.append(numerics.sample.get_mass_profile(rs, ms, rbins)[0])
+        rs, vrs = numerics.sample.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=steps_per_orb)
 
     plot_profile_rel(axs, rbins, rhos[0], prof.density, label="initial")
     plot_profile_rel(axs, rbins, rhos[-1], prof.density, label="final")
@@ -61,14 +62,14 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_metropolis=
     rhoxvr2, rhoxvt2, rhoxvr2red, rhoxvt2red = [], [], [], []
     for i in range(norb):
         for j in range(len(rpsplits)-1):
-            rhos[i,j] = at.mathtools.get_mass_profile(rs[j], ms[j], rbins)[0]
+            rhos[i,j] = numerics.sample.get_mass_profile(rs[j], ms[j], rbins)[0]
         rhoxvr2.append(np.histogram(rs[rs >0.], weights=np.float128((vrs**2*ms)[rs > 0.]), bins=rbinsaniso)[0])
         rhoxvt2.append(np.histogram(rs[rs >0.], weights=((Ls0/rs)**2*ms)[rs > 0.], bins=rbinsaniso)[0])
         v2 = vrs**2 + (Ls0/rs)**2
         rhoxvr2red.append(np.histogram(rs[rs >0.], weights=np.float128((vrs**2*ms/v2)[rs > 0.]), bins=rbinsaniso)[0])
         rhoxvt2red.append(np.histogram(rs[rs >0.], weights=((Ls0/rs)**2*ms/v2)[rs > 0.], bins=rbinsaniso)[0])
 
-        rs, vrs = at.mathtools.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=steps_per_orb)
+        rs, vrs = numerics.sample.integrate_radial_orbits(prof.accr, rs, vrs, Ls0, tmax, nsteps=steps_per_orb)
     betas = 1-np.array(rhoxvt2)/np.array(rhoxvr2)/2.
     betamean = 1-np.mean(rhoxvt2, axis=0)/np.mean(rhoxvr2, axis=0)/2.
     betamean_red = 1-np.mean(rhoxvt2red, axis=0)/np.mean(rhoxvr2red, axis=0)/2.
@@ -98,7 +99,7 @@ def plot_perimultisplit_integration(prof, n_per_split=100000, nsteps_metropolis=
     axs[2].semilogx(rcentaniso, betamean_red, color="green", label=r"Reduced, Av(%d)" % norb, lw=2, ls="dotted")
 
     for i in range(0,len(rpsplits)-1):
-        rhotrue = at.mathtools.integrate_fofel_adaptive_rperi_lim(prof.f_of_el, prof.potential, rcent, N=200, rp1=rpsplits[i], rp2=rpsplits[i+1])
+        rhotrue = numerics.integrate.integrate_fofel_adaptive_rperi_lim(prof.f_of_el, prof.potential, rcent, N=200, rp1=rpsplits[i], rp2=rpsplits[i+1])
         axs[0].loglog(rcent, rhotrue, color="black", ls="dashed", alpha=0.6, label="true" if i == 0 else None)
         axs[1].semilogx(rcent, rhotrue/rhoref, color="black", ls="dashed", alpha=0.6)
 
@@ -134,7 +135,7 @@ def plot_poisson_convergence(prof, spline_class=PchipInterpolator, title="Interp
 
     for n in 50,100,200,400:
         ri = np.logspace(-10,10,n)
-        rho,m,phi = at.mathtools.solve_poisson_via_spline_with_smart_boundaries(ri, prof.density(ri), spline_class, **kwargs)
+        rho,m,phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(ri, prof.density(ri), spline_class, **kwargs)
 
         axs[0,0].loglog(rtest, rho(rtest), label="N=%d"%n)
         axs[1,0].loglog(rtest, np.abs(rho(rtest)/prof.density(rtest)-1.))
@@ -169,8 +170,8 @@ def plot_poisson_convergence(prof, spline_class=PchipInterpolator, title="Interp
     return fig,axs
 
 def plot_adiabatic_iterations(prof, rt0, title=None, verbose=1, **kwargs):
-    # res = at.mathtools.adiabatic_tidal_reconstruction(prof, np.abs(prof.accr(rt0)/rt0), rpmin=1e-20, eps=1e-3, get_all=True, verbose=verbose, **kwargs)
-    att = at.adiabatic.AdiabaticTidalTransformation.from_rtid(prof, rt0, **kwargs)
+    # res = adiabatic.adiabatic_tidal_reconstruction(prof, np.abs(prof.accr(rt0)/rt0), rpmin=1e-20, eps=1e-3, get_all=True, verbose=verbose, **kwargs)
+    att = adiabatic.AdiabaticTidalTransformation.from_rtid(prof, rt0, **kwargs)
     res = att.run().history
 
     fig,ax = plt.subplots(1,1, figsize=(6,5))

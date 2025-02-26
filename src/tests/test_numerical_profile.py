@@ -77,12 +77,12 @@ def test_boundaries(profile, embed_plot):
     nprof_t = at.profiles.CompositeProfile(dm=nprof, tide=tprof)
 
     for p in (prof, nprof):
-        rlmax, rtid = at.mathtools.find_rlmax(p.accr, p.daccdr), at.mathtools.find_rphimax(p.accr)
+        rlmax, rtid = at.numerics.search.find_rlmax(p.accr, p.daccdr), at.numerics.search.find_rphimax(p.accr)
         print("Without tide: boundary: %.5e %.5e" % (rlmax, rtid))
         assert (rlmax == np.infty) and (rtid == np.infty)
     print("With Tide:")
     for p in (prof_t, nprof_t):
-        rlmax, rtid = at.mathtools.find_rlmax(p.accr, p.daccdr), at.mathtools.find_rphimax(p.accr)
+        rlmax, rtid = at.numerics.search.find_rlmax(p.accr, p.daccdr), at.numerics.search.find_rphimax(p.accr)
         print("With tide: boundary: %.5e %.5e" % (rlmax, rtid))
         assert np.abs(rtid/rtid0 - 1.) < 1e-3
 
@@ -92,8 +92,8 @@ def test_boundaries(profile, embed_plot):
         # Check that rtid corresponds to the maximum of the potential
         assert np.all(p.potential(rtest) <= p.potential(rtid))
 
-    rperi, rapo, rlmax, rtid, ramax_of_rp = at.mathtools.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
-    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.mathtools.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)
+    rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
+    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)
 
     rtest = np.logspace(-8, -0.1, 33) * rlmax
     tc.check_max_relative_error(ramax_of_rp(rtest), nramax_of_rp(rtest), 1e-2)
@@ -115,23 +115,23 @@ def test_boundaries_orbits(profile, embed_plot):
     prof_t = at.profiles.CompositeProfile(dm=prof, tide=tprof)
     nprof_t = at.profiles.CompositeProfile(dm=nprof, tide=tprof)
 
-    rperi, rapo, rlmax, rtid, ramax_of_rp = at.mathtools.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
-    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.mathtools.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)
+    rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
+    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)
 
-    js = at.mathtools.calculate_radial_action_tanh_peri_apo(prof_t.potential, rperi[:-1], rapo[:-1], invalid_vr_to_zero=False)
+    js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof_t.potential, rperi[:-1], rapo[:-1], invalid_vr_to_zero=False)
     assert np.all(~np.isnan(js))
-    njs = at.mathtools.calculate_radial_action_tanh_peri_apo(nprof_t.potential, nrperi[:-1], nrapo[:-1], invalid_vr_to_zero=True)
+    njs = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(nprof_t.potential, nrperi[:-1], nrapo[:-1], invalid_vr_to_zero=True)
     assert np.all(js > 0)
     
     for p in (prof_t, nprof_t):
         print("----")
-        rperi, rapo, rlmax, rtid, ramax_of_rp = at.mathtools.define_paspace_boundaries(p.potential, p.accr, p.daccdr, nbins=555)
+        rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(p.potential, p.accr, p.daccdr, nbins=555)
 
         rp = 10**np.random.uniform(-5, np.log10(rlmax), 1000)
         ra = rp * 10 ** np.random.uniform(0, np.log10(ramax_of_rp(rp)/rp), rp.shape)
         
-        valid = at.mathtools.rperi_rapo_valid(p.potential, p.accr, rp, ra)
+        valid = at.numerics.search.rperi_rapo_valid(p.potential, p.accr, rp, ra)
         assert np.all(valid)
 
-        js = at.mathtools.calculate_radial_action_tanh_peri_apo(p.potential, rp, ra, invalid_vr_to_zero=True)
+        js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(p.potential, rp, ra, invalid_vr_to_zero=True)
         assert np.all(js > 0)

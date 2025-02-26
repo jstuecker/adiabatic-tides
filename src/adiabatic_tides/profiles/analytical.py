@@ -1,7 +1,65 @@
 import numpy as np
 from .import RadialProfile
-from .. import mathtools
 from ..phasespace import AnalyticPhaseSpace
+
+# Helper functions
+
+def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
+    """Returns the virial radius of a halo with a given virial mass
+    
+    It is assumed that mvir is the mass enclosed inside that radius and
+    that the object is 'delta' times as dense as the critical/mean
+    density of the universe
+    
+    mvir : virial mass in solar masses
+    mode : can be 'crit' or 'mean' to use the critical or mean density
+    delta : the over-density. Typically 200 is used here
+    h : reduced hubble parameter. If set to 1 units will change to
+        mass in Msol/h and radius in Mpc/h
+    omega_m : matter density parameter, only relevant when using mode='mean'
+    
+    returns : virial radius in Mpc
+    """
+    G = 43.0071057317063 * 1e-10  #  Grav. constant in Mpc (km/s)^2 / Msol
+    rhocrit = 3.0 / (8.0 * np.pi * G) * (1e2*h)**2
+    
+    if mode == "crit":
+        rhoref = rhocrit
+    elif mode == "mean":
+        rhoref = omega_m * rhocrit
+    else:
+        raise ValueError("Unknown mode=%s, can be 'crit' or 'mean'" % mode)
+
+    return  np.cbrt(mvir / (rhoref * 4.*np.pi/3. * delta))
+
+def MvirOfRvir(rvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
+    """Returns the virial mass of a halo with a given virial radius
+    
+    It is assumed that mvir is the mass enclosed inside rvir and
+    that the object is 'delta' times as dense as the critical/mean
+    density of the universe
+    
+    rvir : virial radius in Mpc
+    mode : can be 'crit' or 'mean' to use the critical or mean density
+    delta : the over-density. Typically 200 is used here
+    h : reduced hubble parameter. If set to 1 units will change to
+        mass in Msol/h and radius in Mpc/h
+    omega_m : matter density parameter, only relevant when using mode='mean'
+    
+    returns : virial mass in Msol
+    """
+    G = 43.0071057317063 * 1e-10  #  Grav. constant in Mpc (km/s)^2 / Msol
+    rhocrit = 3.0 / (8.0 * np.pi * G) * (1e2*h)**2
+    
+    if mode == "crit":
+        rhoref = rhocrit
+    elif mode == "mean":
+        rhoref = omega_m * rhocrit
+    else:
+        raise ValueError("Unknown mode=%s, can be 'crit' or 'mean'" % mode)
+        
+    return rhoref * 4.*np.pi/3. * delta * rvir**3
+
 
 class NFWProfile(RadialProfile):
 
@@ -21,11 +79,11 @@ class NFWProfile(RadialProfile):
         
         if m200c is not None:
             self.m200c = m200c
-            self.r200c = mathtools.RvirOfMvir(m200c, h=h)
+            self.r200c = RvirOfMvir(m200c, h=h)
         elif r200c is not None:
             assert m200c is None, "You provided both m200c and r200c, please only provide one"
             self.r200c = r200c
-            self.m200c = mathtools.MvirOfRvir(r200c, h=h)
+            self.m200c = MvirOfRvir(r200c, h=h)
         else:
             raise ValueError("You have to provide either m200c or r200c")
 

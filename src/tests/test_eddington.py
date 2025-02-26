@@ -76,9 +76,9 @@ def test_known_f_of_e(profile, embed_plot):
     check_max_relative_error(f2, f1, 2e-3)
 
 def integrate_rho_f_rho(ri, rho):
-    e, f = at.mathtools.eddington_inversion(ri, rho)
+    e, f = at.numerics.integrate.eddington_inversion(ri, rho)
 
-    rho_new = at.mathtools.integrate_f_to_density(e, f)
+    rho_new = at.numerics.integrate.integrate_f_to_density(e, f)
     
     return rho,f,rho_new
 
@@ -127,8 +127,8 @@ def test_rho_f_rho_adaptive(profile, embed_plot):
     rev = np.logspace(-15,5, 7*31)
     # prof.f_of_e(E=(0.1,0.2), nintegrate=400)
     def phi(r): return prof.potential(r, zero_at_zero=True)
-    # rho_new = at.mathtools.integrate_f_paspace(prof.f_of_el, phi, prof.accr, rev, N=200) # , rperirange=(rsetup[0], rsetup[-1]), raporange=(rsetup[0], rsetup[-1])
-    rho_new = at.mathtools.integrate_f_to_density_adaptive(prof.f_of_e, phi(rev), nintegrate=400)
+    # rho_new = at.numerics.integrals.integrate_f_paspace(prof.f_of_el, phi, prof.accr, rev, N=200) # , rperirange=(rsetup[0], rsetup[-1]), raporange=(rsetup[0], rsetup[-1])
+    rho_new = at.numerics.integrate.integrate_f_to_density_adaptive(prof.f_of_e, phi(rev), nintegrate=400)
     rho = prof.density(rev)
 
     sel = np.ones_like(rev, dtype=bool)
@@ -145,8 +145,8 @@ def test_aniso_vs_iso_inv(profile):
 
     prof = standard_profiles(profile)
 
-    E,fa = at.mathtools.anisotropic_inversion(rsetup, prof.density(rsetup), prof.potential(rsetup, zero_at_zero=True), beta=0.)
-    E,fb = at.mathtools.eddington_inversion(rsetup, prof.density(rsetup), prof.potential(rsetup))
+    E,fa = at.numerics.integrate.anisotropic_inversion(rsetup, prof.density(rsetup), prof.potential(rsetup, zero_at_zero=True), beta=0.)
+    E,fb = at.numerics.integrate.eddington_inversion(rsetup, prof.density(rsetup), prof.potential(rsetup))
 
     check_max_relative_error(fa[sel], fb[sel], 1e-2)
 
@@ -159,7 +159,7 @@ def test_known_aniso_fel(profile, embed_plot):
     beta = prof.beta
 
     ri = np.logspace(-15,15,2000)
-    E,f1 = at.mathtools.anisotropic_inversion(ri, prof.density(ri), prof.potential(ri), beta=beta, nintegrate=100)
+    E,f1 = at.numerics.integrate.anisotropic_inversion(ri, prof.density(ri), prof.potential(ri), beta=beta, nintegrate=100)
     
     sel = (ri > 1e-8) & (ri < 1e4)
     phi = prof.potential(ri[sel])
@@ -207,8 +207,8 @@ def test_known_fel_integration(profile, embed_plot):
     
     N = 55
     r = np.logspace(-1,5,400)
-    # rho = at.mathtools.integrate_fofel_adaptive(prof.f_of_el, prof.potential, r, N)
-    rho = at.mathtools.integrate_f_paspace(prof.f_of_el, prof.potential, prof.accr, r, N)
+    # rho = at.numerics.integrals.integrate_fofel_adaptive(prof.f_of_el, prof.potential, r, N)
+    rho = at.numerics.integrate.integrate_f_paspace(prof.f_of_el, prof.potential, prof.accr, r, N)
 
     rhoref = prof.density(r)
 

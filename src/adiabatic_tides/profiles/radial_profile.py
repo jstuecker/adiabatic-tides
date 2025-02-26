@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.interpolate import  RectBivariateSpline, NearestNDInterpolator, LinearNDInterpolator
-from .. import mathtools
 from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
 from ..config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 import time
+from .. import numerics
 
 
 class RadialProfile(Configureable):
@@ -186,11 +186,11 @@ class RadialProfile(Configureable):
 
         p = {}
 
-        rho = mathtools.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
-        p["r"],p["m"] = mathtools.sample_rimi_from_density(ri, rho, ntot)
+        rho = numerics.integrate.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
+        p["r"],p["m"] = numerics.sample.sample_rimi_from_density(ri, rho, ntot)
 
-        p["rp"], p["ra"] = mathtools.sample_rp_ra_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
-        p["e"],p["l"],p["vr"] = mathtools.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
+        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
+        p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
 
         p["rrho"] = ri
         p["rho"] = rho
@@ -377,11 +377,11 @@ class RadialProfile(Configureable):
         if search_method is None: search_method = self.cfg["actions"].search_method
 
         if search_method == "binary":
-            rp = mathtools.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
-            ra = mathtools.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+            rp = numerics.search.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
+            ra = numerics.search.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
         elif search_method == "ridders":
-            rp = mathtools.ridders_method(energy_permitted, rlow*np.ones_like(r), r, mode="positive", niter=niter, logspace=True)
-            ra = mathtools.ridders_method(energy_permitted, r, rup*np.ones_like(r), mode="positive", niter=niter, logspace=True)
+            rp = numerics.search.ridders_method(energy_permitted, rlow*np.ones_like(r), r, mode="positive", niter=niter, logspace=True)
+            ra = numerics.search.ridders_method(energy_permitted, r, rup*np.ones_like(r), mode="positive", niter=niter, logspace=True)
         else:
             raise ValueError("Unknown mode %s" % search_method)
         
@@ -396,7 +396,7 @@ class RadialProfile(Configureable):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
         if nintegrate is None:
             nintegrate = int(self.cfg["actions"].nintegrate * self.cfg["general"].scale_accuracy)
-        return mathtools.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, invalid_vr_to_zero=invalid_vr_to_zero)
+        return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, invalid_vr_to_zero=invalid_vr_to_zero)
 
     def density_of_states(self, energy):
         """Returns the density of states g(E) associated with some energy.
@@ -546,13 +546,13 @@ class RadialProfile(Configureable):
                 Ecirc = self.potential(rcirc) + 0.5*vcirc**2
                 
                 if log:
-                    ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale, kind=kind)
-                    ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), kind=kind)
-                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), logx=True, eps_for_logx=1e-20*self._lscale, kind=kind)
+                    ip_l_of_e = numerics.interpolate.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale, kind=kind)
+                    ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), kind=kind)
+                    ip_r_of_l = numerics.interpolate.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.scale("rmin"), logx=True, eps_for_logx=1e-20*self._lscale, kind=kind)
                 else:
-                    ip_l_of_e = mathtools.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]), kind=kind)
-                    ip_r_of_e = mathtools.flexible_interpolator(Ecirc, rcirc, logy=False, kind=kind)
-                    ip_r_of_l = mathtools.flexible_interpolator(Lcirc, rcirc, logy=False, kind=kind)
+                    ip_l_of_e = numerics.interpolate.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]), kind=kind)
+                    ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=False, kind=kind)
+                    ip_r_of_l = numerics.interpolate.flexible_interpolator(Lcirc, rcirc, logy=False, kind=kind)
 
                 return ip_l_of_e, ip_r_of_e, ip_r_of_l, (rcirc, Ecirc, Lcirc)
 
@@ -680,7 +680,7 @@ class RadialProfile(Configureable):
                   
         returns : rtid, the tidal radius and possibly its potential value
         """
-        return find_boundary(self, getphi=getphi, warning=warning, eps=eps, maxiter=maxiter)
+        return numerics.search.find_boundary(self, getphi=getphi, warning=warning, eps=eps, maxiter=maxiter)
     
     def tidal_lmax_radius(self, getphi=False, getl=False, warning=True, eps=1e-12, maxiter=200):
         """The radius of maximum circular angular momentum
@@ -699,7 +699,7 @@ class RadialProfile(Configureable):
                   
         returns : rlmax,  and possibly phimax and lmax
         """
-        res = find_boundary(self, getphi=getphi, warning=warning, eps=eps, mode="lmax", maxiter=maxiter)
+        res = numerics.search.find_boundary(self, getphi=getphi, warning=warning, eps=eps, mode="lmax", maxiter=maxiter)
         if getl:
             rlmax = np.atleast_1d(res)[0]
             if rlmax < self.scale("rmax"):
@@ -729,10 +729,10 @@ class RadialProfile(Configureable):
         """
         
         if mode == "self":
-            rmax = find_boundary(self, warning=warning, eps=eps, mode="vmaxself", maxiter=maxiter)
+            rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmaxself", maxiter=maxiter)
             vmax = self.self_vcirc(rmax)
         elif mode == "full":
-            rmax = find_boundary(self, warning=warning, eps=eps, mode="vmax", maxiter=maxiter)
+            rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmax", maxiter=maxiter)
             vmax = self.vcirc(rmax)
         else:
             raise ValueError("Unknown mode %s" % mode)
@@ -792,7 +792,7 @@ class RadialProfile(Configureable):
             nbins = self.scale("nbins_circ")
             
         ri = np.logspace(np.log10(rmin), np.log10(rmax), nbins)
-        res = mathtools.cum_simpson(dA_dlogr, np.log(ri))
+        res = numerics.integrate.cum_simpson(dA_dlogr, np.log(ri))
         
         if cumulative:
             return ri, res
@@ -824,7 +824,7 @@ class RadialProfile(Configureable):
             rmax = self.scale("rmax") #* 1e8
         emin, emax = self.potential(np.array((rmin, rmax)))
         
-        rres = mathtools.vectorized_binary_search(func, rmin, rmax, niter=100, mode="sqrt")
+        rres = numerics.search.vectorized_binary_search(func, rmin, rmax, niter=100, mode="sqrt")
         
         return rres
     

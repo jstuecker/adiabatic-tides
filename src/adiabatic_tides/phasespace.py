@@ -1,6 +1,6 @@
 import numpy as np
-from . import mathtools
 from .config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
+from . import numerics
 
 class PhaseSpace():
     def __init__(self, anisotropy=np.nan):
@@ -58,12 +58,12 @@ class EddingtonPhaseSpace(PhaseSpace):
         
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
-        e,f1 = mathtools.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        e,f1 = numerics.integrate.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
         self.q["phasespace_r"] = ri[sel]
         self.q["phasespace_e"] = e
         self.q["phasespace_f"] = f1
 
-        self.ip["f1"] = mathtools.define_interpolator(e, f1, method="pchip", bounds="zero")
+        self.ip["f1"] = numerics.interpolate.define_interpolator(e, f1, method="pchip", bounds="zero")
 
     def f_of_e(self, e):
         self._setup_f()
@@ -98,8 +98,8 @@ class InterpolatorActionMap(ActionMap):
         rpmin, rpmax, facmax = self.profile.rmin(), self.profile.rmax(), cfg_act.rafac_max*cfg_gen.scale_geometry
 
         # table = mathtools.define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra)
-        table = mathtools.define_peri_apo_table(rpmin, rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra, facmax=facmax)
-        self.ip["rp_ra_of_jl"] = mathtools.setup_rperi_rapo_of_jl(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, nintegrate_action=cfg_act.nintegrate)
+        table = numerics.interpolate.define_peri_apo_table(rpmin, rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra, facmax=facmax)
+        self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, nintegrate_action=cfg_act.nintegrate)
 
     def rp_ra_of_jl(self, j, l):
         self.setup_rp_ra_of_jl()
