@@ -10,7 +10,7 @@ from adiabatic_tides.convergence_plots import plot_perisplit_integration, plot_p
 # Tests in this module are slow and do not make assertions
 # rather they add plots to the report that can be checked manually
 
-basedir = "tests/plots"
+basedir = "plots"
 def savefig(fig, dir, filename):
     path = os.path.join(basedir, dir, filename)
     os.makedirs(os.path.dirname(path), exist_ok=True)
