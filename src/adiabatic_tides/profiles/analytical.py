@@ -465,38 +465,6 @@ class RadialTidalProfile(RadialProfile):
         return self.alpha * np.ones_like(r)
     def to_string(self):
         return "tid_alpha=%.5e" % self.alpha
-    
-class CompositeProfile(RadialProfile):
-    def __init__(self, *profiles, idmain=0):
-        """Create a profile by combining several profiles.
-        
-        All functions where it makes sense (e.g. density, potential) 
-        will return the sum of all profile components.
-        
-        idmain : the index of the main profile which is used for setting
-                 the r0 scale
-        """
-        super().__init__()
-        self.profiles = profiles
-        self.idmain = idmain
-    def density(self, r):
-        """Density in Msol/Mpc**3"""
-        return np.sum([prof.density(r) for prof in self.profiles], axis=0)
-    def drhodr(self, r):
-        """Radial derivative of the density"""
-        return np.sum([prof.drhodr(r) for prof in self.profiles], axis=0)
-    def m_of_r(self, r):
-        """The mass contained inside radius r"""
-        return np.sum([prof.m_of_r(r) for prof in self.profiles], axis=0)
-    def potential(self, r, zero_at_zero=False):
-        """The gravitational potential"""
-        return np.sum([prof.potential(r, zero_at_zero=zero_at_zero) for prof in self.profiles], axis=0)
-    def r0(self):
-        """A scale radius"""
-        return self.profiles[self.idmain].r0()
-    def daccdr(self, r):
-        """The radial derivative of the acceleration"""
-        return np.sum([prof.daccdr(r) for prof in self.profiles], axis=0)
 
 def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, warning=True, mode="phimax"):
     """Finds a special boundary (e.g. tidal radius or vmax radius) of a RadialProfile
