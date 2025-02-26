@@ -2,6 +2,7 @@ import numpy as np
 from .import RadialProfile
 from ..phasespace import AnalyticPhaseSpace
 from scipy.special import gamma as GammaF
+from scipy.optimize import brentq
 
 # Helper functions
 
@@ -61,9 +62,26 @@ def MvirOfRvir(rvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
         
     return rhoref * 4.*np.pi/3. * delta * rvir**3
 
+def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200.):
+    """Converts the central density and scale radius to concentration and virial mass"""
+    def rho_ratio_of_c(c): # mean enclosed density at r200c in units of rhoc
+        return 3*(-c/(c + 1) + np.log(c + 1))/c**3
+    
+    G = 43.0071057317063 * 1e-10  #  Grav. constant in Mpc (km/s)^2 / Msol
+    rhocrit = 3.0 / (8.0 * np.pi * G) * (1e2*h)**2
+
+    # Function that has zero-point at the correct concentration
+    def f(c): return rho_ratio_of_c(c)*rhoc - delta*rhocrit
+
+    assert rhoc > rhocrit, f"The central density seems unreasonably low... rhoc/rhocrit={rhoc/rhocrit}"
+
+    c = brentq(f, 1e-10, 1e10) # Find the zero-point
+    M = 4*np.pi*rhoc*rs**3 * (np.log(1+c) - c/(1+c))
+    
+    return c, M
+
 
 class NFWProfile(RadialProfile):
-
     def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rminrs=1e-15, rmaxrs=1e15, **config):
         """Set up an NFW profile with a given mass and concentration
         
@@ -95,6 +113,12 @@ class NFWProfile(RadialProfile):
         self.phi0 = - 4.*np.pi*self.G*self.rhoc*self.rs**2
         
         self.phasespace_initialized =  False
+
+    @classmethod
+    def from_rhoc_rs(cls, rhoc, rs, rminrs=1e-15, rmaxrs=1e15, h=0.679, **kwargs):
+        """Create an NFW profile from characteristic density and scale radius"""
+        conc, m200c = rhoc_rs_to_conc_m200c(rhoc, rs, h=h)
+        return cls(conc, m200c=m200c, rminrs=rminrs, rmaxrs=rmaxrs, h=h, **kwargs)
 
     def density(self, r):
         """Density in Msol/Mpc**3"""
