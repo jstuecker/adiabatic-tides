@@ -477,6 +477,7 @@ class RadialProfile(Configureable):
         
         returns: r, sigmar2   radii and radial velocity dispersion
         """
+        print("This function is outdated, better use 'compute_velocity_dispersions' instead")
         
         if callable(anisotropy):
             faniso = anisotropy
@@ -508,6 +509,32 @@ class RadialProfile(Configureable):
             rhosigr2[i] = rhosigr2[i-1] +  drhosigr2_dlogr(logr[i-1], sigr2)*dlogr
             
         return np.exp(logr[::-1]), (rhosigr2/density(np.exp(logr)))[::-1]
+    
+    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40):
+        """Integrates a function over velocity-space through peri-apo-space discretization
+        f_of_rp_ra : the phase space density (dM/d3x/d3v) with peri and apo centers as arguments
+        """
+        if f_of_rp_ra is None:
+            f_of_rp_ra = self.f_of_rperi_rapo
+
+        is_limited = numerics.search.profile_is_limited(self.accr, rpmin=self.rmin())
+        if is_limited:
+            rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin())
+            rperirange, raporange = (self.rmin(), rlmax), (self.rmin(), ramax_of_rp)
+        else:
+            rperirange, raporange = (self.rmin(), np.infty), (self.rmin(), np.infty)
+
+        return numerics.integrate.integrate_f_paspace(f_of_rp_ra, self.potential, self.accr, r, N=nintegrate,
+                                                      rperirange=rperirange, raporange=raporange, 
+                                                      vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment)
+    
+    def compute_velocity_dispersions(self, r, nintegrate=40):
+        """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
+        rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate)
+        rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate)
+        rho = self.compute_pa_space_integral(r)
+
+        return rho_x_vr2/rho, rho_x_vt2/rho
 
     def _initialize_tidal_radius(self, reinit=False):
         """Calcualtes the maximum of the potential and of the angular momentum"""
