@@ -23,7 +23,8 @@ def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=
     table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=ninterp)
     f_of_rperi_rapo = numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi_tot, table, fpa_below=fpa_below)
     rnew = np.geomspace(rpmin,rtid,nr)
-    rhonew = numerics.integrate.integrate_f_limited_paspace(f_of_rperi_rapo, phi_tot, accr_tot, ramax_of_rp, rnew, rperirange=(0, rlmax), N=nintegrate)
+
+    rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi_tot, accr_tot, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
 
     if getf:
         return rnew, rhonew, f_of_rperi_rapo

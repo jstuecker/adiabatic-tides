@@ -148,7 +148,6 @@ class RadialProfile(Configureable):
         """Abstract: The gravitational potential. By default normed to 0 at infinity"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
-    
     def sample_particles(self, ntot=10000, mode="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
@@ -184,10 +183,10 @@ class RadialProfile(Configureable):
 
         p = {}
 
-        rho = numerics.integrate.integrate_f_paspace(self.f_of_el, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
+        rho = numerics.integrate.integrate_f_paspace(self.f_of_rperi_rapo, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
         p["r"],p["m"] = numerics.sample.sample_rimi_from_density(ri, rho, ntot)
 
-        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(self.f_of_el, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
+        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(self.f_of_rperi_rapo, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
         p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
 
         p["rrho"] = ri
@@ -509,7 +508,7 @@ class RadialProfile(Configureable):
             rhosigr2[i] = rhosigr2[i-1] +  drhosigr2_dlogr(logr[i-1], sigr2)*dlogr
             
         return np.exp(logr[::-1]), (rhosigr2/density(np.exp(logr)))[::-1]
-    
+
     def _initialize_tidal_radius(self, reinit=False):
         """Calcualtes the maximum of the potential and of the angular momentum"""
         if (not self._tidal_radius_initialized) | reinit:

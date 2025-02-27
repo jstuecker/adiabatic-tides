@@ -140,7 +140,7 @@ def test_rho_reconstruction(profile, embed_plot):
         r = np.logspace(-0.8,6,200)
     else:
         r = np.logspace(-7,7,200)
-    rho = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, prof.potential, prof.accr, r, farguments_peri_apo=True)
+    rho = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, prof.potential, prof.accr, r)
 
     embed_plot(plot_relative_error(rho, prof.density(r), 1e-3))
 
@@ -177,7 +177,7 @@ def test_numerical_rho_reconstruction(profile, embed_plot):
         r = np.logspace(-0.8,6,200)
     else:
         r = np.logspace(-7,7,200)
-    rho = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, potential, prof.accr, r, farguments_peri_apo=True)
+    rho = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, potential, prof.accr, r)
 
     embed_plot(plot_relative_error(rho, prof.density(r), 1e-2))
 

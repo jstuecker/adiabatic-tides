@@ -208,7 +208,7 @@ def test_known_fel_integration(profile, embed_plot):
     N = 55
     r = np.logspace(-1,5,400)
     # rho = at.numerics.integrals.integrate_fofel_adaptive(prof.f_of_el, prof.potential, r, N)
-    rho = at.numerics.integrate.integrate_f_paspace(prof.f_of_el, prof.potential, prof.accr, r, N)
+    rho = at.numerics.integrate.integrate_f_paspace(prof.f_of_rperi_rapo, prof.potential, prof.accr, r, N)
 
     rhoref = prof.density(r)
 

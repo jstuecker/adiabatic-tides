@@ -585,12 +585,14 @@ def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=1
     
     return rho
 
-def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), farguments_peri_apo=False, vrmoment=0, vtmoment=0, vmoment=0):
+def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), vrmoment=0, vtmoment=0, vmoment=0):
     """Integrates a distribution function, discretizing the integral in "paspace"
     paspace is the space of possible peri- and apocenter radii and maps one to one
     to (E,L) space
 
-    f : function f(E,L) or f(rp, ra) if farguments_peri_apo is True
+    raporange: each component can be a constant or a function depending on rp
+
+    f : function f(rp, ra)
     """
     r = np.array(r)
     phir = pot(r)
@@ -606,12 +608,9 @@ def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty)
                 valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
 
             fval = np.zeros_like(e)
-            if farguments_peri_apo:
-                rps, ras = np.broadcast_arrays(rp[...,np.newaxis], ra)
-                fval[valid] = f(rps[valid], ras[valid])
-            else:
-                fval[valid] = f(e[valid], l[valid])
 
+            rps, ras = np.broadcast_arrays(rp[...,np.newaxis], ra)
+            fval[valid] = f_of_rp_ra(rps[valid], ras[valid])
 
             if vmoment != 0:
                 v = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis], 0, None))
@@ -623,54 +622,24 @@ def integrate_f_paspace(f, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty)
 
             return np.divide(fval * ldlde, vr, out=np.zeros_like(fval), where=valid)
 
-        a = np.clip(raporange[0], r, None)[...,np.newaxis]
-        if raporange[1] == np.infty:
+        if callable(raporange[0]):
+            a = np.clip(raporange[0](rp), r[...,np.newaxis], None)
+        else:
+            a = np.clip(raporange[0], r, None)[...,np.newaxis]
+        if callable(raporange[1]):
+            b = np.clip(raporange[1](rp), r[...,np.newaxis], None)
+        else:
+            b = np.clip(raporange[1], r, None)[...,np.newaxis]
+
+        if np.max(raporange[1]) == np.infty:
             I = integrate_double_exponential_a_inf(integrand, a=a, N=N2,c=1, tmax=4., xscale=a)
         else: # We have a finite upper limit
-            b = np.clip(raporange[1], r, None)[...,np.newaxis]
             I = integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
 
         return I
     
     a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
     I = integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
-    return 4.*np.pi*I  / r**2
-
-def integrate_f_limited_paspace(f_of_rpra, pot, accr, ramax_of_rp, r, N=32, N2=None, rperirange=(0, np.infty)):
-    """
-    f : function f(rp, ra) 
-    """
-    r = np.array(r)
-    phir = pot(r)
-    if N2 is None:
-        N2 = N
-
-    def integrate_ra_given_rp(rp):
-        def integrand(ra):
-            rps, ras = np.broadcast_arrays(rp[...,np.newaxis], ra)
-            valid = (r[...,np.newaxis,np.newaxis] > rps) & (r[...,np.newaxis,np.newaxis] < ras)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                e,l,ldlde = utility.Jacobian_ldlde_drpdra(pot, accr, rp[...,np.newaxis], ra, get_el=True)
-                vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
-
-                valid = valid & (ldlde > 0.) & (vr > 0.) & (l > 0.)
-
-            fval = np.zeros_like(e)
-            
-            fval[valid] = f_of_rpra(rps[valid], ras[valid])
-
-            return np.divide(fval * ldlde, vr, out=np.zeros_like(fval), where=valid)
-
-        a = r[...,np.newaxis]
-        b = np.clip(ramax_of_rp(rp), r[...,np.newaxis], None)
-
-        I = integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
-
-        return I
-    
-    a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
-    I = integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
-
     return 4.*np.pi*I  / r**2
 
 # ================= Methods for calculating Actions  ======================= #

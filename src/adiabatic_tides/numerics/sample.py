@@ -424,7 +424,7 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
 
     return es, ls, vrs
 
-def sample_rp_ra_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
+def sample_rp_ra_given_r_metropolis_perisplit(f_of_rp_ra, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
     """Samples particle's peri-apo-centers given their radii and an allowed range of peri-center"""
     assert (np.min(rs) >= rperirange[0]) & (rperirange[1] >= rperirange[0])
 
@@ -436,7 +436,7 @@ def sample_rp_ra_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_cha
         valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
 
         f = np.zeros_like(e)
-        f[valid] = f_of_el(e[valid], l[valid])
+        f[valid] = f_of_rp_ra(rp[valid], ra[valid])
 
         return np.divide(f * ldlde, vr, out=np.zeros_like(f), where=valid)
 

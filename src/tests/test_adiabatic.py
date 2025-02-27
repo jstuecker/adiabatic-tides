@@ -36,15 +36,13 @@ def test_single_step_tidal_convergence(profile, embed_plot):
         r = np.logspace(-3,3,100)
     else:
         r = np.logspace(-10,3,100)
-    rhoref = at.numerics.integrate.integrate_f_limited_paspace(f_of_rperi_rapo, prof_t.potential, prof_t.accr, ramax_of_rp, r, N=80, rperirange=(0, rlmax))
 
-    rho = at.numerics.integrate.integrate_f_limited_paspace(f_of_rperi_rapo, prof_t.potential, prof_t.accr, ramax_of_rp, r, rperirange=(0, rlmax))
+    rhoref = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, prof_t.potential, prof_t.accr, r, N=80, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
+    rho = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, prof_t.potential, prof_t.accr, r, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
 
     rhoscale = prof.density(r)
     embed_plot(plot_relative_error(rho, rhoref, 5e-3, fscale=rhoscale))
     check_max_relative_error(rho, rhoref, 5e-3, fscale=rhoscale)
-
-    # check_max_relative_error(rho[r<rt*1e-2], rhoref[r<rt*1e-2], 1e-3, fscale=rhoscale[r<rt*1e-2])
 
 @pytest.mark.slow
 @pytest.mark.parametrize("profile", ["nfw", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8", "aniso0.2pow1.5", "aniso-0.2pow1.0"])
