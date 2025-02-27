@@ -151,10 +151,10 @@ class AdiabaticTransformation(Configureable):
                 remnants[label] = self.assemble_single_profile(mode=label, iter=iter)
             for label in self.prof_initial.external:
                 remnants[label] = self.prof_initial.profiles[label]
-            return CompositeProfile(**remnants, perturbation=self.prof_pert, external=self.prof_initial.external + ("perturbation",))
+            return CompositeProfile(**remnants, perturbation=self.prof_pert, external=self.prof_initial.external + ("perturbation",), phase_space_mode="children")
         else:
             remnant = self.assemble_single_profile(iter=iter)
-            return CompositeProfile(remnant=remnant, perturbation=self.prof_pert, external=("perturbation",))
+            return CompositeProfile(remnant=remnant, perturbation=self.prof_pert, external=("perturbation",), phase_space_mode="children")
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1, **configs):
@@ -198,7 +198,7 @@ class AdiabaticResultProfile(RadialProfile):
         return self.ip["rho"](r)
     def m_of_r(self, r):
         return self.ip["m"](r)
-    def potential(self, r):
+    def potential(self, r, zero_at_zero=True):
         return self.ip["phi"](r)
     def f_of_rperi_rapo(self, rp, ra):
         return self.ip["f_of_rp_ra"](rp, ra)

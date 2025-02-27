@@ -48,8 +48,6 @@ class EddingtonPhaseSpace(PhaseSpace):
 
     @only_on_change(attributes=("potential","density"), cfg_groups=('eddington', 'general'))
     def _setup_f(self):
-        print("Recalculating phasespace")
-
         cfg_ps : EddingtonConfig = self.cfg["eddington"]
         cfg_gen : GeneralConfig = self.cfg["general"]
 

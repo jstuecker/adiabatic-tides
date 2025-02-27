@@ -528,7 +528,7 @@ class RadialProfile(Configureable):
                                                       rperirange=rperirange, raporange=raporange, 
                                                       vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment)
     
-    def compute_velocity_dispersions(self, r, nintegrate=40):
+    def compute_vr2_vt2(self, r, nintegrate=40):
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
         rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate)
         rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate)
@@ -764,13 +764,7 @@ class RadialProfile(Configureable):
     
     def E_L_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the energy and angular-momentum of the corresponding orbit"""
-        phip = self.potential(rperi)
-        phia = self.potential(rapo)
-
-        e = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
-        l = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
-        
-        return e, l
+        return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo)
         
     def rcirc_eta_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the radius where a circular orbit
