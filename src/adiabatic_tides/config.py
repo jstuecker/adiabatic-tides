@@ -94,6 +94,7 @@ class ActionsConfig:
     nbins_ra: int = 100 # zero means that it uses the same as rp
     nsteps_newton: int = 5
     rafac_max: float = 1e10
+    rpfac_eps: float = 1e-5
 
 @dataclass
 class AdiabaticConfig:
