@@ -138,6 +138,8 @@ def test_boundaries_orbits(profile, embed_plot):
 
 @pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
 def test_tidal_boundary_detection(profile, embed_plot):
+    np.seterr(all='raise', under="ignore")
+    
     prof0 = tc.standard_profiles(profile)
     r = np.logspace(-10, 10, 1000)
     nprof = at.profiles.NumericalProfile(r, prof0.density(r))
