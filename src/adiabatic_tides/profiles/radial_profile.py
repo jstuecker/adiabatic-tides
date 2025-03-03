@@ -3,6 +3,14 @@ from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, Ac
 from ..config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 import time
 from .. import numerics
+import functools
+
+def deprecated(func):
+    @functools.wraps(func)
+    def new_func(*args, **kwargs):
+        raise DeprecationWarning("This function is deprecated, please use a different one")
+        return func(*args, **kwargs)
+    return new_func
 
 
 class RadialProfile(Configureable):
@@ -54,6 +62,12 @@ class RadialProfile(Configureable):
         return self.cfg["general"].rmin / self.cfg["general"].scale_geometry
     def rmax(self):
         return self.cfg["general"].rmax * self.cfg["general"].scale_geometry
+    def rapo_max(self):
+        """The maximal radius at which orbital apo-centers can lie
+        Either corresponds to rmax or to the tidal radius, depending on the profile
+        """
+        rtid, rmax = self.rtid(), self.rmax()
+        return rtid if rtid < rmax else rmax
 
     def reset_interpolators(self):
         """Resets the interpolators, like j_of_el, e_of_kl etc...
@@ -535,7 +549,24 @@ class RadialProfile(Configureable):
         rho = self.compute_pa_space_integral(r)
 
         return rho_x_vr2/rho, rho_x_vt2/rho
+    
+    def rtid(self):
+        """Tidal radius corresponding to the maximum of the potential"""
+        opt = numerics.search.maximize_scalar(lambda r: self.potential(r), (self.rmin(), self.rmax()))
+        return opt.x
+    
+    def rlmax(self):
+        """Radius with the maximum possible angular momentum"""
+        opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)*r, (self.rmin(), self.rapo_max()))
+        return opt.x
+    
+    def rmax_vmax(self):
+        """Radius and velocity where the circular velocity is maximal"""
+        opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)/r, (self.rmin(), self.rmax()))
+        return opt.x, self.vcirc(opt.x)
 
+
+    @deprecated
     def _initialize_tidal_radius(self, reinit=False):
         """Calcualtes the maximum of the potential and of the angular momentum"""
         if (not self._tidal_radius_initialized) | reinit:
@@ -557,6 +588,7 @@ class RadialProfile(Configureable):
                 
             self._tidal_radius_initialized = True
     
+    @deprecated
     def _initialize_rel_circ_interpolators(self, reinit=False):
         """"""
         
@@ -596,6 +628,7 @@ class RadialProfile(Configureable):
 
             self._rel_circ_initialized = True
     
+    @deprecated
     def rcirc_rmax_of_e(self, e, reinit=False):
         """The radii where a circular orbit with energy e is possible
         
@@ -627,6 +660,7 @@ class RadialProfile(Configureable):
 
         return lmin, lmax
     
+    @deprecated
     def lminmax_of_e(self, e, reinit=False):
         """The minimum and maximum angular momentum possible for energy e
 
@@ -658,6 +692,7 @@ class RadialProfile(Configureable):
 
         return lmin, lmax
     
+    @deprecated
     def rcirc_rmax_of_l(self, l, reinit=False):
         """The radius of the minimum and maximum of the effective potential
         phieff(r) = phi(r) + 0.5 L**2/r**2
@@ -692,6 +727,7 @@ class RadialProfile(Configureable):
 
         return rmin, rmax
     
+    @deprecated
     def tidal_boundary(self, getphi=False, warning=True, eps=1e-12, maxiter=200):
         """The tidal radius -- corresponding to a maximum in the potential
         
@@ -706,6 +742,7 @@ class RadialProfile(Configureable):
         """
         return numerics.search.find_boundary(self, getphi=getphi, warning=warning, eps=eps, maxiter=maxiter)
     
+    @deprecated
     def tidal_lmax_radius(self, getphi=False, getl=False, warning=True, eps=1e-12, maxiter=200):
         """The radius of maximum circular angular momentum
         
@@ -733,34 +770,34 @@ class RadialProfile(Configureable):
             return list(np.atleast_1d(res)) + [lmax]
         else:
             return res
+    
+    # def rmax_vmax(self, mode="self", warning=True, eps=1e-12, maxiter=200):
+    #     """The radius and the circular velocity where vcirc is maximual
         
-    def rmax_vmax(self, mode="self", warning=True, eps=1e-12, maxiter=200):
-        """The radius and the circular velocity where vcirc is maximual
+    #     This is the maximum in vcirc(r)*r. This is the radius where the bound
+    #     orbit with highest energy and highest angular momentum is possible.
+    #     Will be infty for monothonic profiles
         
-        This is the maximum in vcirc(r)*r. This is the radius where the bound
-        orbit with highest energy and highest angular momentum is possible.
-        Will be infty for monothonic profiles
-        
-        mode : if "self" will only consider self-gravity,
-               if "full" will also consider the tidal field (if exists)
-        warning : if True, prints warnings if rtid-> infty. I.e. if the
-                  potential has no tidal radius
-        eps : desired relative accuracy
-        maxiter : when to stop iterating, if the desired rel. accuracy is never
-                  reached
+    #     mode : if "self" will only consider self-gravity,
+    #            if "full" will also consider the tidal field (if exists)
+    #     warning : if True, prints warnings if rtid-> infty. I.e. if the
+    #               potential has no tidal radius
+    #     eps : desired relative accuracy
+    #     maxiter : when to stop iterating, if the desired rel. accuracy is never
+    #               reached
                   
-        returns : rlmax,  and possibly phimax and lmax
-        """
+    #     returns : rlmax,  and possibly phimax and lmax
+    #     """
         
-        if mode == "self":
-            rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmaxself", maxiter=maxiter)
-            vmax = self.self_vcirc(rmax)
-        elif mode == "full":
-            rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmax", maxiter=maxiter)
-            vmax = self.vcirc(rmax)
-        else:
-            raise ValueError("Unknown mode %s" % mode)
-        return rmax,vmax
+    #     if mode == "self":
+    #         rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmaxself", maxiter=maxiter)
+    #         vmax = self.self_vcirc(rmax)
+    #     elif mode == "full":
+    #         rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmax", maxiter=maxiter)
+    #         vmax = self.vcirc(rmax)
+    #     else:
+    #         raise ValueError("Unknown mode %s" % mode)
+    #     return rmax,vmax
     
     def E_L_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the energy and angular-momentum of the corresponding orbit"""

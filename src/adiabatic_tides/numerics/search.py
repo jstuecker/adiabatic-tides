@@ -1,5 +1,6 @@
 import numpy as np
 from .utility import save_divide
+from scipy.optimize import minimize_scalar
 
 # ================== Generic Root Finding functions ======================== #
 
@@ -235,3 +236,18 @@ def profile_is_disrupted(accr, rpmin=1e-10):
 def profile_is_limited(accr, rpmin=1e-10):
     rtid = find_single_root(accr, rpmin, warning=False)
     return (rtid < np.infty)
+
+def maximize_scalar(f, bounds, boundary_eps=1e-1):
+    opt = minimize_scalar(lambda x: -f(x), bounds=bounds)
+    opt.fun = -opt.fun
+
+    if not opt.success:
+        pass
+    elif opt.x < bounds[0] +  np.abs(bounds[0]) * boundary_eps:
+        opt.x, opt.fun, opt.succes = np.nan, np.nan, False
+        opt.message = "Lower boundary reached during optimization"
+    elif opt.x > bounds[1] -  np.abs(bounds[1]) * boundary_eps:
+        opt.x, opt.fun, opt.succes = np.nan, np.nan, False
+        opt.message = "Upper boundary reached during optimization"
+    
+    return opt

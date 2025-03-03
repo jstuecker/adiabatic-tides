@@ -135,3 +135,32 @@ def test_boundaries_orbits(profile, embed_plot):
 
         js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(p.potential, rp, ra, invalid_vr_to_zero=True)
         assert np.all(js > 0)
+
+@pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
+def test_tidal_boundary_detection(profile, embed_plot):
+    prof0 = tc.standard_profiles(profile)
+    r = np.logspace(-10, 10, 1000)
+    nprof = at.profiles.NumericalProfile(r, prof0.density(r))
+
+    for prof in prof0, nprof:
+
+        assert np.isnan(prof.rtid())
+        assert np.isnan(prof.rlmax())
+
+        rmax, vmax = prof.rmax_vmax()
+        print(f"rmax {rmax:.2g}, vmax: {vmax:.2g}")
+
+        if isinstance(prof0, at.profiles.PowerlawProfile):
+            # Powerlaw profiles should have undefined rmax vmax
+            assert np.isnan(rmax) and np.isnan(vmax)
+        else:
+            assert rmax > 0 and vmax > 0
+
+        for rt in 1e-2,1,1e2:
+            # With tide boundaries should be defined
+            tprof = at.profiles.RadialTidalProfile(np.abs(prof0.accr(rt)/rt))
+            cprof = at.profiles.CompositeProfile(mass=prof, tide=tprof, external=("tide",))
+
+            assert np.abs(cprof.rtid() / rt - 1) < 1e-3
+            assert cprof.rlmax() <= cprof.rtid()
+            assert cprof.rmax_vmax()[0] <= cprof.rtid()

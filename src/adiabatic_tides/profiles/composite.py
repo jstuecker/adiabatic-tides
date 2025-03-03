@@ -3,6 +3,7 @@ from ..phasespace import EddingtonPhaseSpace
 from ..config import only_on_change
 import numpy as np
 from functools import partial
+from ..numerics.search import maximize_scalar
 
 def combine_functions(f, mode, internal, external, *args, **kwargs):
     if mode == "alldict":
@@ -81,6 +82,11 @@ class CompositeProfile(RadialProfile):
     def accr(self, r, mode="total"):
         """Radial Acceleration (negative means pull towards center)"""
         return  -self.G * self.m_of_r(r, mode=mode) / r**2
+
+    def rmax_vmax(self, mode="total"):
+        """Radius and velocity where the circular velocity is maximal"""
+        opt = maximize_scalar(lambda r: self.m_of_r(r, mode=mode)/r, (self.rmin(), self.rmax()))
+        return opt.x, self.vcirc(opt.x, mode=mode)
     
     def _initialize_phasespace(self):
         if self._phase_space_initialized:
