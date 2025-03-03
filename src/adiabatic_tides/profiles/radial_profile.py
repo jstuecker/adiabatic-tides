@@ -409,6 +409,13 @@ class RadialProfile(Configureable):
             nintegrate = int(self.cfg["actions"].nintegrate * self.cfg["general"].scale_accuracy)
         return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, invalid_vr_to_zero=invalid_vr_to_zero)
 
+    def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None):
+        """Numerically infer the radial orbital period time"""
+        if nintegrate is None:
+            nintegrate = int(self.cfg["actions"].nintegrate * self.cfg["general"].scale_accuracy)
+        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate)
+        return djde*2.*np.pi
+
     def density_of_states(self, energy):
         """Returns the density of states g(E) associated with some energy.
         
@@ -431,55 +438,6 @@ class RadialProfile(Configureable):
         
         return (integral*np.pi) * (4.*np.pi)**2
         
-    
-    def radial_period(self, particle, exceptions="warning"):
-        """Infers the time needed for a radial period of the orbit of a single particle
-        
-        cannot be broadcasted to more than one particle
-        
-        particles : Tuple defining a particle either given by 
-                    (pos, vel) -- positions and velocities or by
-                    (E, L) -- Energy, angular momentum or by
-                    (r, E, L) -- radius, Energy, angular momentum 
-                    Each can be vector-like. Not providing r decreases speed
-        exceptions : If true exceptions may be thrown if there is a problem with determining
-               rapo or rperi
-        
-        returns : the time needed for one full radial orbit
-        """
-        if len(particle) == 2:
-            if np.shape(np.atleast_1d(particle[0]))[-1] == 3:
-                pos, vel = particle
-                r, E, L = self.posvel_to_rEL(pos, vel)
-            else:
-                E, L = particle
-                r, _rmax = self.rcirc_rmax_of_l(L)
-        else:
-            r, E, L = particle
-        
-        def Tr_integrand(r, E, L):
-            SQ = 2*E - 2*self.potential(r) - L**2 / r**2
-            
-            if SQ <= 0.:
-                res = 0.
-            else:
-                res = 2./np.sqrt(np.clip(SQ, 0., None))
-
-            return res
-
-        rperi = self.rperi((r, E, L), exceptions=exceptions)
-        rapo = self.rapo((r, E, L), exceptions=exceptions)
-        
-        assert rperi < rapo, "radial period undefined for circular orbits"
-        
-        assert np.max(np.isnan(rapo)) == False
-        assert np.max(np.isnan(rperi)) == False
-
-        from scipy.integrate import quad
-        
-        Tr, err = quad(Tr_integrand, rperi, rapo, args=(E,L))
-
-        return Tr
     
     def vdispr2_via_jeans_integration(self, logr=None, anisotropy=0., density=None):
         """Obtain the radial velocity dispersion squared through integration of the 1st Jeans equation
