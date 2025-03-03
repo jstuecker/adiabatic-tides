@@ -305,12 +305,6 @@ class PowerlawProfile(RadialProfile):
 
     def r0(self):
         return 1.0
-    
-    def _initialize_numerical_scales(self):
-        super()._initialize_numerical_scales()
-
-        self._sc["rmin"] = 1e-12
-        self._sc["rperimin"] = 1e-12
 
     def to_string(self):
         return "alpha=%.3f_beta=%.5e_rhoc=%.5e" % (self.alpha, self.anisotropy, self.rhoc)

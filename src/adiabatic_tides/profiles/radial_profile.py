@@ -26,22 +26,13 @@ class RadialProfile(Configureable):
         don't initialize!"""
 
         self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
-        self.is_disrupted = False
         self.potential_zero_at_infty = True # should replace this by a function that returns the potential zero-point
-        self._f_initialized = False
 
         super().__init__(**configs)
         if rmin is not None:
             self.cfg["general"].rmin = rmin
         if rmax is not None:
             self.cfg["general"].rmax = rmax
-
-        self.q = {}
-        self.ip = {}
-        
-        self.reset_interpolators()
-
-        self._sc = None
 
         self.set_phase_space(phase_space, anisotropy=anisotropy)
         
@@ -68,76 +59,6 @@ class RadialProfile(Configureable):
         """
         rtid, rmax = self.rtid(), self.rmax()
         return rtid if rtid < rmax else rmax
-        
-    def _initialize_numerical_scales(self):
-        """Sets some default values for numerical scales"""
-        
-        self._sc = {}
-        self._sc["rmin"] = self.r0() * 1e-12
-        self._sc["rmax"] = self.r0() * 1e5
-        self._sc["nbins_circ"] = 500
-        self._sc["drfac_finitediff"] = 1e-5
-        
-        self._sc["rperimin"] = self.r0() * 1e-12
-        self._sc["rapomax"] = self.r0() * 1e10
-
-        self._sc["pss_rbins"] = 2000
-        self._sc["pss_ebins"] = 200
-        self._sc["pss_e_analytic_low"] = -0.999
-        self._sc["pss_e_analytic_up"] = -0.1
-        
-        self._sc["ip_j_of_el_nbinsE"] = 250
-        self._sc["ip_j_of_el_nbinsL"] = 100
-        
-        self._sc["ip_e_of_jl_nbinsE"] = 1000
-        self._sc["ip_e_of_jl_nbinsL"] = 100
-        
-        self._sc["log_lmin"] = -7
-        self._sc["log_emin"] = -10
-        self._sc["log_rmin"] = -5
-        
-        self._sc["nbins_jr"] = 50
-        
-        self._sc["niter_apoperi"] = 30
-        
-        self._sc["log_emin_up"] = -4
-        self._sc["fintegration_nstepsL"] = 101
-        self._sc["fintegration_nstepsE"] = 201
-        
-        self._sc["rel_interpolation_kind"] = "cubic"
-    
-    def set_numerical_scales(self, **kwargs):
-        """Sets numerical scales
-        
-        The default numerical scales are usually good enough. Only change the
-        scales when you really need extra precision.
-        
-        Use for example like this:
-        .set_numerical_scales(nbins_jr=100, fintegration_nstepsE=200)
-        
-        The list of possible keywords can be seen in the code of 
-        ._initialize_numerical_scales()
-        """
-        # assert 0
-        if self._sc is None:
-            self._initialize_numerical_scales()
-        for kw in kwargs:
-            assert kw in self._sc, "scale with name '%s' unknown" % kw
-            self._sc[kw] = kwargs[kw]
-            
-    def scaledict(self):
-        """A dictionary containg the value of all numerical scales"""
-        # assert 0
-        if self._sc is None:
-            self._initialize_numerical_scales()
-        return self._sc
-            
-    def scale(self, name):
-        """Query the value of a numerical scale"""
-        # assert 0
-        if self._sc is None:
-            self._initialize_numerical_scales()
-        return self._sc[name]
 
     #----------- Core functions that every profile should implement --------------#
     def density(self, r): # The density
