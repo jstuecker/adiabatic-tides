@@ -166,3 +166,53 @@ def test_tidal_boundary_detection(profile, embed_plot):
             assert np.abs(cprof.rtid() / rt - 1) < 1e-3
             assert cprof.rlmax() <= cprof.rtid()
             assert cprof.rmax_vmax()[0] <= cprof.rtid()
+
+@pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
+def test_rcirc_finding(profile, embed_plot):
+    np.seterr(all='raise', under="ignore")
+    
+    prof0 = tc.standard_profiles(profile)
+    r = np.logspace(-10, 10, 1000)
+    nprof = at.profiles.NumericalProfile(r, prof0.density(r))
+
+    for prof in prof0, nprof:
+        r = np.logspace(-5,5,100)
+        lcirc = prof.vcirc(r)*r
+        ecirc = 0.5*prof.vcirc(r)**2 + prof.potential(r)
+        
+        rphi = prof.r_of_potential(prof.potential(r))
+        rlcirc = prof.r_of_lcirc(lcirc)
+        recirc = prof.r_of_ecirc(ecirc)
+
+        tc.check_max_relative_error(rphi, r, 1e-5)
+        tc.check_max_relative_error(rlcirc, r, 1e-5)
+        tc.check_max_relative_error(recirc, r, 1e-5)
+
+@pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
+def test_rcirc_finding_nonmonotoneous(profile, embed_plot):
+    np.seterr(all='raise', under="ignore")
+    
+    prof0 = tc.standard_profiles(profile)
+    r = np.logspace(-15, 15, 2000)
+    nprof = at.profiles.NumericalProfile(r, prof0.density(r))
+
+    for prof in prof0, nprof:
+        for rt in 1,1e2:
+            # With tide boundaries should be defined
+            tprof = at.profiles.RadialTidalProfile(np.abs(prof0.accr(rt)/rt))
+            cprof = at.profiles.CompositeProfile(mass=prof, tide=tprof, external=("tide",))
+
+            r = np.geomspace(1e-2,0.99,133)*rt
+            
+            rphi = cprof.r_of_potential(cprof.potential(r))
+            tc.check_max_relative_error(cprof.potential(rphi), cprof.potential(r), 1e-5)
+
+            ecirc = 0.5*cprof.vcirc(r)**2 + cprof.potential(r)
+            
+            lcirc = cprof.vcirc(r)*r
+            for mode in "asc", "desc":
+                rlcirc = cprof.r_of_lcirc(lcirc, mode=mode)
+                tc.check_max_relative_error(cprof.vcirc(rlcirc)*rlcirc, lcirc, 1e-5)
+
+                recirc = cprof.r_of_ecirc(ecirc, mode=mode)
+                tc.check_max_relative_error(0.5*cprof.vcirc(recirc)**2 + cprof.potential(recirc), ecirc, 1e-5)

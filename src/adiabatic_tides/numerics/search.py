@@ -63,10 +63,12 @@ def vectorized_binary_search(f, xlow, xhigh, niter=100, mode="sqrt", return_err=
     else:
         return xnew
 
-def ridders_method(f, x0, x2, niter=10, mode="both", logspace=False, **kwargs):
+def ridders_method(f, xlow, xup, niter=10, mode="both", logspace=False, invalid_val=None, **kwargs):
     """Finds the root f(x) = 0 using Ridder's method.
     mode : can be "both", "positive" or "negative"
     """
+    x0, x2 = xlow, xup
+
     if logspace:
         x0, x2 = np.log(x0), np.log(x2)
         fin = f
@@ -75,9 +77,12 @@ def ridders_method(f, x0, x2, niter=10, mode="both", logspace=False, **kwargs):
     f0 = f(x0, **kwargs)
     f2 = f(x2, **kwargs)
 
-    assert np.all(np.sign(f0*f2) <= 0)
-
-    assert np.all(np.abs(x0) >= 1e-12 * np.abs(x2)), "Initial interval too large, expecting cancellation..."
+    if invalid_val is None: # Raise an error for cases without zero-points in the intevral
+        assert np.all(np.sign(f0*f2) <= 0)
+        assert np.all(np.abs(x0) >= 1e-12 * np.abs(x2)), "Initial interval too large, expecting cancellation..."
+    else: # Continue only with the valid cases
+        valid = np.sign(f0*f2) <= 0.
+        x0, x2 = np.where(valid, x0, invalid_val), np.where(valid, x2, invalid_val)
 
     for i in range(0, niter):
         x1 = (x0 + x2)/2
@@ -97,10 +102,13 @@ def ridders_method(f, x0, x2, niter=10, mode="both", logspace=False, **kwargs):
         x2 = x3
         f2 = f3
 
-    assert np.all(f2*f0 <= 0)
-
     if logspace:
         x0, x2 = np.exp(x0), np.exp(x2)
+
+    if invalid_val is None:
+        assert np.all(f2*f0 <= 0)
+    else:
+        x0, x2 = np.where(valid, x0, invalid_val), np.where(valid, x2, invalid_val)    
 
     if mode == "both":
         return x0, x2

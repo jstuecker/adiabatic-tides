@@ -378,6 +378,46 @@ class RadialProfile(Configureable):
         
         return r, E, L
     
+    def _search_radius(self, f, rlow=None, rup=None, niter=None, logspace=True, invalid_val=np.nan):
+        rlow = self.rmin() if rlow is None else rlow
+        rup = self.rmax() if rup is None else rup
+        niter = int(self.cfg["actions"].niter_pa * self.cfg["general"].scale_accuracy) if niter is None else niter
+
+        return numerics.search.ridders_method(f, rlow, rup, mode="positive", niter=niter, logspace=logspace, invalid_val=invalid_val)
+    
+    def r_of_potential(self, phi):
+        "Find radius where the potential is phi (if non-monotoneous considering only ascending part)"
+        return self._search_radius(lambda r: self.potential(r) - phi, rup=self.rapo_max())
+
+    def r_of_ecirc(self, ecirc, mode="asc"):
+        "Find radius where the circular energy is ecirc (if non-monotoneous mode can be 'asc' or 'desc')"
+        def f(r): return self.potential(r) + 0.5*self.vcirc(r)**2 - ecirc
+        rlmax = self.rlmax() # radius where circular energy is maximal
+
+        if mode == "asc":
+            rup = self.rmax() if np.isnan(rlmax) else rlmax
+            return self._search_radius(f, rup=rup)
+        elif mode == "desc":
+            if np.isnan(rlmax):
+                raise ValueError("Cannot search for descending part, as there is no maximum")
+            return self._search_radius(f, rlow=rlmax)
+        else:
+            raise ValueError("Unknown mode %s" % mode)
+        
+    def r_of_lcirc(self, lcirc, mode="asc"):
+        def f(r): return self.vcirc(r)*r - lcirc
+        rlmax = self.rlmax() # radius where circular angular momentum is maximal
+
+        if mode == "asc":
+            rup = self.rmax() if np.isnan(rlmax) else rlmax
+            return self._search_radius(f, rup=rup)
+        elif mode == "desc":
+            if np.isnan(rlmax):
+                raise ValueError("Cannot search for descending part, as there is no maximum")
+            return self._search_radius(f, rlow=rlmax, rup=self.rtid())
+        else:
+            raise ValueError("Unknown mode %s" % mode)
+    
     def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True):
         def energy_permitted(r):
             return e - 0.5*l**2/r**2 - self.potential(r)
