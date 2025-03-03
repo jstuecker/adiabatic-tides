@@ -565,29 +565,6 @@ class RadialProfile(Configureable):
         opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)/r, (self.rmin(), self.rmax()))
         return opt.x, self.vcirc(opt.x)
 
-
-    @deprecated
-    def _initialize_tidal_radius(self, reinit=False):
-        """Calcualtes the maximum of the potential and of the angular momentum"""
-        if (not self._tidal_radius_initialized) | reinit:
-            if self.is_disrupted:
-                self._rlmax, self._philmax, self._lmax = 0.,0.,0.
-                self._rtid, self._phitid, self._elmax, self._philmax, self._lscale  = 0., 0., 0., 0., 0.
-                self._tidal_radius_initialized = True
-                return
-
-            self._rlmax, self._philmax, self._lmax = self.tidal_lmax_radius(warning=False, getphi=True, getl=True)
-            self._rtid, self._phitid = self.tidal_boundary(warning=False, getphi=True)
-            self._has_tidal_radius = self._rtid < self.scale("rmax")
-            if self._has_tidal_radius:
-                self._lscale = self._lmax
-                self._elmax = self._philmax + 0.5*self._lmax**2/self._rlmax**2
-            else:
-                self._lscale = self.vcirc(self.r0()) * self.r0()
-                self._elmax = 0.
-                
-            self._tidal_radius_initialized = True
-    
     @deprecated
     def _initialize_rel_circ_interpolators(self, reinit=False):
         """"""
@@ -726,79 +703,7 @@ class RadialProfile(Configureable):
         #assert np.all(rmin <= rmax)
 
         return rmin, rmax
-    
-    @deprecated
-    def tidal_boundary(self, getphi=False, warning=True, eps=1e-12, maxiter=200):
-        """The tidal radius -- corresponding to a maximum in the potential
-        
-        getphi : if True, appends the potential at rtid to the result
-        warning : if True, prints warnings if rtid-> infty. I.e. if the
-                  potential has no tidal radius
-        eps : desired relative accuracy
-        maxiter : when to stop iterating, if the desired rel. accuracy is never
-                  reached
-                  
-        returns : rtid, the tidal radius and possibly its potential value
-        """
-        return numerics.search.find_boundary(self, getphi=getphi, warning=warning, eps=eps, maxiter=maxiter)
-    
-    @deprecated
-    def tidal_lmax_radius(self, getphi=False, getl=False, warning=True, eps=1e-12, maxiter=200):
-        """The radius of maximum circular angular momentum
-        
-        This is the maximum in vcirc(r)*r. This is the radius where the bound
-        orbit with highest energy and highest angular momentum is possible.
-        Will be infty for monothonic profiles
-        
-        getphi : if True, appends the potential at rlmax to the result
-        getl : if True, appends the angular momentum at rlmax to the result
-        warning : if True, prints warnings if rtid-> infty. I.e. if the
-                  potential has no tidal radius
-        eps : desired relative accuracy
-        maxiter : when to stop iterating, if the desired rel. accuracy is never
-                  reached
-                  
-        returns : rlmax,  and possibly phimax and lmax
-        """
-        res = numerics.search.find_boundary(self, getphi=getphi, warning=warning, eps=eps, mode="lmax", maxiter=maxiter)
-        if getl:
-            rlmax = np.atleast_1d(res)[0]
-            if rlmax < self.scale("rmax"):
-                lmax = self.vcirc(rlmax) * rlmax
-            else:
-                lmax = np.infty
-            return list(np.atleast_1d(res)) + [lmax]
-        else:
-            return res
-    
-    # def rmax_vmax(self, mode="self", warning=True, eps=1e-12, maxiter=200):
-    #     """The radius and the circular velocity where vcirc is maximual
-        
-    #     This is the maximum in vcirc(r)*r. This is the radius where the bound
-    #     orbit with highest energy and highest angular momentum is possible.
-    #     Will be infty for monothonic profiles
-        
-    #     mode : if "self" will only consider self-gravity,
-    #            if "full" will also consider the tidal field (if exists)
-    #     warning : if True, prints warnings if rtid-> infty. I.e. if the
-    #               potential has no tidal radius
-    #     eps : desired relative accuracy
-    #     maxiter : when to stop iterating, if the desired rel. accuracy is never
-    #               reached
-                  
-    #     returns : rlmax,  and possibly phimax and lmax
-    #     """
-        
-    #     if mode == "self":
-    #         rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmaxself", maxiter=maxiter)
-    #         vmax = self.self_vcirc(rmax)
-    #     elif mode == "full":
-    #         rmax = numerics.search.find_boundary(self, warning=warning, eps=eps, mode="vmax", maxiter=maxiter)
-    #         vmax = self.vcirc(rmax)
-    #     else:
-    #         raise ValueError("Unknown mode %s" % mode)
-    #     return rmax,vmax
-    
+
     def E_L_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the energy and angular-momentum of the corresponding orbit"""
         return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo)
@@ -877,8 +782,7 @@ class RadialProfile(Configureable):
             rmin = self.rmin()
         if rmax is None:
             rmax = self.rmax()
-        emin, emax = self.potential(np.array((rmin, rmax)))
-        
+
         rres = numerics.search.vectorized_binary_search(func, rmin, rmax, niter=100, mode="sqrt")
         
         return rres
