@@ -137,14 +137,14 @@ class RadialProfile(Configureable):
             
     def scaledict(self):
         """A dictionary containg the value of all numerical scales"""
-        assert 0
+        # assert 0
         if self._sc is None:
             self._initialize_numerical_scales()
         return self._sc
             
     def scale(self, name):
         """Query the value of a numerical scale"""
-        assert 0
+        # assert 0
         if self._sc is None:
             self._initialize_numerical_scales()
         return self._sc[name]
@@ -735,29 +735,17 @@ class RadialProfile(Configureable):
 
         rperi, rapo = self.rperi((rcirc,E,l)), self.rapo((rcirc,E,l))
         return rperi, rapo
-    
-    def integral_density_squared(self, cumulative=False, rmin=None, rmax=None, nbins=None):
-        def dA_dlogr(logri):
-            ri = np.exp(logri)
-            try :
-                return self.self_density(ri)**2 * 4*np.pi*ri**3
-            except :
-                return self.density(ri)**2 * 4*np.pi*ri**3
 
-        if rmin is None:
-            rmin = self.rmin()
-        if rmax is None:
-            rmax = self.rmax()
-        if nbins is None:
-            nbins = self.scale("nbins_circ")
-            
-        ri = np.logspace(np.log10(rmin), np.log10(rmax), nbins)
-        res = numerics.integrate.cum_simpson(dA_dlogr, np.log(ri))
+    def integral_density_squared(self, rmin=None, rmax=None, nintegrate=100):
+        if rmin is None: rmin = self.rmin()
+        if rmax is None: rmax = self.rmax()
+
+        def integrand(r):  return self.density(r)**2 * 4*np.pi*r**2
         
-        if cumulative:
-            return ri, res
+        if np.min(rmin) == 0.:
+            return numerics.integrate.integrate_double_exponential_a_b(integrand, rmin, rmax, N=nintegrate)
         else:
-            return res[-1]
+            return numerics.integrate.integrate_exp_double_exp_a_b(integrand, rmin, rmax, N=nintegrate)
         
     def radius_of_f(self, f, rmin=None, rmax=None):
         """Approximates the radius where the phase space density reaches a given value
