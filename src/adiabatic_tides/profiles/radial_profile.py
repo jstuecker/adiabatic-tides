@@ -68,16 +68,6 @@ class RadialProfile(Configureable):
         """
         rtid, rmax = self.rtid(), self.rmax()
         return rtid if rtid < rmax else rmax
-
-    def reset_interpolators(self):
-        """Resets the interpolators, like j_of_el, e_of_kl etc...
-        
-        Calling this is only necessary if the profile has changed for some reason
-        """
-        self._e_of_jl_initialized = False
-        self._j_of_el_initialized = False
-        self._rel_circ_initialized = False
-        self._tidal_radius_initialized = False
         
     def _initialize_numerical_scales(self):
         """Sets some default values for numerical scales"""
@@ -563,145 +553,6 @@ class RadialProfile(Configureable):
         opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)/r, (self.rmin(), self.rmax()))
         return opt.x, self.vcirc(opt.x)
 
-    @deprecated
-    def _initialize_rel_circ_interpolators(self, reinit=False):
-        """"""
-        
-        if (not self._rel_circ_initialized) | reinit:
-            self._initialize_tidal_radius(reinit=reinit)
-            
-            def _rel_circ_interpolator(ri, log=True, kind=self.scale("rel_interpolation_kind")):
-                rcirc = ri
-                vcirc = self.vcirc(rcirc)
-                Lcirc = vcirc*rcirc
-                Ecirc = self.potential(rcirc) + 0.5*vcirc**2
-                
-                if log:
-                    ip_l_of_e = numerics.interpolate.flexible_interpolator(Ecirc, Lcirc, logy=True, eps_for_logy=1e-20*self._lscale, kind=kind)
-                    ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=True, eps_for_logy=self.rmin(), kind=kind)
-                    ip_r_of_l = numerics.interpolate.flexible_interpolator(Lcirc, rcirc, logy=True, eps_for_logy=self.rmax(), logx=True, eps_for_logx=1e-20*self._lscale, kind=kind)
-                else:
-                    ip_l_of_e = numerics.interpolate.flexible_interpolator(Ecirc, Lcirc, logy=False, fill_value=(0., Lcirc[-1]), kind=kind)
-                    ip_r_of_e = numerics.interpolate.flexible_interpolator(Ecirc, rcirc, logy=False, kind=kind)
-                    ip_r_of_l = numerics.interpolate.flexible_interpolator(Lcirc, rcirc, logy=False, kind=kind)
-
-                return ip_l_of_e, ip_r_of_e, ip_r_of_l, (rcirc, Ecirc, Lcirc)
-
-            if self._has_tidal_radius:
-                # Ecirc(r) and Lcirc(r) are not monothonic, we have to make 
-                # separate functions for the increasing and decreasing part
-                # rlmax is the radius of the maximum
-                self.ri_desc = np.linspace(self._rlmax, self._rtid, self.scale("nbins_circ"))
-                self.ip_lcirc_of_e_desc, self.ip_rcirc_of_e_desc, self.ip_rcirc_of_l_desc, _ = _rel_circ_interpolator(self.ri_desc, log=False)
-
-                rmax_asc = self._rlmax
-            else:
-                rmax_asc = self.scale("rmax")
-
-            self.ri_asc = np.logspace(np.log10(self.rmin()), np.log10(rmax_asc), self.scale("nbins_circ"))
-            self.ip_lcirc_of_e_asc, self.ip_rcirc_of_e_asc, self.ip_rcirc_of_l_asc, _ = _rel_circ_interpolator(self.ri_asc, log=True)
-
-            self._rel_circ_initialized = True
-    
-    @deprecated
-    def rcirc_rmax_of_e(self, e, reinit=False):
-        """The radii where a circular orbit with energy e is possible
-        
-        For monothonic profiles rmax is undefined and will be set to infty.
-        For non-monothonic profiles (e.g. with a tidal field) it can be
-        possible to have circular orbits with energy e at two different radii.
-        However, the larger one, rmax, is unstable, corresponding to a maximum
-        of the effective potential.
-        On the first call interpolators for this function are calculated
-        through ._initialize_rel_circ_interpolators().
-        
-        e : energy
-        reinit : if given, reinitializes the interpolator
-
-        returns : rcirc, rmax -- radii where e is the minimum and maximum 
-                  of the effective potential. For monothonic profiles it is 
-                  rmax=infty
-        
-        -- relevant numerical scales:
-        rmin, rmax, nbins_circ
-        """
-        self._initialize_rel_circ_interpolators(reinit=reinit)
-
-        lmin = self.ip_rcirc_of_e_asc(e)
-        if self._has_tidal_radius:
-            lmax =  self.ip_rcirc_of_e_desc(e)
-        else:
-            lmax = np.ones_like(e) * np.infty
-
-        return lmin, lmax
-    
-    @deprecated
-    def lminmax_of_e(self, e, reinit=False):
-        """The minimum and maximum angular momentum possible for energy e
-
-        For monothonic profiles lmin is always zero and lmax will correspond
-        to the angular momentum of a circular orbit with energy e.
-        For non-monothonic profiles (e.g. with a tidal field) it can be
-        possible to have circular orbits with energy e at two different angular momenta.
-        However, the lower angular momentum, lmin, corresponds to a maximum of the
-        effective potential. Therefore orbits with l<lmin are unbound and the orbit with
-        l=lmin is instable. lmin, lmax are therefore boundaries of possible angular momenta
-        On the first call interpolators for this function are calculated
-        through ._initialize_rel_circ_interpolators().
-        
-        e : energy
-        reinit : if given, reinitializes the interpolator
-
-        returns : lmin, lmax: the minimum and maximum possible energy momentum at energy e
-        
-        -- relevant numerical scales:
-        rmin, rmax, nbins_circ
-        """
-        self._initialize_rel_circ_interpolators(reinit=reinit)
-
-        lmax = self.ip_lcirc_of_e_asc(e)
-        if self._has_tidal_radius:
-            lmin =  self.ip_lcirc_of_e_desc(e)
-        else:
-            lmin = np.zeros_like(e)
-
-        return lmin, lmax
-    
-    @deprecated
-    def rcirc_rmax_of_l(self, l, reinit=False):
-        """The radius of the minimum and maximum of the effective potential
-        phieff(r) = phi(r) + 0.5 L**2/r**2
-        
-        For monothonic profiles rmax is undefined and will be infinty.
-        For non-monothonic profiles (e.g. with a tidal field). The effective
-        potential can have a maximum and therefore a circular orbit with angular
-        momentum l can exist at rcirc and rmax. However, rmax is instable, since
-        it is a maximum. All orbits with r > rmax are unbound. Therefore bound
-        orbits are confined to r < rmax(l).
-        
-        l : angular momentum
-        reinit : if given, reinitializes the interpolator
-
-        returns : rcirc, rmax: the minimum and maximum of the effective potential
-        
-        -- relevant numerical scales:
-        rmin, rmax, nbins_circ
-        """
-        if (not self._rel_circ_initialized) | (reinit):
-            self._initialize_rel_circ_interpolators()
-            
-        rmin = self.ip_rcirc_of_l_asc(l)
-        if self._has_tidal_radius:
-            rmax =  self.ip_rcirc_of_l_desc(l)
-        else:
-            rmax = np.infty * np.ones_like(l)
-        
-        rmin = np.clip(rmin, 0., None)
-        
-        #assert np.all(rmin <= rmax)
-
-        return rmin, rmax
-
     def E_L_of_rperi_rapo(self, rperi, rapo):
         """Given a peri and apo-center, finds the energy and angular-momentum of the corresponding orbit"""
         return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo)
@@ -713,7 +564,6 @@ class RadialProfile(Configureable):
         useful for translating results to DASH simulations"""
         e, l = self.E_L_of_rperi_rapo(rperi, rapo)
 
-        # rcirc = self.rcirc_rmax_of_e(e)[0]
         rcirc = self.r_of_ecirc(np.atleast_1d(e))
         lcirc = self.vcirc(rcirc)*rcirc
 
