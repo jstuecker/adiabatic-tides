@@ -711,16 +711,13 @@ class RadialProfile(Configureable):
         is possible and the angular-momentum in units of the circular angular momentum
         
         useful for translating results to DASH simulations"""
-        phiperi = self.potential(rperi)
-        phiapo = self.potential(rapo)
+        e, l = self.E_L_of_rperi_rapo(rperi, rapo)
 
-        l = np.sqrt(2.*(phiapo-phiperi)/(1./rperi**2 - 1./rapo**2 ) )
-        e = phiperi + 0.5 * l**2 / rperi**2
-
-        rcirc = self.rcirc_rmax_of_e(e)[0]
+        # rcirc = self.rcirc_rmax_of_e(e)[0]
+        rcirc = self.r_of_ecirc(np.atleast_1d(e))
         lcirc = self.vcirc(rcirc)*rcirc
 
-        return rcirc, l/lcirc
+        return rcirc.reshape(np.shape(rperi)), (l/lcirc).reshape(np.shape(rperi))
     
     def rperiapo_of_eta_rcirc(self, rcirc, eta):
         """Given a circular radius and the angular momentum in units of
