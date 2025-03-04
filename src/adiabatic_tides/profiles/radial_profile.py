@@ -329,10 +329,10 @@ class RadialProfile(Configureable):
         else:
             raise ValueError("Unknown mode %s" % mode)
 
-    def radius_of_f(self, f, l=0.):
+    def radius_of_f(self, f, l=1., rlow=None, rup=None):
         "Radius where the phase space density f(phi(r), l) = f"
-        def func(r): return self.f_of_el(self.potential(r), l) - f
-        return self._search_radius(func)
+        def func(r): return np.log(self.f_of_el(self.potential(r), l)/f)
+        return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
     
     def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True):
         def energy_permitted(r):
@@ -539,65 +539,14 @@ class RadialProfile(Configureable):
               up to a few percent accuracy. Therefore, I print a warning here.
         """
         
-        c = 299792458.0
-        
-        def fmax_wdm(h=0.68, omega_dm=0.26, gx=1.5, mx=1.):
-            """Following https://arxiv.org/pdf/2207.05082.pdf
-
-            the phase space density of a thermal relic WDM
-            """
-            def v0_wdm(omega_dm=0.28, h=0.678, gx=1.5, mx=1., a=1.):
-                """omgega_dm: dark matter (not full matter) density paramater, mx in kev
-                result : velocity in km/s
-                """
-                # Bode (2001), arXiv:astro-ph/0010389
-                v0 = 0.012 * a**(-1) * (omega_dm / 0.3)**(1./3.) * (h/0.65)**(2./3.) * (1.5/gx)**(1./3.) * (1./mx)**(4./3.)
-                return v0
-
-            rho_dm = 3. * (h * 100.)**2 / (8.*np.pi*self.G) * omega_dm
-
-            v0 = v0_wdm(mx=mx, omega_dm=omega_dm, gx=gx, h=h)
-
-            return 0.0221 * v0**-3 * rho_dm
-        
-        def fmax_wimp(h=0.68, omega_dm=0.26,  mx=100, Td=30., ad=5.332e-12):
-            """Following https://arxiv.org/pdf/2207.05082.pdf
-
-            mx : WIMP mass in GeV
-            Td : Decoupling Temperature in MeV
-            omgega_dm: dark matter (not full matter) density paramater, mx in kev
-            ad : scale factor of decoupling (where the temperature of the universe is Td)
-                 This can be put to None to use an approximation by the neutrino temperature
-                 which may have errors of order 10% if the wimp decoupled a bit before the
-                 neutrinos
-            
-            the phase space density of WIMP's in Msol (km/s)**3 Mpc**3
-            """
-            mev, Tdev = mx*1e9, Td*1e6
-
-            if ad is None:
-                print("Approximating ad by assuming evaluating T(a_d)=Td while using the temperature T(a) of the Neutrino background.\n"
-                      "This may give inaccurate results by 10-20%. For full accuracy use a full thermal history and determine ad")
-                Tcmb = 2.725 #K
-                kb = 8.617333262e-5 # eV/kelvin
-                Tnu = Tcmb*(4./11.)**(1./3.) * kb   # in eV
-                ad = (Tnu/Tdev)
-            
-            v0 =  np.sqrt(Tdev * mev)*ad / mev * c / 1e3  # velocity today in km/s
-
-            rho_dm = 3. * (h * 100.)**2 / (8.*np.pi*self.G) * omega_dm
-
-            return (2.*np.pi)**(-3./2.) * v0**-3 * rho_dm
-        
-        
         if dmtype == "WDM":
-            fmax = fmax_wdm(h=h, omega_dm=omega_dm, **kwargs)
+            fmax = numerics.utility.fmax_wdm(h=h, omega_dm=omega_dm, G=self.G, **kwargs)
         elif dmtype == "WIMP":
-            fmax = fmax_wimp(h=h, omega_dm=omega_dm, **kwargs)
+            fmax = numerics.utility.fmax_wimp(h=h, omega_dm=omega_dm, G=self.G, **kwargs)
         else:
             raise ValueError("Unknown dmtype=%s, so far can only handle WDM or WIMP" % dmtype)
             
-        return self.radius_of_f(fmax)
+        return self.radius_of_f(np.atleast_1d(fmax))[0]
     
     def to_string(self):
         raise NotImplementedError("to_string not implemented for this profile, need this for caching etc...")
