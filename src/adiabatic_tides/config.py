@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, Callable, List
 from collections.abc import Iterable
 import copy
+import numpy as np
 
 @dataclass
 class GeneralConfig:
@@ -47,7 +48,6 @@ class AdiabaticConfig:
 class SamplingConfig:
     nintegrate: int = 40
     ninterp : int = 1001
-    nintegrate : int = 32
     nsteps_metropolis : int = 64
 
 class Config():
@@ -66,6 +66,35 @@ class Config():
 
         self.configs = (self.general, self.eddington, self.actions, self.adiabatic, self.sampling)
 
+    def scale_accuracy(self, scale: float):
+        self.eddington.nintegrate = int(self.eddington.nintegrate * scale)
+        self.eddington.nr = int(self.eddington.nr * scale)
+        
+        self.actions.niter_pa = int(self.actions.niter_pa * scale)
+        self.actions.nintegrate = int(self.actions.nintegrate * scale)
+        self.actions.nbins_rp = int(self.actions.nbins_rp * scale)
+        self.actions.nbins_ra = int(self.actions.nbins_ra * scale)
+        self.actions.nsteps_newton = int(self.actions.nsteps_newton * scale)
+        
+        self.adiabatic.nr = int(self.adiabatic.nr * scale)
+        self.adiabatic.ninterp = int(self.adiabatic.ninterp * scale)
+        self.adiabatic.nintegrate = int(self.adiabatic.nintegrate * scale)
+        self.adiabatic.nitermax = int(self.adiabatic.nitermax * scale)
+        self.adiabatic.eps_done = self.adiabatic.eps_done / scale
+
+        self.sampling.nintegrate = int(self.sampling.nintegrate * scale)
+        self.sampling.ninterp = int(self.sampling.ninterp * scale)
+        self.sampling.nsteps_metropolis = int(self.sampling.nsteps_metropolis * scale)
+
+    def scale_geometry(self, scale: float):
+        self.general.rmin = self.general.rmin / scale
+        self.general.rmax = self.general.rmax * scale
+
+        self.actions.rafac_max = self.actions.rafac_max * scale
+        self.actions.rpfac_eps = self.actions.rpfac_eps / scale
+
+        self.adiabatic.rminfac = self.adiabatic.rminfac * np.sqrt(scale)
+
     def modified(self):
         modified_attrs = []
         for config in self.configs:
@@ -73,6 +102,13 @@ class Config():
                 if getattr(config, field) != config.__dataclass_fields__[field].default:
                     modified_attrs.append((config.__class__.__name__, field, getattr(config, field)))
         return modified_attrs
+    
+    def print_modified(self):
+        for config in self.configs:
+            print(f"{config.__class__.__name__}:")
+            for field in config.__dataclass_fields__:
+                if getattr(config, field) != config.__dataclass_fields__[field].default:
+                    print(f"  {field}: {getattr(config, field)}")
 
     def __str__(self):
         s = "Config:\n  "
