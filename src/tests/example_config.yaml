@@ -1,0 +1,34 @@
+scale_accuracy : 1.0
+scale_geometry : 1.0
+
+general:
+  rmin: 1e-20
+  rmax: 1e20
+
+eddington:
+  nintegrate: 100
+  nr: 2000
+
+actions:
+  niter_pa: 30
+  search_method: "ridders"
+  nintegrate: 40
+  nbins_rp: 250
+  nbins_ra: 100
+  nsteps_newton: 5
+  rafac_max: 1e10
+  rpfac_eps: 1e-5
+
+adiabatic:
+  nr: 200
+  ninterp: 50
+  nintegrate: 32
+  lower_boundary: "initial"
+  rminfac: 1e2
+  nitermax: 100
+  eps_done: 1e-3
+
+sampling:
+  nintegrate: 40
+  ninterp: 1001
+  nsteps_metropolis: 64

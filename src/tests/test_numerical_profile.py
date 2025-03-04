@@ -249,3 +249,14 @@ def test_string_repr():
     for prof in (nfw, ppow, ptide, peinasto, pplum, piso, cprof, nprof, pprof, aprof):
         print(repr(prof))
         print()
+
+def test_yaml_cfg():
+    # Check that example is consistent with default config
+    cfg = at.config.Config.from_yaml("example_config.yaml")
+    default_cfg = at.config.Config()
+    
+    print(cfg)
+    cfg.print_modified()
+
+    for c1, c2 in zip(cfg.configs, default_cfg.configs):
+        assert c1 == c2

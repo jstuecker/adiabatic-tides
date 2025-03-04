@@ -1,6 +1,5 @@
-import yaml
-from dataclasses import dataclass, asdict
-from typing import Any, Dict, Callable, List
+from dataclasses import dataclass
+from typing import Any, Dict, Callable
 from collections.abc import Iterable
 import copy
 import numpy as np
@@ -70,6 +69,43 @@ class Config():
             self.scale_accuracy(scale_accuracy)
         if scale_geometry is not None:
             self.scale_geometry(scale_geometry)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]):
+        """Initialize the Config object from a dictionary"""
+        return cls(
+            general=GeneralConfig(**d.get("general", {})),
+            eddington=EddingtonConfig(**d.get("eddington", {})),
+            actions=ActionsConfig(**d.get("actions", {})),
+            adiabatic=AdiabaticConfig(**d.get("adiabatic", {})),
+            sampling=SamplingConfig(**d.get("sampling", {})),
+            scale_accuracy=d.get("scale_accuracy", None),
+            scale_geometry=d.get("scale_geometry", None)
+        )
+    
+    @classmethod
+    def from_yaml(cls, filename: str):
+        """Initialize the Config object from a YAML file"""
+        import yaml, re
+
+        # The following is needed because of the slightly incorrect way
+        # that floats are handled in the python yaml package
+        loader = yaml.SafeLoader
+        loader.add_implicit_resolver(
+            u'tag:yaml.org,2002:float',
+            re.compile(u'''^(?:
+            [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+            |[-+]?\\.(?:inf|Inf|INF)
+            |\\.(?:nan|NaN|NAN))$''', re.X),
+            list(u'-+0123456789.'))
+
+        with open(filename, 'r') as ymlfile:
+            cfg_dict = yaml.load(ymlfile, Loader=loader)
+
+        return cls.from_dict(cfg_dict)
 
     def scale_accuracy(self, scale: float):
         self.eddington.nintegrate = int(self.eddington.nintegrate * scale)
