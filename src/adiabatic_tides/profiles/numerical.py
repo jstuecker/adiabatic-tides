@@ -70,11 +70,12 @@ class NumericalProfile(RadialProfile):
         return f"NumericalProfile(anisotropy={self.anisotropy:.5g}) with {len(self.ri)} points in ({self.ri[0]:.5g}, {self.ri[-1]:.5g})"
 
     def __repr__(self):
-        s =  super().__repr__()
+        s =  str(self)
         s += "\nBoundary: " + self.boundary
         s += "\nHash:"
         s += f"\n  ri: {zlib.adler32(self.ri.data.tobytes())}"
         s += f"\n  rho: {zlib.adler32(self.rhoi.data.tobytes())}"
+        s += f"\n{repr(self.cfg)}"
         return s
 
 class ParticleProfile(NumericalProfile):
@@ -140,7 +141,12 @@ class ParticleProfile(NumericalProfile):
         return f"ParticleProfile with {len(self.p['r'])} particles in {len(self.rbins) - 1} bins in ({self.rbins[0]:.5g}, {self.rbins[-1]:.5g})"
     
     def __repr__(self):
-        s = super().__repr__()
+        s =  str(self)
+        s += "\nBoundary: " + self.boundary
+        s += "\nHash:"
+        s += f"\n  ri: {zlib.adler32(self.ri.data.tobytes())}"
+        s += f"\n  rho: {zlib.adler32(self.rhoi.data.tobytes())}"
         for key in self.p:
-            s += f"\n  {key}: {zlib.adler32(self.p[key].tobytes())}"
+            s += f"\n  p.{key}: {zlib.adler32(self.p[key].tobytes())}"
+        s += f"\n{repr(self.cfg)}"
         return s
