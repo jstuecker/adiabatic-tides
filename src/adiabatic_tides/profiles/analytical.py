@@ -1,5 +1,6 @@
 import numpy as np
 from .import RadialProfile
+from ..config import Config
 from ..phasespace import AnalyticPhaseSpace
 from scipy.special import gamma as GammaF, gammaincc
 from scipy.optimize import brentq
@@ -82,7 +83,7 @@ def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200.):
 
 
 class NFWProfile(RadialProfile):
-    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rminrs=1e-15, rmaxrs=1e15, **config):
+    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rminrs=1e-15, rmaxrs=1e15, config : Config | None = None):
         """Set up an NFW profile with a given mass and concentration
         
         conc : concentration -- so that the scale radius is rs = r200c / c
@@ -107,7 +108,7 @@ class NFWProfile(RadialProfile):
             raise ValueError("You have to provide either m200c or r200c")
 
         self.rs = self.r200c / self.conc
-        super().__init__(anisotropy=anisotropy, rmin=rminrs*self.rs, rmax=rmaxrs*self.rs, **config)
+        super().__init__(anisotropy=anisotropy, rmin=rminrs*self.rs, rmax=rmaxrs*self.rs, config=config)
 
         self.rhoc = self.m200c/(4.*np.pi*self.rs**3 * (np.log(1.+self.conc) - self.conc/(1.+self.conc)))
         self.phi0 = - 4.*np.pi*self.G*self.rhoc*self.rs**2
@@ -166,14 +167,14 @@ class NFWProfile(RadialProfile):
         return "NFWProfile(conc=%.5g, r200c=%.5g, anisotropy=%.5g)" % (self.conc, self.r200c, self.anisotropy)
 
 class EinastoProfile(RadialProfile):
-    def __init__(self, rhom2=1., rm2=1., alpha=0.16, anisotropy=0.):
+    def __init__(self, rhom2=1., rm2=1., alpha=0.16, anisotropy=0., config : Config | None = None):
         """Set up an Einasto profile
         
         rm2 : radius where the slope is -2
         rhom2 : Density at the radius where the slope is -2
         alpha : curvature parameter of the Einasto Profile. Wang et al (2020) suggest 0.16
         """
-        super().__init__(anisotropy=anisotropy)
+        super().__init__(anisotropy=anisotropy, config=config)
         
         self.rhom2 = rhom2
         self.rm2 = rm2
@@ -203,7 +204,7 @@ class EinastoProfile(RadialProfile):
         return f"EinastoProfile(rhom2={self.rhom2:.5g}, rm2={self.rm2:.5g}, alpha={self.alpha:.5g}, anisotropy={self.anisotropy:.5g})"
 
 class PowerlawProfile(RadialProfile):
-    def __init__(self, alpha=None, anisotropy=0., gamma=None, rhoc=1.):
+    def __init__(self, alpha=None, anisotropy=0., gamma=None, rhoc=1., config : Config | None = None):
         """
         Initialize a powerlaw profile with the given parameters.
 
@@ -213,7 +214,7 @@ class PowerlawProfile(RadialProfile):
 
         free variables: either alpha or gamma, and beta
         """
-        super().__init__(phase_space=None)
+        super().__init__(phase_space=None, config=config)
         
         def gamma_of_alpha_beta(alpha, beta=0.):
             return (3 - 0.5*alpha - 4.*beta + alpha*beta)/(2. - alpha)
@@ -280,12 +281,12 @@ class PowerlawProfile(RadialProfile):
         return f"PowerlawProfile(alpha={self.alpha:.5g}, rhoc={self.rhoc:.5g}, anisotropy={self.anisotropy:.5g})"
 
 class IsothermalSphere(RadialProfile):
-    def __init__(self, rho0=1., r0=1.):
+    def __init__(self, rho0=1., r0=1., config : Config | None = None):
         """Set up an Isotrhermal Sphere profile
         
         https://arxiv.org/pdf/2011.07077.pdf
         """
-        super().__init__()
+        super().__init__(config=config)
         
         self.rho0 = rho0
         self.rad0 = r0
@@ -305,10 +306,10 @@ class IsothermalSphere(RadialProfile):
         return f"IsothermalSphere(rho0={self.rho0:.5g}, r0={self.rad0:.5g})"
 
 class PlummerProfile(RadialProfile):
-    def __init__(self, M=1, a=1):
+    def __init__(self, M=1, a=1, config : Config | None = None):
         """Set up a Plummer profile
         """
-        super().__init__(phase_space=None)
+        super().__init__(phase_space=None, config=config)
         
         self.M = M
         self.a = a
@@ -344,14 +345,14 @@ class PlummerProfile(RadialProfile):
         return f"PlummerProfile(m={self.M:.5g}, a={self.a:.5g})"
 
 class RadialTidalProfile(RadialProfile):
-    def __init__(self, tide=0.):
+    def __init__(self, tide=0., config : Config | None = None):
         """A repulsive potential of form phi = -0.5*alpha*r**2
         
         alpha : eigenvalue of the tidal tensor. alpha>0 corresponds to a field
                 stretching the mass distribution and leading to disruption.
                 alpha < 0 does not make much sense in this context"""
 
-        super().__init__(phase_space=None, anisotropy=None)
+        super().__init__(phase_space=None, anisotropy=None, config=config)
 
         if tide < 0:
             raise ValueError("Probably you want to use a positive alpha... If you don't, just comment this!")

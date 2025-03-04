@@ -5,3 +5,4 @@ from . import potentials
 from . import profiles
 from . import adiabatic
 from . import config
+from .config import Config

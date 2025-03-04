@@ -1,6 +1,6 @@
 import numpy as np
 from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
-from ..config import Config, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
+from ..config import Config
 from .. import numerics
 import functools
 
@@ -12,7 +12,7 @@ def deprecated(func):
     return new_func
 
 class RadialProfile():
-    def __init__(self, rmin=None, rmax=None, phase_space="eddington", anisotropy=0., config=None):
+    def __init__(self, rmin=None, rmax=None, phase_space="eddington", anisotropy=0., config : Config = None):
         """This is an abstract class defining the interface of RadialProfiles,
         don't initialize!"""
 

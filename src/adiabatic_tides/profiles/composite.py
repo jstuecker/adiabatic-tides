@@ -3,6 +3,7 @@ from ..phasespace import EddingtonPhaseSpace
 import numpy as np
 from functools import partial
 from ..numerics.search import maximize_scalar
+from ..config import Config
 
 def combine_functions(f, mode, internal, external, *args, **kwargs):
     if mode == "alldict":
@@ -23,7 +24,7 @@ def combine_functions(f, mode, internal, external, *args, **kwargs):
 
 
 class CompositeProfile(RadialProfile):
-    def __init__(self, external=(), configs={}, phase_space_mode="joint_inversion", **profiles):
+    def __init__(self, external=(), phase_space_mode="joint_inversion", config : Config | None = None, **profiles):
         """Create a profile by combining several profiles.
         
         All functions where it makes sense (e.g. density, potential) 
@@ -37,7 +38,7 @@ class CompositeProfile(RadialProfile):
                              inconsistencies if the child phase spaces did not consider the full potential
                     joint_inversion: infer each profile's phasespace in the joint potential
         """
-        super().__init__(phase_space=None, **configs)
+        super().__init__(phase_space=None, config=config)
         assert not set(profiles.keys()) & set(("alldict", "all", "total", "self", "external")), "Trying to use prohibited profile name"
 
         self.profiles = {}
@@ -96,7 +97,7 @@ class CompositeProfile(RadialProfile):
         for label in self.profiles:
             if not label in self.external:
                 assert self.profiles[label].phase_space is not None, "Only external profiles can have undefined phase space"
-                self.phase_spaces[label] = EddingtonPhaseSpace(self.profiles[label].density, self.potential, self.cfg, anisotropy=self.profiles[label].anisotropy)
+                self.phase_spaces[label] = EddingtonPhaseSpace(self.profiles[label].density, self.potential, self.config.general, self.config.eddington, anisotropy=self.profiles[label].anisotropy)
        
         self._phase_space_initialized = True
     

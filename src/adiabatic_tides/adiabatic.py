@@ -1,7 +1,7 @@
 import numpy as np
 from . import profiles
 from . import numerics
-from .config import AdiabaticConfig
+from .config import Config
 from .profiles import RadialProfile, CompositeProfile
 import time
 from functools import partial
@@ -133,7 +133,7 @@ class AdiabaticTransformation():
         _, _, rhotot, mtot, phitot = self.history[iter]
         ri, rhoi, fi = self.integrate_phasespace(rhotot, mtot, phitot, mode=mode, getf=True)
         rho,m,phi = self.solve_poisson(ri, rhoi, mode=mode)
-        return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi)
+        return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg)
     
     def assemble_total_profile(self, iter=-1):
         """Assemble the final profile, perturbation included"""
@@ -143,17 +143,17 @@ class AdiabaticTransformation():
                 remnants[label] = self.assemble_single_profile(mode=label, iter=iter)
             for label in self.prof_initial.external:
                 remnants[label] = self.prof_initial.profiles[label]
-            return CompositeProfile(**remnants, perturbation=self.prof_pert, external=self.prof_initial.external + ("perturbation",), phase_space_mode="children")
+            return CompositeProfile(**remnants, perturbation=self.prof_pert, external=self.prof_initial.external + ("perturbation",), phase_space_mode="children", config=self.cfg)
         else:
             remnant = self.assemble_single_profile(iter=iter)
-            return CompositeProfile(remnant=remnant, perturbation=self.prof_pert, external=("perturbation",), phase_space_mode="children")
+            return CompositeProfile(remnant=remnant, perturbation=self.prof_pert, external=("perturbation",), phase_space_mode="children", config=self.cfg)
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
-    def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1, **configs):
+    def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1):
         assert tide > 0, "Tide must be positive"
         self.tide = tide
         prof_pert = profiles.RadialTidalProfile(tide=tide)
-        super().__init__(prof_initial=prof_initial, prof_pert=prof_pert, nr=nr, verbose=verbose, **configs)
+        super().__init__(prof_initial=prof_initial, prof_pert=prof_pert, nr=nr, verbose=verbose)
 
     @classmethod
     def from_rtid(cls, prof_initial : RadialProfile, rtid=1., **kwargs):
@@ -177,8 +177,8 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
         return adiabatic_tidal_iteration(f0_of_jl, rho, m, phi, tide=self.tide, fpa_below=fpa_below, getf=getf, **kwargs)
 
 class AdiabaticResultProfile(RadialProfile):
-    def __init__(self, result, f_of_rp_ra):
-        super().__init__(phase_space=None, anisotropy=None)
+    def __init__(self, result, f_of_rp_ra, config : Config | None = None):
+        super().__init__(phase_space=None, anisotropy=None, config=config)
         ri, rhoi, rho, m, phi = result
 
         self.q = dict(ri=ri, rhoi=rhoi)

@@ -251,8 +251,8 @@ def test_string_repr():
         print()
 
 def test_yaml_cfg():
-    # Check that example is consistent with default config
-    cfg = at.config.Config.from_yaml("example_config.yaml")
+    # Check that example config is consistent with default config
+    cfg = at.Config.from_yaml("example_config.yaml")
     default_cfg = at.config.Config()
     
     print(cfg)

@@ -1,10 +1,11 @@
 from .radial_profile import RadialProfile
 import numpy as np
 from .. import numerics
+from ..config import Config
 import zlib
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri, rho, boundary="powerlaw", anisotropy=0., **configs):
+    def __init__(self, ri, rho, boundary="powerlaw", anisotropy=0., config : Config | None = None):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
@@ -14,7 +15,7 @@ class NumericalProfile(RadialProfile):
                    two smallest radii. This is the recommended mode if applicable.
         anisotropy : anisotropy parameter beta
         """
-        super().__init__(anisotropy=anisotropy, rmin=ri[0], rmax=ri[-1], **configs)
+        super().__init__(anisotropy=anisotropy, rmin=ri[0], rmax=ri[-1], config=config)
         
         self.boundary = boundary
 
@@ -79,7 +80,7 @@ class NumericalProfile(RadialProfile):
         return s
 
 class ParticleProfile(NumericalProfile):
-    def __init__(self, particles, rbins):
+    def __init__(self, particles, rbins, config : Config | None = None):
         """Numerical profile that is derived from binning a set of particles
         particles: can either be (r,m) or (r,m,vr,L) or (pos,vel,m)
             or a dictionary containing variables "r", "m" and optionally "vr" and "l"
@@ -90,7 +91,7 @@ class ParticleProfile(NumericalProfile):
 
         rho, mprof = numerics.sample.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
 
-        super().__init__(np.sqrt(rbins[1:]*rbins[:-1]), rho, boundary="zero", anisotropy=None)
+        super().__init__(np.sqrt(rbins[1:]*rbins[:-1]), rho, boundary="zero", anisotropy=None, config=config)
 
     def _update_mass_profile(self):
         rho, mprof = numerics.sample.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
