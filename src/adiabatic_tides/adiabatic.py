@@ -160,7 +160,7 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1, **configs):
         assert tide > 0, "Tide must be positive"
         self.tide = tide
-        prof_pert = profiles.RadialTidalProfile(alpha=tide)
+        prof_pert = profiles.RadialTidalProfile(tide=tide)
         super().__init__(prof_initial=prof_initial, prof_pert=prof_pert, nr=nr, verbose=verbose, **configs)
 
     @classmethod

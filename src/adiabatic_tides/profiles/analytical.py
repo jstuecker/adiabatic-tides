@@ -344,30 +344,31 @@ class PlummerProfile(RadialProfile):
         return f"PlummerProfile(m={self.M:.5g}, a={self.a:.5g})"
 
 class RadialTidalProfile(RadialProfile):
-    def __init__(self, alpha=0.):
+    def __init__(self, tide=0.):
         """A repulsive potential of form phi = -0.5*alpha*r**2
         
         alpha : eigenvalue of the tidal tensor. alpha>0 corresponds to a field
                 stretching the mass distribution and leading to disruption.
                 alpha < 0 does not make much sense in this context"""
 
-        super().__init__(phase_space=None)
+        super().__init__(phase_space=None, anisotropy=None)
 
-        if alpha < 0:
+        if tide < 0:
             raise ValueError("Probably you want to use a positive alpha... If you don't, just comment this!")
         
-        self.alpha = alpha
-        self.rhoalpha = - 3.* self.alpha / (4.*np.pi*self.G)
-        self.warned = False
+        self.tide = tide
         
     def density(self, r):
-        return self.rhoalpha * np.ones_like(r)
+        return (- 3.* self.tide / (4.*np.pi*self.G)) * np.ones_like(r)
     
     def m_of_r(self, r):
-        return - self.alpha/self.G * r**3
+        return - self.tide/self.G * r**3
     
     def potential(self, r, zero_at_zero=True):
-        return - 0.5 * self.alpha* r**2
+        return - 0.5 * self.tide* r**2
 
     def __str__(self):
-        return f"RadialTidalProfile(tide={self.alpha:.5g})"
+        return f"RadialTidalProfile(tide={self.tide:.5g})"
+
+    def __repr__(self):
+        return self.__str__()
