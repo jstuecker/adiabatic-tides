@@ -236,7 +236,7 @@ def test_string_repr():
     pprof = at.profiles.ParticleProfile(part, rbins=r)
 
     # Mimic result of adiabatic calculation
-    ares = (nprof.ri, nprof.q["rho"], nprof.density, nprof.m_of_r, nprof.potential)
+    ares = (nprof.ri, nprof.rhoi, nprof.density, nprof.m_of_r, nprof.potential)
     aprof = at.adiabatic.AdiabaticResultProfile(ares, nprof.f_of_rperi_rapo)
 
     for prof in (nfw, ppow, ptide, peinasto, pplum, piso, cprof, nprof, pprof, aprof):
