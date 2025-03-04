@@ -1,7 +1,7 @@
 import numpy as np
 from .import RadialProfile
 from ..phasespace import AnalyticPhaseSpace
-from scipy.special import gamma as GammaF
+from scipy.special import gamma as GammaF, gammaincc
 from scipy.optimize import brentq
 
 # Helper functions
@@ -121,19 +121,11 @@ class NFWProfile(RadialProfile):
         return cls(conc, m200c=m200c, rminrs=rminrs, rmaxrs=rmaxrs, h=h, **kwargs)
 
     def density(self, r):
-        """Density in Msol/Mpc**3"""
         a = r/self.rs
 
         return self.rhoc/(a * (1 + a)**2 )
     
-    def drhodr(self, r):
-        """Radial derivative of the density"""
-        a = r/self.rs
-
-        return self.rhoc/self.rs * (-(3*a**2 + 4*a + 1)  /(a * (1 + a)**2)**2)
-    
     def m_of_r(self, r):
-        """The mass contained inside radius r"""
         x = np.array(r) / self.rs
         M0 = 4.*np.pi*self.rs**3*self.rhoc
         
@@ -145,9 +137,6 @@ class NFWProfile(RadialProfile):
         return m
     
     def potential(self, r, zero_at_zero=True):
-        """The gravitational  potential. 0 at r -> infty.
-        zero_at_zero: if True, norm to phi(r->0)=0. This can be useful
-        to avoid problems caused by roundoff errors as r->0"""
         phi = np.zeros_like(r)
         x = np.array(r) / self.rs
         sel = x > 1e-4
@@ -158,30 +147,20 @@ class NFWProfile(RadialProfile):
             phi[sel] = self.phi0 * np.log(1. + x[sel]) / x[sel]
             phi[~sel] = self.phi0 * (1. - x[~sel]/2. + x[~sel]**2/3.)
         return phi
-    
-    def phimax(self):
-        return 0.
-    
-    def r0(self):
-        """The virial radius"""
-        return self.r200c
-    
-    def daccdr(self, r):
-        """Radial derivative of the acceleration"""
-        a = r/self.rs
-        log_deriv = (1./self.rs/(1. + a))
-        daccr_dr = -self.phi0*self.rs * (2*r**-3 * np.log(1. + a) - 2*r**-2 * log_deriv
-                          + r**-1 * (-1./self.rs**2/(1. + a)**2))
-        
-        return daccr_dr
-    
+
     def to_dict(self):
         d = {}
         
         d["conc"] = self.conc
         d["r200c"] = self.r200c
+        d["anisotropy"] = self.anisotropy
         
         return d
+    
+    @classmethod
+    def from_dict(cls, d):
+        """Load a state extracted from a previous '.to_dict()' call"""
+        return cls.__init__(conc=d["conc"], r200c=d["r200c"], anisotropy=d["anisotropy"])
     
     def __str__(self):
         return "NFWProfile(conc=%.5g, r200c=%.5g, anisotropy=%.5g)" % (self.conc, self.r200c, self.anisotropy)
@@ -201,25 +180,15 @@ class EinastoProfile(RadialProfile):
         self.alpha = alpha
 
     def density(self, r):
-        """Density in Msol/Mpc**3"""
-        
         return self.rhom2*np.exp(- 2./self.alpha * ((r/self.rm2)**self.alpha - 1.))
-    
-    def drhodr(self, r):
-        """Radial derivative of the density"""
-        assert 0
-    
+
     def m_of_r(self, r):
-        """The mass contained inside radius r"""
-        from scipy.special import gamma, gammaincc
-        
         N = self.rhom2 * np.exp(2./self.alpha)
         A = self.rm2**(-self.alpha) / self.alpha
         alpha = self.alpha
-        #rho = N * np.exp(-2.*A*r**self.alpha)
-        
+
         def gamma_wolfram(a, x): # incomplete gamma function as defined in wolfram alpha
-            return gammaincc(a, x) * gamma(a)
+            return gammaincc(a, x) * GammaF(a)
         
         def m_indef(r):
             return - 4.*np.pi* N/alpha * ( 8**(-1./alpha) * r**3 * (A*r**alpha)**(-3/alpha)
@@ -228,15 +197,7 @@ class EinastoProfile(RadialProfile):
         return m_indef(r) - m_indef(self.r0()*1e-15)
     
     def potential(self, r, zero_at_zero=False):
-        """The gravitational  potential. 0 at r -> infty.
-        zero_at_zero: if True, norm to phi(r->0)=0. This can be useful
-        to avoid problems caused by roundoff errors as r->0"""
-       
-        assert 0
-    
-    def r0(self):
-        """The scale radius"""
-        return self.rm2
+        raise NotImplementedError("Potential of Einasto profile is not implemented yet")
     
     def __str__(self):
         return f"EinastoProfile(rhom2={self.rhom2:.5g}, rm2={self.rm2:.5g}, alpha={self.alpha:.5g}, anisotropy={self.anisotropy:.5g})"
@@ -306,9 +267,6 @@ class PowerlawProfile(RadialProfile):
     def potential(self, r, zero_at_zero=True):
         return self.phic * r**(2.-self.alpha)
 
-    def r0(self):
-        return 1.0
-
     def to_dict(self):
         d = {}
         
@@ -342,15 +300,6 @@ class IsothermalSphere(RadialProfile):
     
     def potential(self, r, zero_at_zero=False):
         return self.v0**2 * np.log(r/self.rad0)
-    
-    def r0(self):
-        """The scale radius"""
-        return self.rad0
-    
-    def daccdr(self, r):
-        """Radial derivative of the acceleration"""
-
-        return self.v0**2 /r**2
     
     def __str__(self):
         return f"IsothermalSphere(rho0={self.rho0:.5g}, r0={self.rad0:.5g})"
@@ -390,13 +339,7 @@ class PlummerProfile(RadialProfile):
             phi_expansion = 0.5 * self.G * self.M * r**2 / self.a**3
             phi = np.where(r < 1e-3*self.a, phi_expansion, phi)
         return phi
-    
-    def r0(self):
-        return self.a
-    
-    def phimax(self):
-        return 0.
-    
+
     def __str__(self):
         return f"PlummerProfile(m={self.M:.5g}, a={self.a:.5g})"
 
@@ -418,24 +361,14 @@ class RadialTidalProfile(RadialProfile):
         self.warned = False
         
     def density(self, r):
-        """Density in Msol/Mpc**3"""
         return self.rhoalpha * np.ones_like(r)
-    def drhodr(self, r):
-        """Radial derivative of the density"""
-        return np.zeros_like(r)
+    
     def m_of_r(self, r):
-        """The mass contained inside radius r"""
         return - self.alpha/self.G * r**3
+    
     def potential(self, r, zero_at_zero=True):
-        """The gravitational potential"""
         return - 0.5 * self.alpha* r**2
-    def daccdr(self, r):
-        """The radial derivative of the acceleration"""
-        if not self.warned:
-            print("Warning: this function was wrong previously... I have to check some things again! ")
-            self.warned = True
-        # return 3.*self.alpha/self.G * r**2 -- previous wrong version...
-        return self.alpha * np.ones_like(r)
+
     def __str__(self):
         return f"RadialTidalProfile(tide={self.alpha:.5g})"
 

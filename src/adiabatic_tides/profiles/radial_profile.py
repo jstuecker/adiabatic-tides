@@ -51,6 +51,14 @@ class RadialProfile(Configureable):
         """Abstract: The gravitational potential. By default normed to 0 at infinity"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
     
+    # Optional methods that can be implemented by subclasses
+    def to_dict(self):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
+    
+    @classmethod
+    def from_dict(cls, d):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
+    
     # ------------------ Geometrical Scales ------------------ #
 
     # Numerical scales that are defined by the configuration
