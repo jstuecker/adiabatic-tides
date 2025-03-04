@@ -18,11 +18,12 @@ def test_sample_radii_fixed(profile, embed_plot):
     rmax = 1.
     
     rs = at.numerics.sample.sample_radii(ri, prof.m_of_r(ri), 1000000, rmax=rmax)
-    mcp = at.profiles.MonteCarloProfile(rs, mi=prof.m_of_r(rmax)/len(rs), rmin=1e-3, rmax=1e3, nbins=500)
+    ms = np.ones_like(rs) * prof.m_of_r(rmax) / len(rs)
+    pprof = at.profiles.ParticleProfile((rs, ms), rbins=np.logspace(-3,3,100))
 
     # uniform mass sampling makes it hard to get the density right at small radii
     ritest = np.logspace(-1.,-0.1, 100)
-    m, mref = mcp.m_of_r(ritest), prof.m_of_r(ritest)
+    m, mref = pprof.m_of_r(ritest), prof.m_of_r(ritest)
 
     embed_plot(plot_relative_error(m, mref, 1e-1))
     check_max_relative_error(m, mref, 1e-1)
@@ -39,7 +40,7 @@ def test_sample_radii_adaptive(profile, embed_plot):
     # We have a lot more (lower mass) particles at small radii
     weights = 1. / (prof.density(ri)*ri**2 * ri) 
     rs,ms = at.numerics.sample.sample_rimi_from_density(ri, prof.density(ri), 1000000, weights=weights )
-    mcp = at.profiles.MonteCarloProfile(rs, ms, rmin=1e-10, rmax=1e10)
+    pprof = at.profiles.ParticleProfile((rs, ms), rbins=np.logspace(-10,10,1000))
 
     if profile == "plummer":
         # At large radii the histogram needed to calculate the
@@ -48,7 +49,7 @@ def test_sample_radii_adaptive(profile, embed_plot):
         ritest = np.logspace(-9,5, 100)
     else: 
         ritest = np.logspace(-9,9, 100)
-    rho, rhoref = mcp.density(ritest), prof.density(ritest)
+    rho, rhoref = pprof.density(ritest), prof.density(ritest)
 
     embed_plot(plot_relative_error(rho, rhoref, 1e-1))
     check_max_relative_error(rho, rhoref, 1e-1)

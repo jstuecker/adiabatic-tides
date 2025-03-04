@@ -103,147 +103,6 @@ class NumericalProfile(RadialProfile):
         s += f"\n  rho={zlib.adler32(self.q['rho'].data.tobytes())}"
         return s
 
-class MonteCarloProfile(RadialProfile):
-    def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
-        """A radial profile which is given by a histogram of particles
-        
-        ri : the radii of the particles (Mpc), can be provided later via set_particles
-        mi : the masses (Msol), can be provided later via set_particles
-        
-        base_profile : An analytic base profile. Optional and will only used for setting scales
-        rmax : the largest radius that is considered to have mass (in Mpc)
-        rmin : the smallest radius that is consider to have mass (in Mpc)
-        nbins : the number of bins
-        rbins : explicitly set the bins -- if given rmin, rmax and nbins will be ignored
-        ancorphi : where to set the potential to zero? Can be 'rmax', 'rmin' or "infty"
-        from_dict : load a previous profile from a dict created by .to_dict()
-        """
-        super().__init__()
-        
-        self.q = {}
-        
-        assert ancorphi in ("rmax", "rmin", "infty"), "Invalid value for ancorphi=%s" % ancorphi
-        self.ancorphi = ancorphi
-        
-        if from_dict:
-            self.from_dict(from_dict)
-            return
-    
-        if ri is not None:
-            self.set_particles(ri,mi, update=False)
-        
-        #self.base_profile = base_profile
-        if base_profile is not None:
-            self.base_radius = base_profile.r0()
-        else:
-            self.base_radius = np.max(ri)
-        
-        self.set_bins(rmax=rmax, rmin=rmin, nbins=nbins, rbins=rbins, update=False)
-        
-        if ri is not None:
-            self._update()
-            
-    def set_bins(self, rmax=None, rmin=None, nbins=1000, rbins=None, update=True):
-        """Change the bins that are used to bin the mass and solve the forces
-        
-        rmax : the largest radius that is considered to have mass (in Mpc)
-        rmin : the smallest radius that is consider to have mass (in Mpc)
-        nbins : the number of bins
-        rbins : explicitly set the bins -- if given rmin, rmax and nbins will be ignored
-        update : whether to update the mass, potential and force-profiles. Should always 
-                 be "True" unless you know what you are doing
-        """
-        if rbins is None:
-            if rmin is None:
-                rmin = self.base_radius * 1e-6
-            if rmax is None:
-                rmax = self.base_radius * 1e1
-            self.rbins = np.logspace(np.log10(rmin), np.log10(rmax), nbins)
-        else:
-            self.rbins = rbins
-            
-        self.rbinscent = np.sqrt(self.rbins[1:]*self.rbins[:-1])
-        self.Vbins = 4./3.*np.pi*(self.rbins[1:]**3 - self.rbins[:-1]**3)
-        
-        if update:
-            self._update()
-
-    def set_particles(self, ri, mi=1., update=True):
-        """Set the particles positions and masses of this profile
-        
-        ri : radii or positions of the particles
-        mi : masses of the particles
-        update : if True, the density/mass/gravity profiles will be recalculated
-                 should always be True, unless you know what you are doing
-        """
-        if ri.shape[-1] == 3:
-            ri = np.sqrt(np.sum(ri**2, axis=-1))
-        self.ri = ri
-        self.mi = np.ones_like(self.ri) * mi
-        
-        if update:
-            self._update()
-            
-    def _set_mass_profile(self, rho, m):
-        assert (len(rho) == len(self.rbins)-1) & (len(m) == len(self.rbins))
-        self.q["rho"], self.q["mofr"] = rho, m
-        
-        accr = - self.G * self.q["mofr"] / self.rbins**2
-        self.q["phi"] = - numerics.integrate.trapez_integral_cumulative(self.rbins, accr)
-
-    def _update(self):
-        """Recalculate the density/mass/gravity profiles"""
-        #self.q["rho"], self.q["mofr"] = mathtools.get_mass_profile(self.ri, self.mi, self.rbins)
-        rho, m = numerics.sample.get_mass_profile(self.ri, self.mi, self.rbins)
-        self._set_mass_profile(rho, m)
-
-    def density(self, r):
-        """Density in Msol/Mpc**3"""
-        return np.interp(np.log10(r), np.log10(self.rbinscent), self.q["rho"])
-    
-    def m_of_r(self, r):
-        """The mass contained inside radius r"""
-        return np.interp(np.log10(r), np.log10(self.rbins), self.q["mofr"])
-    
-    def potential(self, r, zero_at_zero=False):
-        """The gravitational  potential"""
-        assert not zero_at_zero, "mode not implemented"
-        dphi = np.interp(np.log10(r), np.log10(self.rbins), self.q["phi"])
-        if self.ancorphi == "rmax":
-            return dphi - self.q["phi"][-1]
-        else: # ancored at 0
-            return dphi
-        
-    def r0(self):
-        """A scale radius"""
-        return self.base_radius
-
-    def to_dict(self):
-        """Returns a dictionary with all variables that describe the current state"""
-        d = {}
-        d["ri"] = self.ri
-        d["mi"] = self.mi
-        d["rbins"] = self.rbins
-        d["base_radius"] = self.base_radius
-        return d
-
-    def from_dict(self, d):
-        """Load a state  extracted from a previos '.to_dict()' call"""
-        self.base_radius = d["base_radius"]
-        self.set_particles(d["ri"], d["mi"], update=False)
-        self.set_bins(rbins=d["rbins"], update=True)
-        
-    def to_string(self):
-        # We just create a hash here which allows comparison
-        # whether two MCProfiles are identical
-        import zlib
-        mystr = "baseradius%.5e" % self.r0()
-        mystr += "_rbinshash" + str(zlib.adler32(self.rbins.data.tobytes()))
-        mystr +=  "_rihash" + str(zlib.adler32(self.ri.data.tobytes()))
-        mystr +=  "_mihash" + str(zlib.adler32(self.mi.data.tobytes()))
-        
-        return mystr
-    
 class ParticleProfile(NumericalProfile):
     def __init__(self, particles, rbins):
         """ This class is going to replace MonteCarloProfile and will ahve additional options
@@ -297,13 +156,14 @@ class ParticleProfile(NumericalProfile):
     def to_dict(self):
         """Returns a dictionary with all variables that describe the current state"""
         d = {}
-        d["rbins"] = self.rbins
         d["p"] = self.p
+        d["rbins"] = self.rbins
         return d
 
-    def from_dict(self, d):
-        """Load a state  extracted from a previos '.to_dict()' call"""
-        raise NotImplementedError("Not implemented yet")
+    @classmethod
+    def from_dict(cls, d):
+        """Load a state extracted from a previous '.to_dict()' call"""
+        return cls.__init__(particles=d["p"], rbins=d["rbins"])
 
     def __str__(self):
         return f"ParticleProfile with {len(self.p['r'])} particles in {len(self.ri)} bins in ({self.ri[0]:.5e}, {self.ri[-1]:.5e})"
