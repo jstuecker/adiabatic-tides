@@ -85,3 +85,11 @@ def test_multi_step_tidal_convergence(profile, embed_plot):
 
         check_max_relative_error(rho(rev), rho_hr(rev), 1e-2, fscale=prof.density(rev))
     embed_plot(plot_relative_error(rho(rev), rho_hr(rev), 1e-2, fscale=prof.density(rev)))
+
+@pytest.mark.slow
+@pytest.mark.parametrize("profile", ["nfw", "powerlaw0.5", "powerlaw1.8", "aniso0.2pow1.5"])
+def test_adiabatic_class(profile, embed_plot):
+    prof = standard_profiles(profile)
+    aprof = at.adiabatic.AdiabaticTidalTransformation.from_rtid(prof, 1.).run(5).assemble_total_profile()
+
+    print(repr(aprof))

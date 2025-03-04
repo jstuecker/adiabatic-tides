@@ -1,6 +1,6 @@
 import numpy as np
 from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
-from ..config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
+from ..config import Config, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
 from .. import numerics
 import functools
 
@@ -11,26 +11,17 @@ def deprecated(func):
         return func(*args, **kwargs)
     return new_func
 
-class RadialProfile(Configureable):
-    DEFAULT_CONFIG = {
-        "general": GeneralConfig(),
-        "eddington": EddingtonConfig(),
-        "actions": ActionsConfig(),
-        "sampling": SamplingConfig()
-    }
-
-    def __init__(self, rmin=None, rmax=None, phase_space="eddington", anisotropy=0., **configs):
+class RadialProfile():
+    def __init__(self, rmin=None, rmax=None, phase_space="eddington", anisotropy=0., config=None):
         """This is an abstract class defining the interface of RadialProfiles,
         don't initialize!"""
 
         self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
         self.potential_zero_at_infty = True # should replace this by a function that returns the potential zero-point
 
-        super().__init__(**configs)
-        if rmin is not None:
-            self.cfg["general"].rmin = rmin
-        if rmax is not None:
-            self.cfg["general"].rmax = rmax
+        self.cfg = config or Config()
+        self.cfg.general.rmin = rmin or self.cfg.general.rmin
+        self.cfg.general.rmax = rmax or self.cfg.general.rmax
 
         self.set_phase_space(phase_space, anisotropy=anisotropy)
         
@@ -63,10 +54,10 @@ class RadialProfile(Configureable):
 
     # Numerical scales that are defined by the configuration
     def rmin(self):
-        return self.cfg["general"].rmin / self.cfg["general"].scale_geometry
+        return self.cfg.general.rmin / self.cfg.general.scale_geometry
     
     def rmax(self):
-        return self.cfg["general"].rmax * self.cfg["general"].scale_geometry
+        return self.cfg.general.rmax / self.cfg.general.scale_geometry
     
     # Scales that depend on the potential structure
     def rtid(self):
@@ -181,7 +172,7 @@ class RadialProfile(Configureable):
     def _search_radius(self, f, rlow=None, rup=None, niter=None, logspace=True, invalid_val=np.nan):
         rlow = self.rmin() if rlow is None else rlow
         rup = self.rmax() if rup is None else rup
-        niter = int(self.cfg["actions"].niter_pa * self.cfg["general"].scale_accuracy) if niter is None else niter
+        niter = int(self.cfg.actions.niter_pa * self.cfg.general.scale_accuracy) if niter is None else niter
 
         return numerics.search.ridders_method(f, rlow, rup, mode="positive", niter=niter, logspace=logspace, invalid_val=invalid_val)
     
@@ -227,10 +218,10 @@ class RadialProfile(Configureable):
         def energy_permitted(r):
             return e - 0.5*l**2/r**2 - self.potential(r)
 
-        if niter is None: niter = self.cfg["actions"].niter_pa
+        if niter is None: niter = self.cfg.actions.niter_pa
         if rlow is None: rlow = self.rmin()
         if rup is None: rup = self.rmax()
-        if search_method is None: search_method = self.cfg["actions"].search_method
+        if search_method is None: search_method = self.cfg.actions.search_method
 
         if search_method == "binary":
             rp = numerics.search.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
@@ -250,7 +241,7 @@ class RadialProfile(Configureable):
             if anisotropy is None:
                 self.phase_space = None
             else:
-                self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg, anisotropy=anisotropy)
+                self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg.general, self.cfg.eddington, anisotropy=anisotropy)
         else:
             self.phase_space = phase_space
         
@@ -285,13 +276,13 @@ class RadialProfile(Configureable):
     def radial_action_of_rp_ra(self, rp, ra, nintegrate=None, invalid_vr_to_zero=True):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
         if nintegrate is None:
-            nintegrate = int(self.cfg["actions"].nintegrate * self.cfg["general"].scale_accuracy)
+            nintegrate = int(self.cfg.actions.nintegrate * self.cfg.general.scale_accuracy)
         return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, invalid_vr_to_zero=invalid_vr_to_zero)
 
     def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None):
         """Numerically infer the radial orbital period time"""
         if nintegrate is None:
-            nintegrate = int(self.cfg["actions"].nintegrate * self.cfg["general"].scale_accuracy)
+            nintegrate = int(self.cfg.actions.nintegrate * self.cfg.general.scale_accuracy)
         djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate)
         return djde*2.*np.pi
     
@@ -423,8 +414,8 @@ class RadialProfile(Configureable):
         nsteps_chain : number of steps in the metropolis chain (to be safe use 32 or higher)
                        sampling time scales linear with this parameter
         """
-        cfg : SamplingConfig = self.cfg["sampling"]
-        cfg_gen : GeneralConfig = self.cfg["general"]
+        cfg : SamplingConfig = self.cfg.sampling
+        cfg_gen : GeneralConfig = self.cfg.general
 
         if rmax is None: rmax = self.rmax()
         if rpmin is None: rpmin = self.rmin()
@@ -584,4 +575,4 @@ class RadialProfile(Configureable):
         return f"RadialProfile(anisotropy={self.anisotropy})"
     
     def __repr__(self):
-        return self.__str__() + "\n" + super().__repr__()
+        return self.__str__() + "\n" + self.cfg.__repr__()

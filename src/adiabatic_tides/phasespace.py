@@ -1,5 +1,5 @@
 import numpy as np
-from .config import Configureable, only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig, SamplingConfig
+from .config import only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig
 from . import numerics
 
 class PhaseSpace():
@@ -29,13 +29,15 @@ class AnalyticPhaseSpace(PhaseSpace):
         self.f_of_el = f_of_el
 
 class EddingtonPhaseSpace(PhaseSpace):
-    def __init__(self, density, potential, cfg, anisotropy=0.):
+    def __init__(self, density, potential, cfg_gen : GeneralConfig, cfg_ed : EddingtonConfig, anisotropy=0.):
         super().__init__()
         self.density = density
         self.potential = potential
 
         self.anisotropy = anisotropy
-        self.cfg = cfg
+
+        self.cfg_gen = cfg_gen
+        self.cfg_ed = cfg_ed
 
         self.q = {}
         self.ip = {}
@@ -46,17 +48,17 @@ class EddingtonPhaseSpace(PhaseSpace):
     def set_density(self, density):
         self.density = density
 
-    @only_on_change(attributes=("potential","density"), cfg_groups=('eddington', 'general'))
+    @only_on_change(attributes=("cfg_gen","cfg_ed"))
     def _setup_f(self):
-        cfg_ps : EddingtonConfig = self.cfg["eddington"]
-        cfg_gen : GeneralConfig = self.cfg["general"]
+        cfg_ed = self.cfg_ed
+        cfg_gen = self.cfg_gen
 
-        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ps.nr*cfg_gen.scale_accuracy))
+        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ed.nr*cfg_gen.scale_accuracy))
         phi = self.potential(ri)
         
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
-        e,f1 = numerics.integrate.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ps.nintegrate)
+        e,f1 = numerics.integrate.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ed.nintegrate)
         self.q["phasespace_r"] = ri[sel]
         self.q["phasespace_e"] = e
         self.q["phasespace_f"] = f1
@@ -76,7 +78,8 @@ class EddingtonPhaseSpace(PhaseSpace):
 class ActionMap():
     def __init__(self, profile):
         self.profile = profile
-        self.cfg = profile.cfg
+        self.cfg_gen = profile.cfg.general
+        self.cfg_act = profile.cfg.actions
 
     def rp_ra_of_jl(self, j, l):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
@@ -88,10 +91,10 @@ class InterpolatorActionMap(ActionMap):
         self.q = {}
         self.ip = {}
 
-    @only_on_change(cfg_groups=('actions', 'general'))
+    @only_on_change(attributes=("cfg_gen","cfg_act")) 
     def setup_rp_ra_of_jl(self):
-        cfg_gen : GeneralConfig = self.cfg["general"]
-        cfg_act : ActionsConfig = self.cfg["actions"]
+        cfg_gen : GeneralConfig = self.cfg_gen
+        cfg_act : ActionsConfig = self.cfg_act
 
         rpmin, rpmax = self.profile.rmin(), self.profile.rmax()
         facmin, facmax = cfg_act.rpfac_eps/cfg_gen.scale_geometry, cfg_act.rafac_max*cfg_gen.scale_geometry

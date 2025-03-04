@@ -1,6 +1,5 @@
 from .radial_profile import RadialProfile
 from ..phasespace import EddingtonPhaseSpace
-from ..config import only_on_change
 import numpy as np
 from functools import partial
 from ..numerics.search import maximize_scalar

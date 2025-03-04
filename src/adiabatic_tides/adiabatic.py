@@ -1,7 +1,7 @@
 import numpy as np
 from . import profiles
 from . import numerics
-from .config import Configureable, AdiabaticConfig, GeneralConfig
+from .config import AdiabaticConfig
 from .profiles import RadialProfile, CompositeProfile
 import time
 from functools import partial
@@ -76,31 +76,24 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
     
 # === Object oriented interface ===
 
-class AdiabaticTransformation(Configureable):
-    DEFAULT_CONFIG = {
-        'adiabatic': AdiabaticConfig()
-    }
-
-    def __init__(self, prof_initial : RadialProfile, prof_pert : RadialProfile, nr=None, verbose=1, **configs):
+class AdiabaticTransformation():
+    def __init__(self, prof_initial : RadialProfile, prof_pert : RadialProfile, nr=None, verbose=1):
         # Combine with the config from the initial profile
-        self.DEFAULT_CONFIG = {**self.DEFAULT_CONFIG, **prof_initial.cfg}
-        super().__init__(**configs)
+        self.cfg = prof_initial.cfg
+        self.cfg.adiabatic.nr = nr or self.cfg.adiabatic.nr
 
         self.prof_initial = prof_initial
         self.prof_pert = prof_pert
         self.verbose = verbose
 
-        if nr is not None:
-            self.cfg["adiabatic"].nr = nr
-
-        r0 = np.logspace(np.log10(prof_initial.rmin()), np.log10(prof_initial.rmax()), self.cfg["adiabatic"].nr)
+        r0 = np.logspace(np.log10(prof_initial.rmin()), np.log10(prof_initial.rmax()), self.cfg.adiabatic.nr)
         self.history = [(r0, prof_initial.density(r0), prof_initial.density, prof_initial.m_of_r, prof_initial.potential)]
 
     def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
         raise NotImplementedError("This method should be implemented in a subclass")
     
     def solve_poisson(self, ri, rhoi, mode=None):
-        lb = self.cfg["adiabatic"].lower_boundary
+        lb = self.cfg.adiabatic.lower_boundary
         if lb == "initial":
             lb = self.prof_initial.density, self.prof_initial.m_of_r, self.prof_initial.potential
             if mode is not None: # pass mode to each function
@@ -122,9 +115,8 @@ class AdiabaticTransformation(Configureable):
     def run(self, nitermax=None, eps=None, reset=True):
         if reset:
             self.history = self.history[:1]
-        cfg : AdiabaticConfig = self.cfg["adiabatic"]
-        nitermax = nitermax or cfg.nitermax
-        eps = eps or cfg.eps_done * self.cfg["general"].scale_accuracy
+        nitermax = nitermax or self.cfg.adiabatic.nitermax
+        eps = eps or self.cfg.adiabatic.eps_done * self.cfg.general.scale_accuracy
         
         for i in range(nitermax):
             t0 = time.time()
@@ -168,8 +160,8 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
         return cls(prof_initial=prof_initial, tide=-prof_initial.accr(rtid)/rtid, **kwargs)
 
     def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
-        cfg : AdiabaticConfig = self.cfg["adiabatic"]
-        a, b = self.cfg["general"].scale_geometry, self.cfg["general"].scale_accuracy
+        cfg = self.cfg.adiabatic
+        a, b = self.cfg.general.scale_geometry, self.cfg.general.scale_accuracy
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr*b), ninterp=int(cfg.ninterp*b), nintegrate=int(cfg.nintegrate*b))
         if cfg.lower_boundary == "initial":
