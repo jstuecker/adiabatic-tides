@@ -187,7 +187,7 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
 
 class AdiabaticResultProfile(RadialProfile):
     def __init__(self, result, f_of_rp_ra):
-        super().__init__(phase_space=None)
+        super().__init__(phase_space=None, anisotropy=None)
         ri, rhoi, rho, m, phi = result
 
         self.q = dict(ri=ri, rhoi=rhoi)

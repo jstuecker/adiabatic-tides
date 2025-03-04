@@ -247,7 +247,10 @@ class RadialProfile(Configureable):
 
     def set_phase_space(self, phase_space="eddington", anisotropy=0.):
         if phase_space == "eddington":
-            self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg, anisotropy=anisotropy)
+            if anisotropy is None:
+                self.phase_space = None
+            else:
+                self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg, anisotropy=anisotropy)
         else:
             self.phase_space = phase_space
         
