@@ -7,8 +7,6 @@ import numpy as np
 
 @dataclass
 class GeneralConfig:
-    scale_accuracy: float = 1
-    scale_geometry: float = 1
     rmin: float = 1e-20
     rmax: float = 1e20
 
@@ -56,8 +54,10 @@ class Config():
                  eddington : EddingtonConfig | None = None,
                  actions : ActionsConfig | None = None,
                  adiabatic : AdiabaticConfig | None = None,
-                 sampling : SamplingConfig | None = None):
-        
+                 sampling : SamplingConfig | None = None,
+                 scale_accuracy: float | None = None,
+                 scale_geometry: float | None = None):
+
         self.general = general or GeneralConfig()
         self.eddington = eddington or EddingtonConfig()
         self.actions = actions or ActionsConfig()
@@ -65,6 +65,11 @@ class Config():
         self.sampling = sampling or SamplingConfig()
 
         self.configs = (self.general, self.eddington, self.actions, self.adiabatic, self.sampling)
+
+        if scale_accuracy is not None:
+            self.scale_accuracy(scale_accuracy)
+        if scale_geometry is not None:
+            self.scale_geometry(scale_geometry)
 
     def scale_accuracy(self, scale: float):
         self.eddington.nintegrate = int(self.eddington.nintegrate * scale)
@@ -90,8 +95,8 @@ class Config():
         self.general.rmin = self.general.rmin / scale
         self.general.rmax = self.general.rmax * scale
 
-        self.actions.rafac_max = self.actions.rafac_max * scale
-        self.actions.rpfac_eps = self.actions.rpfac_eps / scale
+        self.actions.rafac_max = self.actions.rafac_max * np.sqrt(scale)
+        self.actions.rpfac_eps = self.actions.rpfac_eps / np.sqrt(scale)
 
         self.adiabatic.rminfac = self.adiabatic.rminfac * np.sqrt(scale)
 

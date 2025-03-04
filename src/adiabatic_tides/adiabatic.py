@@ -116,7 +116,7 @@ class AdiabaticTransformation():
         if reset:
             self.history = self.history[:1]
         nitermax = nitermax or self.cfg.adiabatic.nitermax
-        eps = eps or self.cfg.adiabatic.eps_done * self.cfg.general.scale_accuracy
+        eps = eps or self.cfg.adiabatic.eps_done
         
         for i in range(nitermax):
             t0 = time.time()
@@ -161,9 +161,8 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
 
     def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
         cfg = self.cfg.adiabatic
-        a, b = self.cfg.general.scale_geometry, self.cfg.general.scale_accuracy
 
-        kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr*b), ninterp=int(cfg.ninterp*b), nintegrate=int(cfg.nintegrate*b))
+        kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate))
         if cfg.lower_boundary == "initial":
             fpa_below = self.prof_initial.f_of_rperi_rapo
             if mode is not None:

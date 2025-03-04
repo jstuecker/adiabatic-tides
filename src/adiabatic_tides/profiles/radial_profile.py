@@ -54,10 +54,10 @@ class RadialProfile():
 
     # Numerical scales that are defined by the configuration
     def rmin(self):
-        return self.cfg.general.rmin / self.cfg.general.scale_geometry
+        return self.cfg.general.rmin
     
     def rmax(self):
-        return self.cfg.general.rmax / self.cfg.general.scale_geometry
+        return self.cfg.general.rmax
     
     # Scales that depend on the potential structure
     def rtid(self):
@@ -170,9 +170,9 @@ class RadialProfile():
     # These functions help to find e.g. a radius where a given condition is true
     
     def _search_radius(self, f, rlow=None, rup=None, niter=None, logspace=True, invalid_val=np.nan):
-        rlow = self.rmin() if rlow is None else rlow
-        rup = self.rmax() if rup is None else rup
-        niter = int(self.cfg.actions.niter_pa * self.cfg.general.scale_accuracy) if niter is None else niter
+        rlow = rlow or self.rmin()
+        rup = rup or self.rmax()
+        niter = niter or self.cfg.actions.niter_pa
 
         return numerics.search.ridders_method(f, rlow, rup, mode="positive", niter=niter, logspace=logspace, invalid_val=invalid_val)
     
@@ -275,14 +275,12 @@ class RadialProfile():
 
     def radial_action_of_rp_ra(self, rp, ra, nintegrate=None, invalid_vr_to_zero=True):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
-        if nintegrate is None:
-            nintegrate = int(self.cfg.actions.nintegrate * self.cfg.general.scale_accuracy)
+        nintegrate = nintegrate or self.cfg.actions.nintegrate
         return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, invalid_vr_to_zero=invalid_vr_to_zero)
 
     def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None):
         """Numerically infer the radial orbital period time"""
-        if nintegrate is None:
-            nintegrate = int(self.cfg.actions.nintegrate * self.cfg.general.scale_accuracy)
+        nintegrate = nintegrate or self.cfg.actions.nintegrate
         djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate)
         return djde*2.*np.pi
     
@@ -414,16 +412,13 @@ class RadialProfile():
         nsteps_chain : number of steps in the metropolis chain (to be safe use 32 or higher)
                        sampling time scales linear with this parameter
         """
-        cfg : SamplingConfig = self.cfg.sampling
-        cfg_gen : GeneralConfig = self.cfg.general
+        rmax = rmax or self.rmax()
+        rpmin = rpmin or self.rmin()
+        rpmax = rpmax or rmax
 
-        if rmax is None: rmax = self.rmax()
-        if rpmin is None: rpmin = self.rmin()
-        if rpmax is None: rpmax = rmax
-
-        if nintegrate is None: nintegrate = int(cfg.nintegrate * cfg_gen.scale_accuracy)
-        if ninterp is None: ninterp = int(cfg.ninterp * cfg_gen.scale_accuracy)
-        if nsteps_metropolis is None: nsteps_metropolis = int(cfg.nsteps_metropolis * cfg_gen.scale_accuracy)
+        nintegrate = nintegrate or self.cfg.sampling.nintegrate
+        ninterp = ninterp or self.cfg.sampling.ninterp
+        nsteps_metropolis = nsteps_metropolis or self.cfg.sampling.nsteps_metropolis
 
         ri = np.logspace(np.log10(rpmin), np.log10(rmax), ninterp)
 

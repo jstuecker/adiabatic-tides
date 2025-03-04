@@ -50,15 +50,12 @@ class EddingtonPhaseSpace(PhaseSpace):
 
     @only_on_change(attributes=("cfg_gen","cfg_ed"))
     def _setup_f(self):
-        cfg_ed = self.cfg_ed
-        cfg_gen = self.cfg_gen
-
-        ri = np.geomspace(cfg_gen.rmin/cfg_gen.scale_geometry, cfg_gen.rmax*cfg_gen.scale_geometry, int(cfg_ed.nr*cfg_gen.scale_accuracy))
+        ri = np.geomspace(self.cfg_gen.rmin, self.cfg_gen.rmax, int(self.cfg_ed.nr))
         phi = self.potential(ri)
         
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
         
-        e,f1 = numerics.integrate.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=cfg_ed.nintegrate)
+        e,f1 = numerics.integrate.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=self.cfg_ed.nintegrate)
         self.q["phasespace_r"] = ri[sel]
         self.q["phasespace_e"] = e
         self.q["phasespace_f"] = f1
@@ -97,7 +94,7 @@ class InterpolatorActionMap(ActionMap):
         cfg_act : ActionsConfig = self.cfg_act
 
         rpmin, rpmax = self.profile.rmin(), self.profile.rmax()
-        facmin, facmax = cfg_act.rpfac_eps/cfg_gen.scale_geometry, cfg_act.rafac_max*cfg_gen.scale_geometry
+        facmin, facmax = cfg_act.rpfac_eps, cfg_act.rafac_max
 
         # table = mathtools.define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra)
         table = numerics.interpolate.define_peri_apo_table(rpmin, rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra, facmax=facmax, facmin=facmin)
