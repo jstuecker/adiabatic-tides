@@ -216,3 +216,36 @@ def test_rcirc_finding_nonmonotoneous(profile, embed_plot):
 
                 recirc = cprof.r_of_ecirc(ecirc, mode=mode)
                 tc.check_max_relative_error(0.5*cprof.vcirc(recirc)**2 + cprof.potential(recirc), ecirc, 1e-5)
+
+
+def test_string_repr():
+    nfw = at.profiles.NFWProfile(1., m200c=1e12)
+    ppow = at.profiles.PowerlawProfile(1.1, anisotropy=0.1)
+    ptide = at.profiles.RadialTidalProfile(1.2)
+    peinasto = at.profiles.EinastoProfile()
+    pplum = at.profiles.PlummerProfile()
+    piso = at.profiles.IsothermalSphere()
+    cprof = at.profiles.CompositeProfile(dm=nfw, tide=ptide, external=("tide",))
+
+    r = np.logspace(-10,10,133)
+    nprof = at.profiles.NumericalProfile(r, nfw.density(r))
+    nprofb = at.profiles.NumericalProfile(r, nfw.density(r))
+
+    # pprof
+    part = ppow.sample_particles(1000, mode="dict", rmax=1.)
+    pprof = at.profiles.ParticleProfile(part, rbins=r)
+
+    # Mimic result of adiabatic calculation
+    ares = (nprof.ri, nprof.q["rho"], nprof.density, nprof.m_of_r, nprof.potential)
+    aprof = at.adiabatic.AdiabaticResultProfile(ares, nprof.f_of_rperi_rapo)
+
+    for prof in (nfw, ppow, ptide, peinasto, pplum, piso, cprof, nprof, pprof, aprof):
+        print(prof)
+
+    print("\n")
+
+    assert repr(nprof) == repr(nprofb)
+
+    for prof in (nfw, ppow, ptide, peinasto, pplum, piso, cprof, nprof, pprof, aprof):
+        print(repr(prof))
+        print()

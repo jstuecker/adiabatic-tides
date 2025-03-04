@@ -239,7 +239,7 @@ class EinastoProfile(RadialProfile):
         return self.rm2
     
     def __str__(self):
-        return "EinastoProfile(rhom2=%.5g, rm2=%.5g, alpha=%.5g, anisotropy=%.5g)" % (self.rhom2, self.rm2, self.alpha, self.anisotropy)
+        return f"EinastoProfile(rhom2={self.rhom2:.5g}, rm2={self.rm2:.5g}, alpha={self.alpha:.5g}, anisotropy={self.anisotropy:.5g})"
 
 class PowerlawProfile(RadialProfile):
     def __init__(self, alpha=None, anisotropy=0., gamma=None, rhoc=1.):
