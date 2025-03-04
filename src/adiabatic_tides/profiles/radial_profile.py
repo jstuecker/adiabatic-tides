@@ -328,6 +328,11 @@ class RadialProfile(Configureable):
             return self._search_radius(f, rlow=rlmax, rup=self.rtid())
         else:
             raise ValueError("Unknown mode %s" % mode)
+
+    def radius_of_f(self, f, l=0.):
+        "Radius where the phase space density f(phi(r), l) = f"
+        def func(r): return self.f_of_el(self.potential(r), l) - f
+        return self._search_radius(func)
     
     def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True):
         def energy_permitted(r):
@@ -512,34 +517,6 @@ class RadialProfile(Configureable):
             return numerics.integrate.integrate_double_exponential_a_b(integrand, rmin, rmax, N=nintegrate)
         else:
             return numerics.integrate.integrate_exp_double_exp_a_b(integrand, rmin, rmax, N=nintegrate)
-        
-    def radius_of_f(self, f, rmin=None, rmax=None):
-        """Approximates the radius where the phase space density reaches a given value
-        
-        This function is useful to find a radius where a primordial phase space 
-        density constrained starts getting violated by the profile.
-        At the given radius it holds f_of_e(potential(r)) = f. Typically this is the
-        highest phase space density that is reached at that radius and states with
-        non-zero angular momentum will have lower phase space densities. Therefore
-        r will be the largest radius where the phase space density f can be reached
-        by any particles.
-               
-        f : phase space density in Msol / (km/s)**3 / Mpc**3
-        rmin : Minimum radius for the binary search
-        rmax : Maximum radius for the binary search
-        
-        returns : radius in Mpc
-        """
-        def func(r):
-            return self.f_of_e(self.potential(r)) - np.array(f)
-        if rmin is None:
-            rmin = self.rmin()
-        if rmax is None:
-            rmax = self.rmax()
-
-        rres = numerics.search.vectorized_binary_search(func, rmin, rmax, niter=100, mode="sqrt")
-        
-        return rres
     
     def radius_phase_space_core(self, dmtype="WDM", h=0.68, omega_dm=0.26, verbose=True, **kwargs):
         """Estimates the size of the core given by the phase space density constraint
