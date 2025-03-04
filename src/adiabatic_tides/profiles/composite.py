@@ -151,3 +151,10 @@ class CompositeProfile(RadialProfile):
             return {key: rho_x_vr2[key] / rho[key] for key in rho}, {rho_x_vt2[key] / rho[key] for key in rho}
         else:
             return rho_x_vr2 / rho, rho_x_vt2 / rho
+        
+    def __str__(self):
+        s = "CompositeProfile:"
+        for k, v in self.profiles.items():
+            s += f"\n  {k}: {v}"
+        s += f"\n  external: ({', '.join(self.external)})"
+        return s

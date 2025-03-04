@@ -191,7 +191,6 @@ class AdiabaticResultProfile(RadialProfile):
         ri, rhoi, rho, m, phi = result
 
         self.q = dict(ri=ri, rhoi=rhoi)
-
         self.ip = dict(rho=rho, m=m, phi=phi, f_of_rp_ra=f_of_rp_ra)
 
     def density(self, r):
@@ -208,3 +207,6 @@ class AdiabaticResultProfile(RadialProfile):
         raise NotImplementedError("f_of_el is not implemented for Adiabatic Remnants, instead use f_of_rperi_rapo")
     def f_of_jl(self, j, l):
         raise NotImplementedError("f_of_jl makes sense for Adiabatic Remnants, but we first need to define the selection function")
+    
+    def __str__(self):
+        return f"AdiabaticResultProfile with {len(self.q['ri'])} points in ({self.q['ri'][0]:.5e}, {self.q['ri'][-1]:.5e})"

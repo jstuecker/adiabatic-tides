@@ -568,3 +568,9 @@ class RadialProfile(Configureable):
     
     def to_string(self):
         raise NotImplementedError("to_string not implemented for this profile, need this for caching etc...")
+    
+    def __str__(self):
+        return f"RadialProfile(anisotropy={self.anisotropy})"
+    
+    def __repr__(self):
+        return self.__str__() + "\n" + super().__repr__()

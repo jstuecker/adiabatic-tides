@@ -175,9 +175,6 @@ class NFWProfile(RadialProfile):
         
         return daccr_dr
     
-    def to_string(self):
-        return "nfw_conc=%.5g_r200c=%.5e_m200c=%.5e" % (self.conc, self.r200c, self.m200c)
-    
     def to_dict(self):
         d = {}
         
@@ -185,16 +182,19 @@ class NFWProfile(RadialProfile):
         d["r200c"] = self.r200c
         
         return d
+    
+    def __str__(self):
+        return "NFWProfile(conc=%.5g, r200c=%.5g, anisotropy=%.5g)" % (self.conc, self.r200c, self.anisotropy)
 
 class EinastoProfile(RadialProfile):
-    def __init__(self, rhom2=1., rm2=1., alpha=0.16):
+    def __init__(self, rhom2=1., rm2=1., alpha=0.16, anisotropy=0.):
         """Set up an Einasto profile
         
         rm2 : radius where the slope is -2
         rhom2 : Density at the radius where the slope is -2
         alpha : curvature parameter of the Einasto Profile. Wang et al (2020) suggest 0.16
         """
-        super().__init__()
+        super().__init__(anisotropy=anisotropy)
         
         self.rhom2 = rhom2
         self.rm2 = rm2
@@ -237,6 +237,9 @@ class EinastoProfile(RadialProfile):
     def r0(self):
         """The scale radius"""
         return self.rm2
+    
+    def __str__(self):
+        return "EinastoProfile(rhom2=%.5g, rm2=%.5g, alpha=%.5g, anisotropy=%.5g)" % (self.rhom2, self.rm2, self.alpha, self.anisotropy)
 
 class PowerlawProfile(RadialProfile):
     def __init__(self, alpha=None, anisotropy=0., gamma=None, rhoc=1.):
@@ -306,9 +309,6 @@ class PowerlawProfile(RadialProfile):
     def r0(self):
         return 1.0
 
-    def to_string(self):
-        return "alpha=%.3f_beta=%.5e_rhoc=%.5e" % (self.alpha, self.anisotropy, self.rhoc)
-    
     def to_dict(self):
         d = {}
         
@@ -317,8 +317,10 @@ class PowerlawProfile(RadialProfile):
         d["rhoc"] = self.rhoc
         
         return d
-
     
+    def __str__(self):
+        return f"PowerlawProfile(alpha={self.alpha:.5g}, rhoc={self.rhoc:.5g}, anisotropy={self.anisotropy:.5g})"
+
 class IsothermalSphere(RadialProfile):
     def __init__(self, rho0=1., r0=1.):
         """Set up an Isotrhermal Sphere profile
@@ -349,6 +351,9 @@ class IsothermalSphere(RadialProfile):
         """Radial derivative of the acceleration"""
 
         return self.v0**2 /r**2
+    
+    def __str__(self):
+        return f"IsothermalSphere(rho0={self.rho0:.5g}, r0={self.rad0:.5g})"
 
 class PlummerProfile(RadialProfile):
     def __init__(self, M=1, a=1):
@@ -391,8 +396,9 @@ class PlummerProfile(RadialProfile):
     
     def phimax(self):
         return 0.
-
-
+    
+    def __str__(self):
+        return f"PlummerProfile(m={self.M:.5g}, a={self.a:.5g})"
 
 class RadialTidalProfile(RadialProfile):
     def __init__(self, alpha=0.):
@@ -430,8 +436,8 @@ class RadialTidalProfile(RadialProfile):
             self.warned = True
         # return 3.*self.alpha/self.G * r**2 -- previous wrong version...
         return self.alpha * np.ones_like(r)
-    def to_string(self):
-        return "tid_alpha=%.5e" % self.alpha
+    def __str__(self):
+        return f"RadialTidalProfile(tide={self.alpha:.5g})"
 
 def find_boundary(profile, getphi=False, rguess=None, maxiter=100, eps=1e-4, warning=True, mode="phimax"):
     """Finds a special boundary (e.g. tidal radius or vmax radius) of a RadialProfile

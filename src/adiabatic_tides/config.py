@@ -69,6 +69,13 @@ class Configureable:
             file_config = yaml.safe_load(f) or {}
         self.update_config(**file_config)
 
+    def __repr__(self):
+        s = "Config:"
+        for group in self.cfg:
+            s += f"\n  {group}: {self.cfg[group]}"
+
+        return s
+
 
 @dataclass
 class GeneralConfig:

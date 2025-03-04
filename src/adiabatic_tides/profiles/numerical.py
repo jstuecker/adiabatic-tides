@@ -1,6 +1,7 @@
 from .radial_profile import RadialProfile
 import numpy as np
 from .. import numerics
+import zlib
 
 class NumericalProfile(RadialProfile):
     def __init__(self, ri=None, rho=None, mass=None, r0=None, ancorphi="rmin", from_dict=None, boundary="powerlaw", anisotropy=0., **configs):
@@ -91,17 +92,17 @@ class NumericalProfile(RadialProfile):
         """Load a state  extracted from a previos '.to_dict()' call"""
         self.base_radius = d["base_radius"]
         self.set_density_profile(d["ri"], d["rhoi"], update=True)
-        
-    def to_string(self):
-        # We just create a hash here which allows comparison
-        # whether two MCProfiles are identical
-        import zlib
-        mystr = "baseradius%.5e" % self.base_radius
-        mystr += "_rihash" + str(zlib.adler32(self.ri.data.tobytes()))
-        mystr +=  "_rhoihash" + str(zlib.adler32(self.q["rho"].data.tobytes()))
-        
-        return mystr
-    
+
+    def __str__(self):
+        return f"NumericalProfile with {len(self.ri)} points in ({self.ri[0]:.5e}, {self.ri[-1]:.5e})"
+
+    def __repr__(self):
+        s =  super().__repr__()
+        s += "\nHash:"
+        s += f"\n  ri={zlib.adler32(self.ri.data.tobytes())}"
+        s += f"\n  rho={zlib.adler32(self.q['rho'].data.tobytes())}"
+        return s
+
 class MonteCarloProfile(RadialProfile):
     def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
         """A radial profile which is given by a histogram of particles
@@ -247,6 +248,7 @@ class ParticleProfile(NumericalProfile):
     def __init__(self, particles, rbins):
         """ This class is going to replace MonteCarloProfile and will ahve additional options
         particles -- can either be (r,m) or (r,m,vr,L) or (pos,vel,m)
+            or a dictionary containing variables "r", "m" and optionally "vr" and "l"
         """
         self.rbins = rbins
         self.ri = np.sqrt(rbins[1:]*rbins[:-1])
@@ -266,7 +268,11 @@ class ParticleProfile(NumericalProfile):
         particles -- can either be (r,m) or (r,m,vr,l) or (pos,vel,m)
         """
         self.p = {}
-        if len(particles) == 2:
+        if isinstance(particles, dict):
+            for key in "r", "m", "vr", "l":
+                if key in particles:
+                    self.p[key] = particles[key]
+        elif len(particles) == 2:
             self.p["r"], self.p["m"] = particles
             self.p["vr"], self.p["l"] = None, None
         elif len(particles) == 4:
@@ -277,6 +283,8 @@ class ParticleProfile(NumericalProfile):
             self.p["r"] = np.linalg.norm(pos, axis=-1)
             self.p["vr"] = np.sum(vel*pos, axis=-1)/self.p["r"]
             self.p["l"] = np.linalg.norm(np.cross(pos, vel), axis=-1)
+        else:
+            raise ValueError("Invalid input for particles")
         
         if update:
             self._update_mass_profile()
@@ -296,3 +304,12 @@ class ParticleProfile(NumericalProfile):
     def from_dict(self, d):
         """Load a state  extracted from a previos '.to_dict()' call"""
         raise NotImplementedError("Not implemented yet")
+
+    def __str__(self):
+        return f"ParticleProfile with {len(self.p['r'])} particles in {len(self.ri)} bins in ({self.ri[0]:.5e}, {self.ri[-1]:.5e})"
+    
+    def __repr__(self):
+        s = super().__repr__()
+        for key in self.p:
+            s += f"\n  {key}: {zlib.adler32(self.p[key].tobytes())}"
+        return s
