@@ -4,8 +4,9 @@ from collections.abc import Iterable
 import copy
 import numpy as np
 
-@dataclass
+@dataclass(frozen=True) # All units need to be defined at initialization
 class UnitConfig:
+    """Units, length: parsecs, mass: solar masses, velocity: km/s"""
     length: float = 1e6   # parsecs
     mass: float = 1.0     # solar masses
     velocity: float = 1.0 # km/s
@@ -141,9 +142,15 @@ class Config():
         elif isinstance(config, str):
             return cls.from_yaml(config, default=default)
         elif isinstance(config, cls):
-            return copy.deepcopy(config)
+            # return copy.deepcopy(config)
+            return config
         else:
             raise ValueError(f"Cannot initialize Config from {config}")
+    
+    def G(self):
+        """Gravitational constant in the units of the Config object"""
+        G0 = 4.30071057317063e-3 # In pc (km/s)**2 / Msun
+        return G0 / self.units.length / self.units.velocity**2 * self.units.mass
 
     def scale_accuracy(self, scale: float):
         """Scale all accuracy parameters by a factor scale

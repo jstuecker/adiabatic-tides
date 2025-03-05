@@ -1,13 +1,13 @@
 import numpy as np
 from .import RadialProfile
-from ..config import Config
+from ..config import Config, GeneralConfig
 from ..phasespace import AnalyticPhaseSpace
 from scipy.special import gamma as GammaF, gammaincc
 from scipy.optimize import brentq
 
 # Helper functions
 
-def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
+def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30, G=43.0071057317063e-10):
     """Returns the virial radius of a halo with a given virial mass
     
     It is assumed that mvir is the mass enclosed inside that radius and
@@ -23,7 +23,6 @@ def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
     
     returns : virial radius in Mpc
     """
-    G = 43.0071057317063 * 1e-10  #  Grav. constant in Mpc (km/s)^2 / Msol
     rhocrit = 3.0 / (8.0 * np.pi * G) * (1e2*h)**2
     
     if mode == "crit":
@@ -35,7 +34,7 @@ def RvirOfMvir(mvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
 
     return  np.cbrt(mvir / (rhoref * 4.*np.pi/3. * delta))
 
-def MvirOfRvir(rvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
+def MvirOfRvir(rvir, mode="crit", delta=200., h=0.679, omega_m=0.30, G=43.0071057317063e-10):
     """Returns the virial mass of a halo with a given virial radius
     
     It is assumed that mvir is the mass enclosed inside rvir and
@@ -51,7 +50,6 @@ def MvirOfRvir(rvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
     
     returns : virial mass in Msol
     """
-    G = 43.0071057317063 * 1e-10  #  Grav. constant in Mpc (km/s)^2 / Msol
     rhocrit = 3.0 / (8.0 * np.pi * G) * (1e2*h)**2
     
     if mode == "crit":
@@ -63,12 +61,11 @@ def MvirOfRvir(rvir, mode="crit", delta=200., h=0.679, omega_m=0.30):
         
     return rhoref * 4.*np.pi/3. * delta * rvir**3
 
-def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200.):
+def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200., G=43.0071057317063e-10):
     """Converts the central density and scale radius to concentration and virial mass"""
     def rho_ratio_of_c(c): # mean enclosed density at r200c in units of rhoc
         return 3*(-c/(c + 1) + np.log(c + 1))/c**3
     
-    G = 43.0071057317063 * 1e-10  #  Grav. constant in Mpc (km/s)^2 / Msol
     rhocrit = 3.0 / (8.0 * np.pi * G) * (1e2*h)**2
 
     # Function that has zero-point at the correct concentration
@@ -83,6 +80,8 @@ def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200.):
 
 
 class NFWProfile(RadialProfile):
+    default_config = Config(general=GeneralConfig(rmin=1e-15, rmax=1e15))
+
     def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., config : Config | None = None):
         """Set up an NFW profile with a given mass and concentration
         
@@ -95,26 +94,23 @@ class NFWProfile(RadialProfile):
             are measured in Msol/h and lengths in units of Mpc/h
         """
 
+        super().__init__(anisotropy=anisotropy, config=config)
+
         self.conc = conc
         
         if m200c is not None:
             self.m200c = m200c
-            self.r200c = RvirOfMvir(m200c, h=h)
+            self.r200c = RvirOfMvir(m200c, h=h) * (self.cfg.units.length/1e6) # Convert from Mpc units
         elif r200c is not None:
             assert m200c is None, "You provided both m200c and r200c, please only provide one"
             self.r200c = r200c
-            self.m200c = MvirOfRvir(r200c, h=h)
+            self.m200c = MvirOfRvir(r200c * (self.cfg.units.length/1e6), h=h) * self.cfg.units.mass
         else:
             raise ValueError("You have to provide either m200c or r200c")
 
         self.rs = self.r200c / self.conc
 
-        # For the case that no config is provided, set appropriate default 
-        # values of the numerically resolved radial range
-        self.default_config.general.rmin = 1e-15*self.rs
-        self.default_config.general.rmax = 1e15*self.rs
-
-        super().__init__(anisotropy=anisotropy, config=config)
+        self.cfg.scale_base_radius(self.rs) # Make rmin and rmax be given in units of rs
 
         self.rhoc = self.m200c/(4.*np.pi*self.rs**3 * (np.log(1.+self.conc) - self.conc/(1.+self.conc)))
         self.phi0 = - 4.*np.pi*self.G*self.rhoc*self.rs**2
@@ -122,10 +118,13 @@ class NFWProfile(RadialProfile):
         self.phasespace_initialized =  False
 
     @classmethod
-    def from_rhoc_rs(cls, rhoc, rs, rminrs=1e-15, rmaxrs=1e15, h=0.679, **kwargs):
+    def from_rhoc_rs(cls, rhoc, rs, h=0.679, config=None, **kwargs):
         """Create an NFW profile from characteristic density and scale radius"""
-        conc, m200c = rhoc_rs_to_conc_m200c(rhoc, rs, h=h)
-        return cls(conc, m200c=m200c, rminrs=rminrs, rmaxrs=rmaxrs, h=h, **kwargs)
+        config = Config.flexible_init(config, cls.default_config)
+        rhoc_msol_ov_mpc3 = rhoc * 1e9 * config.units.mass / config.units.length**3
+        rs_mpc = rs * (1e6/config.units.length)
+        conc, m200c = rhoc_rs_to_conc_m200c(rhoc_msol_ov_mpc3, rs_mpc, h=h)
+        return cls(conc, m200c=m200c,  h=h, config=config, **kwargs)
 
     def density(self, r):
         a = r/self.rs

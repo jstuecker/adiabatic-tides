@@ -23,11 +23,15 @@ class RadialProfile():
             if it is a dictionary, the subconfigs 
             "units", "general", "eddington", "actions", "adiabatic", "sampling"
             can be specified through their respective config classes or as dictionaries
+
+        To see config options print(profile.cfg) and to modify them e.g. use
+        profile.cfg.eddington.nintegrate = 200 
+        profile.cfg.scale_accuracy(2.0)
+        Only units cannot be modified after initialization
         """
 
-        self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
-
         self.cfg = Config.flexible_init(config, default=self.default_config)
+        self.G = self.cfg.G()
 
         self.set_phase_space(phase_space, anisotropy=anisotropy)
         
@@ -112,6 +116,7 @@ class RadialProfile():
         inyears : transform to years
         """
         if inyears:
+            assert 0, "***Have to fix this"
             si_parsec, si_year = 3.085677581491367e+16, 31536000.0
             tunit = (1e6*si_parsec / (1e3)) / si_year
             return(2.*np.pi*r / self.vcirc(r) * tunit)

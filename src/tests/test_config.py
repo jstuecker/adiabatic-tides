@@ -30,10 +30,10 @@ def embed_plot(extras):
 
 def standard_profiles(name):
     if name == "nfw": # nfw with rs ~ 1
-        return at.profiles.NFWProfile(conc=1., r200c=1.)
+        return at.profiles.NFWProfile(conc=10., r200c=10.)
     elif name[0:4] == "anfw": # anisotropic nfw
         beta = float(name[4:])
-        return at.profiles.NFWProfile(conc=1., r200c=1., anisotropy=beta)
+        return at.profiles.NFWProfile(conc=10., r200c=10., anisotropy=beta)
     elif name == "plummer":
         return at.profiles.PlummerProfile()
     elif name == "isotherm":

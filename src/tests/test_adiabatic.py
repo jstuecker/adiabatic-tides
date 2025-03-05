@@ -75,13 +75,13 @@ def test_multi_step_tidal_convergence(profile, embed_plot):
     rho_hr, m_hr, phi_hr = prof.density, prof.m_of_r, phi0
 
     for i in range(0,5):
-        rnew, rhonew = at.adiabatic.adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=200, nintegrate=32, ninterp=50)
+        rnew, rhonew = at.adiabatic.adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=200, nintegrate=32, ninterp=50, G=prof.G)
         assert  np.min(rhonew) >= 0
-        rho, m, phi = at.numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew, rhonew, lower_boundary=lower_boundary)
+        rho, m, phi = at.numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew, rhonew, lower_boundary=lower_boundary, G=prof.G)
 
-        rnew_hr, rhonew_hr = at.adiabatic.adiabatic_tidal_iteration(f_of_jl, rho_hr, m_hr, phi_hr, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=177, nintegrate=43, ninterp=77)
+        rnew_hr, rhonew_hr = at.adiabatic.adiabatic_tidal_iteration(f_of_jl, rho_hr, m_hr, phi_hr, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=177, nintegrate=43, ninterp=77, G=prof.G)
         assert  np.min(rnew_hr) >= 0
-        rho_hr, m_hr, phi_hr = at.numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew_hr, rhonew_hr, lower_boundary=lower_boundary)
+        rho_hr, m_hr, phi_hr = at.numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew_hr, rhonew_hr, lower_boundary=lower_boundary, G=prof.G)
 
         check_max_relative_error(rho(rev), rho_hr(rev), 1e-2, fscale=prof.density(rev))
     embed_plot(plot_relative_error(rho(rev), rho_hr(rev), 1e-2, fscale=prof.density(rev)))

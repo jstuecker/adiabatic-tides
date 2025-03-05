@@ -31,7 +31,7 @@ def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=
     else:
         return rnew, rhonew
 
-def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial"):
+def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial", G=43.0071057317063e-10):
     #Define Initial profile phase space
     # table = at.mathtools.define_peri_apo_table(rpmin, rpmax, nbins=nbins_fini)
     def accr_t(r): return prof.accr(r) + tide*r
@@ -59,11 +59,11 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
         fpa_below = None
     profiles = []
     for i in range(0,iter_max):
-        rnew, rhonew = adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide=tide,  fpa_below=fpa_below, nr=nr, nintegrate=nintegrate, ninterp=ninterp, rpmin=rpmin2)
+        rnew, rhonew = adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide=tide,  fpa_below=fpa_below, nr=nr, nintegrate=nintegrate, ninterp=ninterp, rpmin=rpmin2, G=G)
         rel_error = np.max(np.abs((rhonew-rho(rnew))/prof.density(rnew)))
         if verbose:
             print(f"iteration {i} relative diff {rel_error:.2%}")
-        rho, m, phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew, np.clip(rhonew, 0, None), lower_boundary=lower_boundary, upper_boundary="vacuum")
+        rho, m, phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew, np.clip(rhonew, 0, None), lower_boundary=lower_boundary, upper_boundary="vacuum", G=G)
         if rel_error < eps:
             break
         if get_all:
@@ -100,7 +100,7 @@ class AdiabaticTransformation():
                 lb = tuple(partial(lbi, mode=mode) for lbi in lb)
         
         rho, m, phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(
-            ri, np.clip(rhoi, 0, None), lower_boundary=lb, upper_boundary="vacuum")
+            ri, np.clip(rhoi, 0, None), lower_boundary=lb, upper_boundary="vacuum", G=self.cfg.G())
         return rho, m, phi
     
     def iterate(self):
@@ -152,7 +152,7 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1):
         assert tide > 0, "Tide must be positive"
         self.tide = tide
-        prof_pert = profiles.RadialTidalProfile(tide=tide)
+        prof_pert = profiles.RadialTidalProfile(tide=tide, config=prof_initial.cfg)
         super().__init__(prof_initial=prof_initial, prof_pert=prof_pert, nr=nr, verbose=verbose)
 
     @classmethod
@@ -174,7 +174,7 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
         if mode is not None:
             f0_of_jl = partial(f0_of_jl, mode=mode)
 
-        return adiabatic_tidal_iteration(f0_of_jl, rho, m, phi, tide=self.tide, fpa_below=fpa_below, getf=getf, **kwargs)
+        return adiabatic_tidal_iteration(f0_of_jl, rho, m, phi, tide=self.tide, fpa_below=fpa_below, getf=getf, G=self.cfg.G(), **kwargs)
 
 class AdiabaticResultProfile(RadialProfile):
     def __init__(self, result, f_of_rp_ra, config : Config | None = None):
