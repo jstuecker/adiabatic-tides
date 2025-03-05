@@ -7,7 +7,7 @@ import numpy as np
 @dataclass(frozen=True) # All units need to be defined at initialization
 class UnitConfig:
     """Units, length: parsecs, mass: solar masses, velocity: km/s"""
-    length: float = 1e6   # parsecs
+    length: float = 1e3   # parsecs
     mass: float = 1.0     # solar masses
     velocity: float = 1.0 # km/s
 
