@@ -17,7 +17,6 @@ class RadialProfile():
         don't initialize!"""
 
         self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
-        self.potential_zero_at_infty = True # should replace this by a function that returns the potential zero-point
 
         self.cfg = config or Config()
         self.cfg.general.rmin = rmin or self.cfg.general.rmin
