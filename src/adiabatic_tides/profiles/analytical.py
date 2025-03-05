@@ -83,7 +83,7 @@ def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200.):
 
 
 class NFWProfile(RadialProfile):
-    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., rminrs=1e-15, rmaxrs=1e15, config : Config | None = None):
+    def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., config : Config | None = None):
         """Set up an NFW profile with a given mass and concentration
         
         conc : concentration -- so that the scale radius is rs = r200c / c
@@ -108,7 +108,13 @@ class NFWProfile(RadialProfile):
             raise ValueError("You have to provide either m200c or r200c")
 
         self.rs = self.r200c / self.conc
-        super().__init__(anisotropy=anisotropy, rmin=rminrs*self.rs, rmax=rmaxrs*self.rs, config=config)
+
+        # For the case that no config is provided, set appropriate default 
+        # values of the numerically resolved radial range
+        self.default_config.general.min = 1e-15*self.rs
+        self.default_config.general.rmax = 1e15*self.rs
+
+        super().__init__(anisotropy=anisotropy, config=config)
 
         self.rhoc = self.m200c/(4.*np.pi*self.rs**3 * (np.log(1.+self.conc) - self.conc/(1.+self.conc)))
         self.phi0 = - 4.*np.pi*self.G*self.rhoc*self.rs**2

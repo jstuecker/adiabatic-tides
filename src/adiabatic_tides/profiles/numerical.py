@@ -15,7 +15,14 @@ class NumericalProfile(RadialProfile):
                    two smallest radii. This is the recommended mode if applicable.
         anisotropy : anisotropy parameter beta
         """
-        super().__init__(anisotropy=anisotropy, rmin=ri[0], rmax=ri[-1], config=config)
+
+        if config is not None:
+            if config.general.rmin != ri[0]:
+                print("Warning: Overriding the config value of rmin by the smallest radius in the profile")
+            if config.general.rmax != ri[-1]:
+                print("Warning: Overriding the config value of rmax by the largest radius in the profile")
+
+        super().__init__(anisotropy=anisotropy, config=config)
         
         self.boundary = boundary
 
@@ -42,7 +49,8 @@ class NumericalProfile(RadialProfile):
         if callable(rho):
             self.ip_rho = rho
 
-        self.potential_zero_at_infty = False
+        self.cfg.general.rmin = ri[0]
+        self.cfg.general.rmax = ri[-1]
 
     def density(self, r):
         return self.ip_rho(r)

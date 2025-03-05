@@ -68,7 +68,7 @@ class Config():
         if scale_accuracy is not None:
             self.scale_accuracy(scale_accuracy)
         if scale_geometry is not None:
-            self.scale_geometry(scale_geometry)
+            self.scale_radial_range(scale_geometry)
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]):
@@ -108,6 +108,11 @@ class Config():
         return cls.from_dict(cfg_dict)
 
     def scale_accuracy(self, scale: float):
+        """Scale all accuracy parameters by a factor scale
+        
+        scale > 1 means more accurate, but more expensive calculations
+        vary this factor to improve convergence or speed
+        """
         self.eddington.nintegrate = int(self.eddington.nintegrate * scale)
         self.eddington.nr = int(self.eddington.nr * scale)
         
@@ -127,7 +132,12 @@ class Config():
         self.sampling.ninterp = int(self.sampling.ninterp * scale)
         self.sampling.nsteps_metropolis = int(self.sampling.nsteps_metropolis * scale)
 
-    def scale_geometry(self, scale: float):
+    def scale_radial_range(self, scale: float):
+        """Scales the radial ranges by a factor
+        
+        scale > 1 means a larger dynamic range.
+        vary this factor to test for boundary effects
+        """
         self.general.rmin = self.general.rmin / scale
         self.general.rmax = self.general.rmax * scale
 
@@ -135,6 +145,14 @@ class Config():
         self.actions.rpfac_eps = self.actions.rpfac_eps / np.sqrt(scale)
 
         self.adiabatic.rminfac = self.adiabatic.rminfac * np.sqrt(scale)
+
+    def scale_base_radius(self, r0 : float):
+        """Scale absolute numerical radii by a factor r0
+        
+        Use this to put the focus on a scale r0 of interest
+        """
+        self.general.rmin = self.general.rmin * r0
+        self.general.rmax = self.general.rmax * r0
 
     def modified(self):
         modified_attrs = []

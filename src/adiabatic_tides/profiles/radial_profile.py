@@ -3,6 +3,7 @@ from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, Ac
 from ..config import Config
 from .. import numerics
 import functools
+import copy
 
 def deprecated(func):
     @functools.wraps(func)
@@ -12,15 +13,15 @@ def deprecated(func):
     return new_func
 
 class RadialProfile():
-    def __init__(self, rmin=None, rmax=None, phase_space="eddington", anisotropy=0., config : Config = None):
+    default_config : Config = Config()
+
+    def __init__(self, phase_space="eddington", anisotropy=0., config : Config = None):
         """This is an abstract class defining the interface of RadialProfiles,
         don't initialize!"""
 
         self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
 
-        self.cfg = config or Config()
-        self.cfg.general.rmin = rmin or self.cfg.general.rmin
-        self.cfg.general.rmax = rmax or self.cfg.general.rmax
+        self.cfg = config or copy.copy(self.default_config)
 
         self.set_phase_space(phase_space, anisotropy=anisotropy)
         
