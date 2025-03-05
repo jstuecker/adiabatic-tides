@@ -5,6 +5,12 @@ import copy
 import numpy as np
 
 @dataclass
+class UnitConfig:
+    length: float = 1e6   # parsecs
+    mass: float = 1.0     # solar masses
+    velocity: float = 1.0 # km/s
+
+@dataclass
 class GeneralConfig:
     rmin: float = 1e-20
     rmax: float = 1e20
@@ -49,14 +55,16 @@ class SamplingConfig:
 
 class Config():
     def __init__(self,
+                 units : UnitConfig | None = None,
                  general : GeneralConfig | None = None,
                  eddington : EddingtonConfig | None = None,
                  actions : ActionsConfig | None = None,
                  adiabatic : AdiabaticConfig | None = None,
                  sampling : SamplingConfig | None = None,
                  scale_accuracy: float | None = None,
-                 scale_geometry: float | None = None):
+                 scale_radial_range: float | None = None):
 
+        self.units = units or UnitConfig()
         self.general = general or GeneralConfig()
         self.eddington = eddington or EddingtonConfig()
         self.actions = actions or ActionsConfig()
@@ -67,24 +75,40 @@ class Config():
 
         if scale_accuracy is not None:
             self.scale_accuracy(scale_accuracy)
-        if scale_geometry is not None:
-            self.scale_radial_range(scale_geometry)
+        if scale_radial_range is not None:
+            self.scale_radial_range(scale_radial_range)
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]):
+    def from_dict(cls, d: Dict[str, Any], default : "Config" = None):
         """Initialize the Config object from a dictionary"""
+        if default is None:
+            default = cls()
+
+        # Each element of the dictionary can be a dictionary or a dataclass
+        # To simplify the handling, we convert the dataclasses to dictionaries
+        d2 = {}
+        for key in d:
+            if key not in ("units", "general", "eddington", "actions", "adiabatic", "sampling"):
+                continue
+            if type(d[key]) == dict:
+                d2[key] = d[key]
+            else:
+                d2[key] = d[key].__dict__
+
         return cls(
-            general=GeneralConfig(**d.get("general", {})),
-            eddington=EddingtonConfig(**d.get("eddington", {})),
-            actions=ActionsConfig(**d.get("actions", {})),
-            adiabatic=AdiabaticConfig(**d.get("adiabatic", {})),
-            sampling=SamplingConfig(**d.get("sampling", {})),
-            scale_accuracy=d.get("scale_accuracy", None),
-            scale_geometry=d.get("scale_geometry", None)
+            units=UnitConfig(**d2.get("units", default.units.__dict__)),
+            general=GeneralConfig(**d2.get("general", default.general.__dict__)),
+            eddington=EddingtonConfig(**d2.get("eddington", default.eddington.__dict__)),
+            actions=ActionsConfig(**d2.get("actions", default.actions.__dict__)),
+            adiabatic=AdiabaticConfig(**d2.get("adiabatic", default.adiabatic.__dict__)),
+            sampling=SamplingConfig(**d2.get("sampling", default.sampling.__dict__)),
+            scale_accuracy=d2.get("scale_accuracy", None),
+            scale_radial_range=d2.get("scale_radial_range", None)
         )
+
     
     @classmethod
-    def from_yaml(cls, filename: str):
+    def from_yaml(cls, filename: str, default : "Config" = None):
         """Initialize the Config object from a YAML file"""
         import yaml, re
 
@@ -105,7 +129,21 @@ class Config():
         with open(filename, 'r') as ymlfile:
             cfg_dict = yaml.load(ymlfile, Loader=loader)
 
-        return cls.from_dict(cfg_dict)
+        return cls.from_dict(cfg_dict, default=default)
+    
+    @classmethod
+    def flexible_init(cls, config, default : "Config" = None):
+        """Initialize the Config object from a dictionary, filename or Config object"""
+        if config is None:
+            return cls.from_dict({}, default=default)
+        elif isinstance(config, dict):
+            return cls.from_dict(config, default=default)
+        elif isinstance(config, str):
+            return cls.from_yaml(config, default=default)
+        elif isinstance(config, cls):
+            return copy.deepcopy(config)
+        else:
+            raise ValueError(f"Cannot initialize Config from {config}")
 
     def scale_accuracy(self, scale: float):
         """Scale all accuracy parameters by a factor scale
@@ -168,6 +206,14 @@ class Config():
             for field in config.__dataclass_fields__:
                 if getattr(config, field) != config.__dataclass_fields__[field].default:
                     print(f"  {field}: {getattr(config, field)}")
+
+    def __eq__(self, other : "Config"):
+        # In principle this check should be done
+        # However, reloading a module can break it, so for now I'll skip it
+        # if not isinstance(other, Config):
+        #     return False
+
+        return all((getattr(self, attr) == getattr(other, attr) for attr in self.__dict__))
 
     def __str__(self):
         s = "Config:\n  "

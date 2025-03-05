@@ -111,7 +111,7 @@ class NFWProfile(RadialProfile):
 
         # For the case that no config is provided, set appropriate default 
         # values of the numerically resolved radial range
-        self.default_config.general.min = 1e-15*self.rs
+        self.default_config.general.rmin = 1e-15*self.rs
         self.default_config.general.rmax = 1e15*self.rs
 
         super().__init__(anisotropy=anisotropy, config=config)

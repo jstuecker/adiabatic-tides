@@ -13,15 +13,21 @@ def deprecated(func):
     return new_func
 
 class RadialProfile():
-    default_config : Config = Config()
+    # A default config... this may be overwritten by subclasses to provide a more specific default
+    default_config : Config = Config() 
 
-    def __init__(self, phase_space="eddington", anisotropy=0., config : Config = None):
-        """This is an abstract class defining the interface of RadialProfiles,
-        don't initialize!"""
+    def __init__(self, phase_space="eddington", anisotropy=0., config = None):
+        """This is an abstract class defining the interface of RadialProfiles
+        
+        config : can be a yaml file name, a Config object or a dictionary
+            if it is a dictionary, the subconfigs 
+            "units", "general", "eddington", "actions", "adiabatic", "sampling"
+            can be specified through their respective config classes or as dictionaries
+        """
 
         self.G = 43.0071057317063e-10 # This is the gravitational constant in units of Mpc (km/s)^2 / Msol 
 
-        self.cfg = config or copy.copy(self.default_config)
+        self.cfg = Config.flexible_init(config, default=self.default_config)
 
         self.set_phase_space(phase_space, anisotropy=anisotropy)
         

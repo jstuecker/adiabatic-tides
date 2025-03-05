@@ -1,5 +1,10 @@
 scale_accuracy : 1.0
-scale_geometry : 1.0
+scale_radial_range : 1.0
+
+units:
+  length: 1e6   # parsecs
+  mass: 1.0     # solar masses
+  velocity: 1.0 # km/s
 
 general:
   rmin: 1e-20

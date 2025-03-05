@@ -260,3 +260,31 @@ def test_yaml_cfg():
 
     for c1, c2 in zip(cfg.configs, default_cfg.configs):
         assert c1 == c2
+
+def test_config_constructors():
+    cfg1 = at.Config.from_yaml("example_config.yaml")
+    cfg2 = at.Config()
+
+    # Copy Init
+    cfg3 = at.Config.flexible_init(cfg2)
+    assert cfg3 == cfg2
+    cfg3.general.rmin =  2
+    assert cfg3 != cfg2
+
+    # Init with default
+    cfg4 = at.Config.flexible_init(None, cfg1)
+    assert cfg4 == cfg1
+
+    # Dict[Dict] Init
+    cfg5 = at.Config.flexible_init(dict(units = dict(length=cfg1.units.length)), cfg1)
+    assert(cfg5 == cfg1)
+    cfg6 = at.Config.flexible_init(dict(units = dict(length=cfg1.units.length*2)), cfg1)
+    assert(cfg6 != cfg1)
+
+    # Dict[SubConfig] Init
+    units = at.config.UnitConfig(length=cfg1.units.length)
+    cfg7 = at.Config.flexible_init(dict(units = units), cfg1)
+    assert(cfg7 == cfg1)
+    units = at.config.UnitConfig(length=cfg1.units.length*2)
+    cfg8 = at.Config.flexible_init(dict(units = units), cfg1)
+    assert(cfg8 != cfg1)
