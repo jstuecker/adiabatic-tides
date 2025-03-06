@@ -703,7 +703,7 @@ def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40):
     dj_drp = dj_de * de_drp + dj_dl2 * dl2_drp
     dj_dra = dj_de * de_dra + dj_dl2 * dl2_dra
 
-    e,l = utility.e_l_of_rp_ra(pot, rperi, rapo)
+    e,l = utility.e_l_of_rp_ra(pot, rperi, rapo, accr=accr)
 
     return j,e,l,dj_drp, dj_dra, dl2_drp/(2.*l), dl2_dra/(2.*l)
 

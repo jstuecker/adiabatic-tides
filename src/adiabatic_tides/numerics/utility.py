@@ -75,22 +75,41 @@ def second_deriv_avoid_cancelation(f, x, degree=1e-10):
 
 # ===================== Coordinate map functions =========================== #
 
-def e_l_of_rp_ra(pot, rp, ra, perturb_circular=False, eps=1e-6):
-    if perturb_circular:
-        # for circular orbits the formula below don't work
-        # However, in a "finite-diffrences" sense they are stll correct, so we can
-        # get away by perturbing ra a little
-        circular = (ra >= rp) & (ra <= rp*(1+eps))
-        ra = np.copy(ra)
-        ra[circular] = rp[circular]*(1+eps) 
+def piecewise_2_2(x1, x2, cond, f1, f2):
+    fo1, fo2 = np.zeros(x1.shape), np.zeros(x1.shape)
 
-    phip, phia = pot(rp), pot(ra)
-    E = phip + (phia - phip)*ra**2 / (ra**2 - rp**2)
-    L = np.sqrt(2. * (phia - phip) / (rp**-2 - ra**-2))
+    fo1[cond], fo2[cond] = f1(x1[cond], x2[cond])
+    fo1[~cond], fo2[~cond] = f2(x1[~cond], x2[~cond])
+    
+    return fo1, fo2
 
-    assert np.all(~np.isnan(L))
+def e_l_of_rp_ra(pot, rp, ra, accr=None, eps=1e-3, get_de=False):
+    """energy and angular momentum as function of peri- and apo-center
+    
+    you may provide accr for handling close to circular orbits accurately
 
-    return E,L
+    de: If true, return de = e - phi(rp) instead of E
+    """
+    facphip = 0. if get_de else 1.
+    def el(rp, ra): 
+        phip, phia = pot(rp), pot(ra)
+        de = (phia - phip)*ra**2 / (ra**2 - rp**2)
+        l = np.sqrt(2. * (phia - phip) / (rp**-2 - ra**-2))
+        return de + facphip*phip,l
+    
+    if accr is None:
+        return el(rp, ra)
+    
+    # Expansion of the equations above around ra=rp (avoids cancellation)
+    def el_expansion(rp, ra):
+        phigrad = -accr(0.5*(ra+rp))
+        de = phigrad * ra**2/(ra + rp)
+        l2 = 2.*(ra**2*rp**2)/(ra + rp) * phigrad
+        return de + facphip*pot(rp),np.sqrt(l2)
+    
+    e,l = piecewise_2_2(rp, ra, ra>=rp*(1+eps), el, el_expansion)
+
+    return e,l
 
 def Jacobian_det_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
     """The jacobian determinant needed for a substitution of angular momentum and energy through

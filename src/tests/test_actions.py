@@ -74,13 +74,13 @@ def test_action_inversion(profile, embed_plot):
 
     # Setup interpolator
     t0 = time.time()
-    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmax=1e10, rpoff=1e-10, facmin=1e-6)
+    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100)
     # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
     rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr)
     print(f"Setup time {time.time()-t0:.2f}s")
 
     # Test against actual values
-    rptest = np.logspace(-3,3,4312)
+    rptest = np.logspace(-5,5,4312)
     for logramin, tolerance in ((-3,1e-4), (-5,1e-2)):
         print("Test tolerance: %.1e" % tolerance)
         ratest = rptest * (1 + 10**np.random.uniform(logramin,5,len(rptest)))
@@ -122,6 +122,12 @@ def test_f_jl_reconstruction(profile, embed_plot):
     np.seterr(all='raise', under="ignore")
     prof = standard_profiles(profile)
 
+    # table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100)
+    # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr)
+    # def f_of_jl(j, l): 
+    #     rp,ra = rp_ra_of_jl(j,l)
+    #     return prof.f_of_rperi_rapo(rp,ra)
+
     table2 = at.numerics.interpolate.define_peri_apo_table(1e-9, 1e9, nbins=133, facmax=1e8)
     f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof.potential, table2)
 
@@ -129,6 +135,7 @@ def test_f_jl_reconstruction(profile, embed_plot):
     rp = np.logspace(-5,5,4000)
     for logramin, tolerance in ((-1,1e-3), (-3,0.5)):
         ra = rp * (1. + 10**np.random.uniform(logramin,5,len(rp)))
+        
 
         f = f_of_rperi_rapo(rp, ra)
         fref = prof.f_of_el(*prof.E_L_of_rperi_rapo(rp, ra))

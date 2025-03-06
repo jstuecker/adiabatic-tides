@@ -161,7 +161,7 @@ class RadialProfile():
     
     def E_L_of_rperi_rapo(self, rperi, rapo):
         "Maps peri- and apo-center radii to energy and angular-momentum"
-        return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo, perturb_circular=True)
+        return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo)
     
     def posvel_to_rEL(self, pos, vel):
         """Calculates the radius, energy and angular momentum of particles

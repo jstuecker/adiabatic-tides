@@ -361,7 +361,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
 
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
     # l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
-    e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, perturb_circular=True)
+    e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid)
     
     f = f_of_jl(j,l)
     f0 = np.min(f[f>0])
