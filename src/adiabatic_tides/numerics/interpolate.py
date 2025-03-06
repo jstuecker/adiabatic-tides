@@ -1,9 +1,9 @@
 import numpy as np
-from scipy.interpolate import interp1d, PchipInterpolator, RectBivariateSpline, NearestNDInterpolator
+from scipy.interpolate import interp1d, PchipInterpolator, RectBivariateSpline, NearestNDInterpolator, LinearNDInterpolator, CloughTocher2DInterpolator, RBFInterpolator, griddata
 
 from . import search
 from . import utility
-from .integrate import calculate_radial_action_tanh_peri_apo
+from .integrate import calculate_radial_action_tanh_peri_apo, calculate_dj_de_tanh_peri_apo, calculate_jel_and_dj_dl_drp_dra
 
 # ==================== Generic Interpolation Functions ===================== #
 
@@ -294,6 +294,67 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=
         return rpra_of_uv(xynew[...,0], xynew[...,1])
     
     return rpra_of_jl
+
+def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0, accr=None, eps=1e-3):
+    """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
+    u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
+
+    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
+    l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
+
+    # assert np.all(j > 0) and np.all(l > 0)
+    sel = (j > 0) & (l > 0)
+
+    l0, j0, facl = np.min(l[l>0]), np.min(j[j>0]), 0
+
+    xy_ip = CloughTocher2DInterpolator(np.stack((np.log(j+j0+l*facl),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
+    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0+l*facl),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
+
+    def rpra_of_jl(j, l):
+        # assert np.all(j > 0) and np.all(l > 0)
+
+        # Use NN interpolator for first guess
+        ftarget, gtarget = np.log(j+l*facl+j0), np.log(l+l0)
+        xynew = xy_ip(np.stack((ftarget, gtarget), axis=-1))
+
+        # For points outside the domain we use the nearest neighbor
+        invalid = np.isnan(xynew[...,0])
+        if np.sum(invalid) > 0:
+            xynew[invalid] = xy_nn(np.stack((ftarget[invalid], gtarget[invalid]), axis=-1))
+
+        # Optionally improve the result with Newton-Raphson
+        # This makes the result practically independent of the table discretization
+        # assuming that the starting point is close enough to the true solution
+        # Even a single step dramatically improves accuracy in that case
+        # accr is additionally needed as an input to evaluate the gradient
+        rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
+
+        assert np.all(rp > 0) and np.all(ra > 0)
+        if nsteps_newton > 0:
+            # circular orbits can lead to a lot of cancellation, but they contribute almost nothing to phase space integrals
+            # Let's simply not improve them
+            sel = (ra >= rp*(1. + eps)) & (j > 0) & (l > 0)
+            rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action)
+        assert np.all(rp > 0) and np.all(ra > 0)
+        return rp, ra
+
+    return rpra_of_jl
+
+def newton_improve_rp_ra_of_j_l(pot,accr,j0,l0, rp0, ra0, nsteps_newton=0, nintegrate_action=40):
+    def F_and_Jac(log_rpra):
+        rp, ra = np.exp(log_rpra[...,0]), np.exp(log_rpra[...,1])
+        j,e,l,dj_drp, dj_dra, dl_drp, dl_dra = calculate_jel_and_dj_dl_drp_dra(pot,accr, rp, ra, nintegrate=nintegrate_action)
+
+        F = np.stack((np.log(j/j0), np.log(l/l0)), axis=-1)
+        Jac = np.stack((dj_drp*(rp/j), dj_dra*(ra/j), dl_drp*(rp/l), dl_dra*(ra/l)), axis=-1).reshape(j0.shape+(2,2))
+
+        return F, Jac
+
+    if nsteps_newton == 0:
+        return rp0, ra0
+    else:
+        log_rpra = search.newton_raphson_FJ(F_and_Jac, np.stack((np.log(rp0), np.log(ra0)), axis=-1), niter=nsteps_newton)
+        return np.exp(log_rpra[...,0]), np.exp(log_rpra[...,1])
 
 def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None, k=3):
     ui,vi,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table

@@ -131,6 +131,18 @@ def newton_raphson(F, Jac, x0, niter=10):
         x = x + dx
     return x
 
+def newton_raphson_FJ(f_jac, x0, niter=10):
+    if niter == 0:
+        return x0
+
+    x = x0
+    for i in range(niter):
+        f,jac = f_jac(x)
+        jac_inv = np.linalg.inv(jac)
+        dx = -np.einsum("...ij,...j", jac_inv, f)
+        x = x + dx
+    return x
+
 def find_single_root(acc, r0=1., maxiter=100, eps=1e-8, warning=True, mode="negative"):
     """Assume acc is a function that is < 0 at small radii and > 0 at large radii"""
     r = r0

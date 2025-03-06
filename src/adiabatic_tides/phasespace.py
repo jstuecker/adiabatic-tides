@@ -99,6 +99,9 @@ class InterpolatorActionMap(ActionMap):
         # table = mathtools.define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra)
         table = numerics.interpolate.define_peri_apo_table(rpmin, rpmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra, facmax=facmax, facmin=facmin)
         self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, nintegrate_action=cfg_act.nintegrate)
+        #self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl_new(self.profile.potential, table, nintegrate_action=cfg_act.nintegrate, nsteps_newton=1, accr=self.profile.accr)
+
+        
 
     def rp_ra_of_jl(self, j, l):
         self.setup_rp_ra_of_jl()

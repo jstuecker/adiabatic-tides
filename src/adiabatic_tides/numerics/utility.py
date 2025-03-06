@@ -79,8 +79,8 @@ def e_l_of_rp_ra(pot, rp, ra, perturb_circular=False, eps=1e-6):
     if perturb_circular:
         # for circular orbits the formula below don't work
         # However, in a "finite-diffrences" sense they are stll correct, so we can
-        # get aways by perturbing ra a little
-        circular = (ra > rp) & (ra <= rp*(1+eps))
+        # get away by perturbing ra a little
+        circular = (ra >= rp) & (ra <= rp*(1+eps))
         ra = np.copy(ra)
         ra[circular] = rp[circular]*(1+eps) 
 
@@ -92,8 +92,8 @@ def e_l_of_rp_ra(pot, rp, ra, perturb_circular=False, eps=1e-6):
 
     return E,L
 
-def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
-    """The jacobian need for a substitution of angular momentum and energy through
+def Jacobian_det_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
+    """The jacobian determinant needed for a substitution of angular momentum and energy through
     peri and apocenter radii multiplied with the angular moment L
     """
     acca, accp = accr(ra), accr(rp)
@@ -109,6 +109,25 @@ def Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=False):
         return e,l,np.abs(res)
     else:
         return np.abs(res)
+    
+def dedl2_drpdra(pot, accr, rp, ra):
+    phia, phip = pot(ra), pot(rp)
+    phigrad_rp, phigrad_ra = -accr(rp), -accr(ra)
+
+    inv_A = 1./(ra**2 - rp**2)
+    e = (phia*ra**2 - phip*rp**2)*inv_A
+    de_dra = (phigrad_ra*ra**2 - 2*(e-phia)*ra)*inv_A
+    de_drp = (-phigrad_rp*rp**2 + 2*(e-phip)*rp)*inv_A
+
+    inv_B = (ra**2*rp**2)*inv_A # == 1/(rp**-2 - ra**-2)
+    
+    l2 = 2*(phia - phip)*inv_B
+    dl2_dra =  2*phigrad_ra*inv_B - 4*(phia - phip)*ra**-3*inv_B**2
+    dl2_drp = -2*phigrad_rp*inv_B + 4*(phia - phip)*rp**-3*inv_B**2
+
+    # jac = np.stack([de_drp, de_dra, dl2_drp, dl2_dra], axis=-1).reshape(rp.shape + (2,2))
+
+    return de_drp, de_dra, dl2_drp, dl2_dra
 
 # ============================== Other ===================================== #
 

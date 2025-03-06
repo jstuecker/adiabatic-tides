@@ -602,7 +602,7 @@ def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, 
     def integrate_ra_given_rp(rp):
         def integrand(ra):
             with np.errstate(divide='ignore', invalid='ignore'):
-                e,l,ldlde = utility.Jacobian_ldlde_drpdra(pot, accr, rp[...,np.newaxis], ra, get_el=True)
+                e,l,ldlde = utility.Jacobian_det_ldlde_drpdra(pot, accr, rp[...,np.newaxis], ra, get_el=True)
                 vr = np.sqrt(np.clip(2*e - 2*phir[...,np.newaxis,np.newaxis] - l**2/r[...,np.newaxis,np.newaxis]**2, 0, None))
 
                 valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)
@@ -679,6 +679,33 @@ def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
     
     I = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
+
+def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+    phip, phia = pot(rperi), pot(rapo)
+    E = (phip * rperi**2 - phia*rapo**2) / (rperi**2 - rapo**2)
+    L2 = 2. * (phia - phip) / (rperi**-2 - rapo**-2)
+
+    def integrand(r):
+        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L2[...,np.newaxis]/r**2
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.nan_to_num(-0.5*r**-2/np.sqrt(vr2), 0)
+    
+    I = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
+    return I / np.pi
+
+def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40):
+    j = calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate)
+    dj_de = calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate)
+    dj_dl2 = calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate)
+
+    de_drp, de_dra, dl2_drp, dl2_dra = utility.dedl2_drpdra(pot, accr, rperi, rapo)
+
+    dj_drp = dj_de * de_drp + dj_dl2 * dl2_drp
+    dj_dra = dj_de * de_dra + dj_dl2 * dl2_dra
+
+    e,l = utility.e_l_of_rp_ra(pot, rperi, rapo)
+
+    return j,e,l,dj_drp, dj_dra, dl2_drp/(2.*l), dl2_dra/(2.*l)
 
 # ============= Methods for Solving Poisson's equation  ==================== #
 

@@ -1,6 +1,6 @@
 import numpy as np
 from . import integrate
-from .utility import cosh_space, Jacobian_ldlde_drpdra
+from .utility import cosh_space, Jacobian_det_ldlde_drpdra
 from .interpolate import vectorized_interp
 
 # ========= Utilitys functions for binning sampled particles =============== #
@@ -430,7 +430,7 @@ def sample_rp_ra_given_r_metropolis_perisplit(f_of_rp_ra, pot, accr, rs, nsteps_
 
     phis = pot(rs)
     def likelihood_rpra(rp, ra):
-        e,l,ldlde = Jacobian_ldlde_drpdra(pot, accr, rp, ra, get_el=True)
+        e,l,ldlde = Jacobian_det_ldlde_drpdra(pot, accr, rp, ra, get_el=True)
         vr = np.sqrt(np.clip(2*e - 2*phis - l**2/rs**2, 0, None))
 
         valid = (ldlde > 0.) & (vr > 0.) & (l > 0.)

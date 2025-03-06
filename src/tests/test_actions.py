@@ -66,18 +66,22 @@ def test_actions_convergence(profile, embed_plot):
 
 @pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8", "aniso0.2pow1.5", "aniso-0.2pow1.0"])
 def test_action_inversion(profile, embed_plot):
-    np.seterr(all='raise')
+    np.seterr(all='raise', under='ignore')
     prof = standard_profiles(profile)
 
     np.random.seed(42)
+    import time
 
     # Setup interpolator
-    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=200, facmax=1e10, rpoff=1e-10)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
+    t0 = time.time()
+    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmax=1e10, rpoff=1e-10, facmin=1e-6)
+    # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
+    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr)
+    print(f"Setup time {time.time()-t0:.2f}s")
 
     # Test against actual values
     rptest = np.logspace(-3,3,4312)
-    for logramin, tolerance in ((-1,1e-4), (-3,0.5)):
+    for logramin, tolerance in ((-3,1e-4), (-5,1e-2)):
         print("Test tolerance: %.1e" % tolerance)
         ratest = rptest * (1 + 10**np.random.uniform(logramin,5,len(rptest)))
         j = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof.potential, rptest, ratest)
@@ -85,31 +89,37 @@ def test_action_inversion(profile, embed_plot):
 
         rpn, ran = rp_ra_of_jl(j,l)
 
-        embed_plot(plot_relative_error(rpn, rptest, tolerance))
-        embed_plot(plot_relative_error(ran, ratest, tolerance))
+        print("nans:", np.sum(np.isnan(rpn)), np.sum(np.isnan(ran)))
 
-        check_max_relative_error(rpn, rptest, tolerance)
-        check_max_relative_error(ran, ratest, tolerance)
+        if logramin > -4:
+            embed_plot(plot_relative_error(rpn, rptest, tolerance))
+            embed_plot(plot_relative_error(ran, ratest, tolerance))
 
-        # Check energies
-        En, Ln = prof.E_L_of_rperi_rapo(rpn, ran)
-        E, L = prof.E_L_of_rperi_rapo(rptest, ratest)
+            check_max_relative_error(rpn, rptest, tolerance)
+            check_max_relative_error(ran, ratest, tolerance)
 
-        embed_plot(plot_relative_error(En, E, tolerance))
-        embed_plot(plot_relative_error(Ln, L, tolerance))
+            # Check energies
+            En, Ln = prof.E_L_of_rperi_rapo(rpn, ran)
+            E, L = prof.E_L_of_rperi_rapo(rptest, ratest)
 
-        check_max_relative_error(En, E, tolerance)
-        check_max_relative_error(Ln, L, tolerance)
+            embed_plot(plot_relative_error(En, E, tolerance))
+            embed_plot(plot_relative_error(Ln, L, tolerance))
 
+            check_max_relative_error(En, E, tolerance)
+            check_max_relative_error(Ln, L, tolerance)
+
+        # For very circular orbits we only care to reconstruc the phase space distr.
+        # properly:
         f1, f2 = prof.f_of_el(E,L), prof.f_of_el(En,Ln)
         embed_plot(plot_relative_error(f1[f2>0], f2[f2>0], tolerance))
 
         check_max_relative_error(f1[f2>0], f2[f2>0], tolerance)
 
+
 @pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8", "aniso0.2pow1.5", "aniso-0.2pow1.0"])
 def test_f_jl_reconstruction(profile, embed_plot):
     np.random.seed(42)
-    np.seterr(all='raise')
+    np.seterr(all='raise', under="ignore")
     prof = standard_profiles(profile)
 
     table2 = at.numerics.interpolate.define_peri_apo_table(1e-9, 1e9, nbins=133, facmax=1e8)
@@ -157,6 +167,7 @@ def test_numerical_rho_reconstruction(profile, embed_plot):
 
     table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=400, facmax=1e11)
     rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
+    # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, accr=prof.accr, nsteps_newton=1)
 
     def f_of_jl(j, l):
         rperi,rapo = rp_ra_of_jl(j,l)
