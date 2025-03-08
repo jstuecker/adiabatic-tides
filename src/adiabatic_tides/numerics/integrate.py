@@ -685,12 +685,12 @@ def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=
 
     def integrand(r):
         vr2 = 2*(e[...,np.newaxis] - pot(r)) - l[...,np.newaxis]**2/r**2
-        return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
+        return np.sqrt(np.clip(vr2, 0, None)) # Roundoff can lead to negative values
 
     I[sel] = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
 
-def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
     phip, phia = pot(rperi), pot(rapo)
     E = (phip * rperi**2 - phia*rapo**2) / (rperi**2 - rapo**2)
     L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
@@ -703,7 +703,7 @@ def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
     I = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
 
-def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
     phip, phia = pot(rperi), pot(rapo)
     E = (phip * rperi**2 - phia*rapo**2) / (rperi**2 - rapo**2)
     L2 = 2. * (phia - phip) / (rperi**-2 - rapo**-2)
@@ -716,10 +716,10 @@ def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
     I = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
 
-def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40):
-    j = calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate)
-    dj_de = calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate)
-    dj_dl2 = calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate)
+def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40, daccdr=None, eps_circ=1e-4):
+    j = calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
+    dj_de = calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
+    dj_dl2 = calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
 
     de_drp, de_dra, dl2_drp, dl2_dra = utility.dedl2_drpdra(pot, accr, rperi, rapo)
 

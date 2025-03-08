@@ -16,7 +16,7 @@ def test_single_step_tidal_convergence(profile, embed_plot):
 
     # Define Initial profile phase space
     table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=100, facmax=1e14)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, nsteps_newton=5)
+    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, nsteps_newton=5, accr=prof.accr, daccdr=prof.daccdr)
     #rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr)
 
     def f_of_jl(j, l):
@@ -31,7 +31,7 @@ def test_single_step_tidal_convergence(profile, embed_plot):
     def fbelow(rp, ra):
         return prof.f_of_el(*prof.E_L_of_rperi_rapo(rp, ra))
 
-    f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, prof_t.potential, table2, k=3, fpa_below=fbelow)
+    f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, prof_t.potential, table2, k=3, fpa_below=fbelow, accr=prof_t.accr, daccdr=prof_t.daccdr)
 
     if profile == "plummer":
         r = np.logspace(-3,3,100)
@@ -53,7 +53,7 @@ def test_multi_step_tidal_convergence(profile, embed_plot):
     prof = standard_profiles(profile)
 
     table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=200)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
+    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr)
     # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, accr=prof.accr, nsteps_newton=1)
 
     def f_of_jl(j, l):

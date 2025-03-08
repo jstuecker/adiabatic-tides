@@ -254,12 +254,12 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
 
 # =========== Functions for calculating interpolation tables =============== #
 
-def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=3):
+def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=3, accr=None, daccdr=None, eps_circ=1e-3):
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
-    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
-    l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
+    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
+    e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
 
     l0, j0, facl = np.min(l[l>0]), np.min(j[j>0]), 1e-5
 
@@ -295,12 +295,12 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=
     
     return rpra_of_jl
 
-def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0, accr=None, eps=1e-3):
+def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0, accr=None, daccdr=None, eps_circ=1e-3):
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
-    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
-    l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
+    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
+    e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
 
     # assert np.all(j > 0) and np.all(l > 0)
     sel = (j > 0) & (l > 0)
@@ -333,7 +333,7 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
         if nsteps_newton > 0:
             # circular orbits can lead to a lot of cancellation, but they contribute almost nothing to phase space integrals
             # Let's simply not improve them
-            sel = (ra >= rp*(1. + eps)) & (j > 0) & (l > 0)
+            sel = (ra >= rp*(1. + eps_circ)) & (j > 0) & (l > 0)
             rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action)
         assert np.all(rp > 0) and np.all(ra > 0)
         return rp, ra
@@ -356,12 +356,11 @@ def newton_improve_rp_ra_of_j_l(pot,accr,j0,l0, rp0, ra0, nsteps_newton=0, ninte
         log_rpra = search.newton_raphson_FJ(F_and_Jac, np.stack((np.log(rp0), np.log(ra0)), axis=-1), niter=nsteps_newton)
         return np.exp(log_rpra[...,0]), np.exp(log_rpra[...,1])
 
-def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None, k=3):
+def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None, k=3, accr=None, daccdr=None, eps_circ=1e-3):
     ui,vi,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
-    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action)
-    # l = np.sqrt(2.*(pot(ragrid) - pot(rpgrid))/(rpgrid**-2 - ragrid**-2))
-    e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid)
+    j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
+    e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
     
     f = f_of_jl(j,l)
     f0 = np.min(f[f>0])

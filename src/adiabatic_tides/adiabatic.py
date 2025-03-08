@@ -21,7 +21,7 @@ def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=
     
     rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(phi_tot, accr_tot, daccdr_tot, rpmin=rpmin)
     table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=ninterp)
-    f_of_rperi_rapo = numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi_tot, table, fpa_below=fpa_below)
+    f_of_rperi_rapo = numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi_tot, table, fpa_below=fpa_below, accr=accr_tot, daccdr=daccdr_tot)
     rnew = np.geomspace(rpmin,rtid,nr)
 
     rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi_tot, accr_tot, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
@@ -31,7 +31,7 @@ def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=
     else:
         return rnew, rhonew
 
-def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial", G=43.0071057317063e-10):
+def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial", G=43.0071057317063e-10, eps_circ=1e-4):
     #Define Initial profile phase space
     # table = at.mathtools.define_peri_apo_table(rpmin, rpmax, nbins=nbins_fini)
     def accr_t(r): return prof.accr(r) + tide*r
@@ -41,7 +41,7 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
     rpmax = rt0*10
 
     table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=nbins_fini)
-    rp_ra_of_jl = numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
+    rp_ra_of_jl = numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr, eps_circ=eps_circ)
 
     if rpmin2 is None:
         rpmin2 = rpmin*1e1

@@ -292,7 +292,7 @@ class RadialProfile():
     def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None):
         """Numerically infer the radial orbital period time"""
         nintegrate = nintegrate or self.cfg.actions.nintegrate
-        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate)
+        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr)
         return djde*2.*np.pi
     
     #----------- Integrals and Moments --------------#
