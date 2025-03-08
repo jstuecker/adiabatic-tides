@@ -667,15 +667,21 @@ def vr_integral_near_circ(accr, daccdr, rp, ra, p=0.5):
         from scipy.special import gamma
         fac = gamma(p+1)**2 / gamma(2*p+2)
         return fac * c**p * (ra - rp)**(2*p+1)
-
-def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
-    """Calculate radial action. Provide accr and daccdr to improve accuracy for near circular orbits"""
+    
+def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+    """Calculates an integral over vr**(2p)*r**pr dr from rp to ra.
+    
+    Provide accr and daccdr to improve accuracy for near circular orbits"""
     I = np.zeros(np.broadcast(rperi, rapo).shape)
+
+    assert np.all(rapo >= rperi), "rapo must be larger than rperi"
     I[rapo < rperi] = np.nan
 
     if (accr is not None) and (daccdr is not None): # Use expansion for nearly circular orbits
         sel_circ = (rapo > rperi) & (rapo <= rperi*(1+eps_circ))
-        I[sel_circ] = vr_integral_near_circ(accr, daccdr, rperi[sel_circ], rapo[sel_circ], p=0.5)
+        I[sel_circ] = vr_integral_near_circ(accr, daccdr, rperi[sel_circ], rapo[sel_circ], p=p)
+        if pr != 0.: 
+            I[sel_circ] *= (0.5*(rperi[sel_circ]+rapo[sel_circ]))**pr
         sel = (rapo > rperi*(1+eps_circ))
     else:
         sel = rapo > rperi
@@ -685,36 +691,24 @@ def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=
 
     def integrand(r):
         vr2 = 2*(e[...,np.newaxis] - pot(r)) - l[...,np.newaxis]**2/r**2
-        return np.sqrt(np.clip(vr2, 0, None)) # Roundoff can lead to negative values
+        with np.errstate(divide='ignore', invalid='ignore'):
+            if pr == 0.:
+                return np.nan_to_num(vr2**p, 0) # Roundoff errors may lead to vr2 <= 0
+            else:
+                return np.nan_to_num(vr2**p * r**pr, 0)
 
     I[sel] = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
-    return I / np.pi
+    return I
+
+def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+    """Calculate radial action. Provide accr and daccdr to improve accuracy for near circular orbits"""
+    return vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ) / np.pi
 
 def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
-    phip, phia = pot(rperi), pot(rapo)
-    E = (phip * rperi**2 - phia*rapo**2) / (rperi**2 - rapo**2)
-    L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
-
-    def integrand(r):
-        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
-        with np.errstate(divide='ignore', invalid='ignore'):
-            return np.nan_to_num(1./np.sqrt(vr2), 0)
-    
-    I = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
-    return I / np.pi
+    return vr_integral_tanh_peri_apo(pot, rperi, rapo, p=-0.5, nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ) / np.pi
 
 def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
-    phip, phia = pot(rperi), pot(rapo)
-    E = (phip * rperi**2 - phia*rapo**2) / (rperi**2 - rapo**2)
-    L2 = 2. * (phia - phip) / (rperi**-2 - rapo**-2)
-
-    def integrand(r):
-        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L2[...,np.newaxis]/r**2
-        with np.errstate(divide='ignore', invalid='ignore'):
-            return np.nan_to_num(-0.5*r**-2/np.sqrt(vr2), 0)
-    
-    I = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
-    return I / np.pi
+    return vr_integral_tanh_peri_apo(pot, rperi, rapo, p=-0.5, pr=-2., nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ) / (-2.*np.pi)
 
 def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40, daccdr=None, eps_circ=1e-4):
     j = calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
