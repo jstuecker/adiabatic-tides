@@ -287,7 +287,7 @@ class RadialProfile():
     def radial_action_of_rp_ra(self, rp, ra, nintegrate=None):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
         nintegrate = nintegrate or self.cfg.actions.nintegrate
-        return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate)
+        return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr)
 
     def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None):
         """Numerically infer the radial orbital period time"""

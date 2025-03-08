@@ -650,12 +650,13 @@ def vr_near_circ(daccdr, r, rp, ra, l):
     dphieff_dr2 = 2*daccdr(rc) - 6*l**2/rc**4
     return np.sqrt(-0.5*dphieff_dr2*(r-rp)*(ra-r))
 
-def vr_integral_near_circ(daccdr, rp, ra, l, p=0.5):
+def vr_integral_near_circ(accr, daccdr, rp, ra, p=0.5):
     """integrate vr**(2p) from rp to ra analytically with an expansion for nearly circular orbits"""
-    rc = 0.5*(rp + ra)
-    c = -daccdr(rc) + 3*l**2/rc**4
+    rm = 0.5*(rp + ra)
+    l2 = 2.*(ra**2*rp**2)/(ra + rp) * (-accr(rm))
+    c = -daccdr(rm) + 3*l2/rm**4
 
-    # To second order vr can be approximated as vr**2 = c*(r-rp)*(r-ra)
+    # To second order vr can be approximated as vr**2 = c*(r-rp)*(ra-r)
     # Then  can integrate vr**2p analytically
 
     if p == 0.5: # integral over sqrt(vr2) as needed for radial action
@@ -667,22 +668,25 @@ def vr_integral_near_circ(daccdr, rp, ra, l, p=0.5):
         fac = gamma(p+1)**2 / gamma(2*p+2)
         return fac * c**p * (ra - rp)**(2*p+1)
 
-def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
+def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+    """Calculate radial action. Provide accr and daccdr to improve accuracy for near circular orbits"""
     I = np.zeros(np.broadcast(rperi, rapo).shape)
     I[rapo < rperi] = np.nan
-    sel = rapo > rperi
-    rperi, rapo = rperi[sel], rapo[sel]
 
-    phip, phia = pot(rperi), pot(rapo)
-    #E = (phia*rapo**2 - phip * rperi**2) / (rapo**2 - rperi**2)
-    E = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
-    L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
+    if (accr is not None) and (daccdr is not None): # Use expansion for nearly circular orbits
+        sel_circ = (rapo > rperi) & (rapo <= rperi*(1+eps_circ))
+        I[sel_circ] = vr_integral_near_circ(accr, daccdr, rperi[sel_circ], rapo[sel_circ], p=0.5)
+        sel = (rapo > rperi*(1+eps_circ))
+    else:
+        sel = rapo > rperi
+
+    rperi, rapo = rperi[sel], rapo[sel]
+    e, l = utility.e_l_of_rp_ra(pot, rperi, rapo, accr=accr, eps_circ=eps_circ)
 
     def integrand(r):
-        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
+        vr2 = 2*(e[...,np.newaxis] - pot(r)) - l[...,np.newaxis]**2/r**2
         return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
 
-    
     I[sel] = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi
 

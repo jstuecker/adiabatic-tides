@@ -83,7 +83,7 @@ def piecewise_2_2(x1, x2, cond, f1, f2):
     
     return fo1, fo2
 
-def e_l_of_rp_ra(pot, rp, ra, accr=None, eps=1e-3, get_de=False):
+def e_l_of_rp_ra(pot, rp, ra, accr=None, eps_circ=1e-4, get_de=False):
     """energy and angular momentum as function of peri- and apo-center
     
     you may provide accr for handling close to circular orbits accurately
@@ -107,7 +107,7 @@ def e_l_of_rp_ra(pot, rp, ra, accr=None, eps=1e-3, get_de=False):
         l2 = 2.*(ra**2*rp**2)/(ra + rp) * phigrad
         return de + facphip*pot(rp),np.sqrt(l2)
     
-    e,l = piecewise_2_2(rp, ra, ra>=rp*(1+eps), el, el_expansion)
+    e,l = piecewise_2_2(rp, ra, ra>=rp*(1+eps_circ), el, el_expansion)
 
     return e,l
 
