@@ -667,8 +667,8 @@ def vr_integral_near_circ(accr, daccdr, rp, ra, p=0.5):
         from scipy.special import gamma
         fac = gamma(p+1)**2 / gamma(2*p+2)
         return fac * c**p * (ra - rp)**(2*p+1)
-    
-def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+
+def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
     """Calculates an integral over vr**(2p)*r**pr dr from rp to ra.
     
     Provide accr and daccdr to improve accuracy for near circular orbits"""
@@ -700,17 +700,17 @@ def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, acc
     I[sel] = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I
 
-def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
     """Calculate radial action. Provide accr and daccdr to improve accuracy for near circular orbits"""
     return vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ) / np.pi
 
-def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+def calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
     return vr_integral_tanh_peri_apo(pot, rperi, rapo, p=-0.5, nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ) / np.pi
 
-def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-4):
+def calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
     return vr_integral_tanh_peri_apo(pot, rperi, rapo, p=-0.5, pr=-2., nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ) / (-2.*np.pi)
 
-def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40, daccdr=None, eps_circ=1e-4):
+def calculate_jel_and_dj_dl_drp_dra(pot, accr, rperi, rapo, nintegrate=40, daccdr=None, eps_circ=1e-3):
     j = calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
     dj_de = calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
     dj_dl2 = calculate_dj_dl2_tanh_peri_apo(pot, rperi, rapo, nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)

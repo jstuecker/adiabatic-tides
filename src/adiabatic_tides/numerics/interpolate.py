@@ -254,6 +254,24 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
 
 # =========== Functions for calculating interpolation tables =============== #
 
+def rp_ra_of_j_l_near_circ(accr, daccdr, j,l, r0, niter=30):
+    """Find the peri- and apo-centers of a nearly circular orbit with actions j and l
+    
+    consider the function integrals.vr_integral_near_circ to see what we need to invert
+    """
+    # First, find the circular orbit radius of l
+    # dvr2_dr =  2*accr(r) + 2*l**2/r**3
+    # dvr2_dr = 0 <=>  r0 = (l**2/accr(r0))**(1/3)
+    for i in range(niter):
+        r0 = (-l**2/accr(r0))**(1/3)
+
+    c = -daccdr(r0) + 3*l**2/r0**4
+
+    # invert j = (1/8.)*c**0.5 * (ra - rp)**2
+    drap = np.sqrt(j * 8 / c**0.5)
+
+    return r0 - drap*0.5, r0 + drap*0.5
+
 def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=3, accr=None, daccdr=None, eps_circ=1e-3):
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
@@ -322,28 +340,34 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
         if np.sum(invalid) > 0:
             xynew[invalid] = xy_nn(np.stack((ftarget[invalid], gtarget[invalid]), axis=-1))
 
+        # For almost circular orbits we use a more accurate method that avoids cancellation
+        rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
+        if (accr is not None) and (daccdr is not None):
+            sel = ra <= rp*(1. + eps_circ)
+            rp[sel], ra[sel] = rp_ra_of_j_l_near_circ(accr, daccdr, j[sel], l[sel], 0.5*(rp[sel]+ra[sel]))
+
         # Optionally improve the result with Newton-Raphson
         # This makes the result practically independent of the table discretization
         # assuming that the starting point is close enough to the true solution
         # Even a single step dramatically improves accuracy in that case
         # accr is additionally needed as an input to evaluate the gradient
-        rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
 
         assert np.all(rp > 0) and np.all(ra > 0)
         if nsteps_newton > 0:
-            # circular orbits can lead to a lot of cancellation, but they contribute almost nothing to phase space integrals
-            # Let's simply not improve them
-            sel = (ra >= rp*(1. + eps_circ)) & (j > 0) & (l > 0)
-            rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action)
+            # Avoid circular orbits, they lead to cancellation
+            sel = (ra > rp*(1. + eps_circ)) & (j > 0) & (l > 0)
+            # sel = np.ones_like(rp, dtype=bool)
+            rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
         assert np.all(rp > 0) and np.all(ra > 0)
         return rp, ra
 
     return rpra_of_jl
 
-def newton_improve_rp_ra_of_j_l(pot,accr,j0,l0, rp0, ra0, nsteps_newton=0, nintegrate_action=40):
+def newton_improve_rp_ra_of_j_l(pot,accr,j0,l0, rp0, ra0, nsteps_newton=0, nintegrate_action=40, daccdr=None, eps_circ=1e-3):
     def F_and_Jac(log_rpra):
         rp, ra = np.exp(log_rpra[...,0]), np.exp(log_rpra[...,1])
-        j,e,l,dj_drp, dj_dra, dl_drp, dl_dra = calculate_jel_and_dj_dl_drp_dra(pot,accr, rp, ra, nintegrate=nintegrate_action)
+        rp, ra = np.minimum(rp, ra), np.maximum(rp, ra)
+        j,e,l,dj_drp, dj_dra, dl_drp, dl_dra = calculate_jel_and_dj_dl_drp_dra(pot,accr, rp, ra, nintegrate=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
 
         F = np.stack((np.log(j/j0), np.log(l/l0)), axis=-1)
         Jac = np.stack((dj_drp*(rp/j), dj_dra*(ra/j), dl_drp*(rp/l), dl_dra*(ra/l)), axis=-1).reshape(j0.shape+(2,2))
@@ -354,7 +378,9 @@ def newton_improve_rp_ra_of_j_l(pot,accr,j0,l0, rp0, ra0, nsteps_newton=0, ninte
         return rp0, ra0
     else:
         log_rpra = search.newton_raphson_FJ(F_and_Jac, np.stack((np.log(rp0), np.log(ra0)), axis=-1), niter=nsteps_newton)
-        return np.exp(log_rpra[...,0]), np.exp(log_rpra[...,1])
+        rp,ra = np.exp(log_rpra[...,0]), np.exp(log_rpra[...,1])
+        rp, ra = np.minimum(rp, ra), np.maximum(rp, ra)
+        return rp, ra
 
 def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, fpa_below=None, k=3, accr=None, daccdr=None, eps_circ=1e-3):
     ui,vi,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table

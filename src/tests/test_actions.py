@@ -74,39 +74,38 @@ def test_action_inversion(profile, embed_plot):
 
     # Setup interpolator
     t0 = time.time()
-    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100)
+    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmin=1e-3)
     # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr, daccdr=prof.daccdr)
+    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=2, accr=prof.accr, daccdr=prof.daccdr, eps_circ=1e-3) # , daccdr=prof.daccdr
     print(f"Setup time {time.time()-t0:.2f}s")
 
     # Test against actual values
     rptest = np.logspace(-5,5,4312)
-    for logramin, tolerance in ((-3,1e-4), (-5,1e-2)):
+    for logramin, tolerance in ((-3,1e-4), (-8,5e-2)):
         print("Test tolerance: %.1e" % tolerance)
         ratest = rptest * (1 + 10**np.random.uniform(logramin,5,len(rptest)))
-        j = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof.potential, rptest, ratest, accr=prof.accr, daccdr=prof.daccdr)
-        l = np.sqrt(2.*(prof.potential(ratest) - prof.potential(rptest))/(rptest**-2 - ratest**-2))
+        j = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof.potential, rptest, ratest, accr=prof.accr, daccdr=prof.daccdr, eps_circ=1e-3) # 
+        e,l = prof.E_L_of_rperi_rapo(rptest, ratest)
 
         rpn, ran = rp_ra_of_jl(j,l)
 
         print("nans:", np.sum(np.isnan(rpn)), np.sum(np.isnan(ran)))
 
-        if logramin > -4:
-            embed_plot(plot_relative_error(rpn, rptest, tolerance))
-            embed_plot(plot_relative_error(ran, ratest, tolerance))
+        embed_plot(plot_relative_error(rpn, rptest, tolerance))
+        embed_plot(plot_relative_error(ran, ratest, tolerance))
 
-            check_max_relative_error(rpn, rptest, tolerance)
-            check_max_relative_error(ran, ratest, tolerance)
+        check_max_relative_error(rpn, rptest, tolerance)
+        check_max_relative_error(ran, ratest, tolerance)
 
-            # Check energies
-            En, Ln = prof.E_L_of_rperi_rapo(rpn, ran)
-            E, L = prof.E_L_of_rperi_rapo(rptest, ratest)
+        # Check energies
+        En, Ln = prof.E_L_of_rperi_rapo(rpn, ran)
+        E, L = prof.E_L_of_rperi_rapo(rptest, ratest)
 
-            embed_plot(plot_relative_error(En, E, tolerance))
-            embed_plot(plot_relative_error(Ln, L, tolerance))
+        embed_plot(plot_relative_error(En, E, tolerance))
+        embed_plot(plot_relative_error(Ln, L, tolerance))
 
-            check_max_relative_error(En, E, tolerance)
-            check_max_relative_error(Ln, L, tolerance)
+        check_max_relative_error(En, E, tolerance)
+        check_max_relative_error(Ln, L, tolerance)
 
         # For very circular orbits we only care to reconstruc the phase space distr.
         # properly:
