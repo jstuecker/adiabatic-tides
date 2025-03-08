@@ -667,7 +667,7 @@ def vr_integral_near_circ(daccdr, rp, ra, l, p=0.5):
         fac = gamma(p+1)**2 / gamma(2*p+2)
         return fac * c**p * (ra - rp)**(2*p+1)
 
-def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, invalid_vr_to_zero=True):
+def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40):
     I = np.zeros(np.broadcast(rperi, rapo).shape)
     I[rapo < rperi] = np.nan
     sel = rapo > rperi
@@ -678,14 +678,10 @@ def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, inval
     E = phip + (phia - phip)*(rapo**2) / (rapo**2 - rperi**2)
     L = np.sqrt(2. * (phia - phip) / (rperi**-2 - rapo**-2))
 
-    if invalid_vr_to_zero:
-        def integrand(r):
-            vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
-            return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
-    else:
-        def integrand(r):
-            vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
-            return np.sqrt(vr2)
+    def integrand(r):
+        vr2 = 2*(E[...,np.newaxis] - pot(r)) - L[...,np.newaxis]**2/r**2
+        return np.sqrt(np.clip(vr2, 0, None)) # it can happen vr2 < 0 if profile is not perfectly monotonic due to round-off errors
+
     
     I[sel] = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
     return I / np.pi

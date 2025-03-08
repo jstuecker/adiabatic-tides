@@ -120,7 +120,7 @@ def test_boundaries_orbits(profile, embed_plot):
 
     # js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof_t.potential, rperi[:-1], rapo[:-1], invalid_vr_to_zero=False)
     # assert np.all(~np.isnan(js))
-    js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(nprof_t.potential, nrperi[:-1], nrapo[:-1], invalid_vr_to_zero=True)
+    js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(nprof_t.potential, nrperi[:-1], nrapo[:-1])
     assert np.all(js > 0)
     
     for p in (prof_t, nprof_t):
@@ -133,7 +133,7 @@ def test_boundaries_orbits(profile, embed_plot):
         valid = at.numerics.search.rperi_rapo_valid(p.potential, p.accr, rp, ra)
         assert np.all(valid)
 
-        js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(p.potential, rp, ra, invalid_vr_to_zero=True)
+        js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(p.potential, rp, ra)
         assert np.all(js > 0)
 
 @pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
