@@ -644,6 +644,29 @@ def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, 
 
 # ================= Methods for calculating Actions  ======================= #
 
+def vr_near_circ(daccdr, r, rp, ra, l):
+    """Expansion of vr for nearly circular orbits (avoids cancellation)"""
+    rc = 0.5*(rp + ra)
+    dphieff_dr2 = 2*daccdr(rc) - 6*l**2/rc**4
+    return np.sqrt(-0.5*dphieff_dr2*(r-rp)*(ra-r))
+
+def vr_integral_near_circ(daccdr, rp, ra, l, p=0.5):
+    """integrate vr**(2p) from rp to ra analytically with an expansion for nearly circular orbits"""
+    rc = 0.5*(rp + ra)
+    c = -daccdr(rc) + 3*l**2/rc**4
+
+    # To second order vr can be approximated as vr**2 = c*(r-rp)*(r-ra)
+    # Then  can integrate vr**2p analytically
+
+    if p == 0.5: # integral over sqrt(vr2) as needed for radial action
+        return (1/8. * np.pi)*c**0.5 * (ra - rp)**2
+    elif p == -0.5: # integral over 1/sqrt(vr2) as needed for dj/de
+        return np.pi/np.sqrt(c)
+    else: # for other cases get the pre-factor numerically
+        from scipy.special import gamma
+        fac = gamma(p+1)**2 / gamma(2*p+2)
+        return fac * c**p * (ra - rp)**(2*p+1)
+
 def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, invalid_vr_to_zero=True):
     I = np.zeros(np.broadcast(rperi, rapo).shape)
     I[rapo < rperi] = np.nan
