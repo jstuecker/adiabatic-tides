@@ -136,23 +136,32 @@ class NFWProfile(RadialProfile):
         M0 = 4.*np.pi*self.rs**3*self.rhoc
         
         m = np.zeros_like(r)
-        sel = x > 1e-5
+        sel = x > 1e-3
         m[sel] = M0 * (np.log(1 + x[sel]) + 1. / (1. + x[sel]) - 1.)
-        m[~sel] = 0.5 * M0 * x[~sel]**2
+        m[~sel] = M0 * (0.5*x[~sel]**2 - 2./3. * x[~sel]**3)
         
         return m
     
     def potential(self, r, zero_at_zero=True):
         phi = np.zeros_like(r)
         x = np.array(r) / self.rs
-        sel = x > 1e-4
+        sel = x > 1e-3
         if zero_at_zero:
             phi[sel] = self.phi0 * (np.log(1. + x[sel]) / x[sel] - 1.)
-            phi[~sel] = self.phi0 * (- x[~sel]/2. + x[~sel]**2/3.)
+            phi[~sel] = self.phi0 * (- x[~sel]/2. + x[~sel]**2/3. - x[~sel]**3/4.)
         else:
             phi[sel] = self.phi0 * np.log(1. + x[sel]) / x[sel]
             phi[~sel] = self.phi0 * (1. - x[~sel]/2. + x[~sel]**2/3.)
         return phi
+    
+    def daccdr(self, r):
+        """The normal expression leads to cancellation for r**-1 profile,
+        so we use an expansion at small radii
+        """
+        sel = r > 1e-3*self.rs
+        a0 = 4.*np.pi*self.rs**3*self.rhoc * self.G
+
+        return np.piecewise(r, [sel, ~sel], [super().daccdr, lambda r: a0*(2./3. - 3./2. * (r/self.rs) + 12./5. * (r/self.rs)**2)])
 
     def to_dict(self):
         d = {}
@@ -311,6 +320,7 @@ class IsothermalSphere(RadialProfile):
         return f"IsothermalSphere(rho0={self.rho0:.5g}, r0={self.rad0:.5g})"
 
 class PlummerProfile(RadialProfile):
+    default_config = Config(general=GeneralConfig(rmin=1e-10, rmax=1e10))
     def __init__(self, M=1, a=1, config : Config | None = None):
         """Set up a Plummer profile
         """
@@ -318,6 +328,8 @@ class PlummerProfile(RadialProfile):
         
         self.M = M
         self.a = a
+
+        self.cfg.scale_base_radius(self.a) # Make rmin and rmax be given in units of rs
 
         self.phi0 = - self.G * self.M / self.a
 
