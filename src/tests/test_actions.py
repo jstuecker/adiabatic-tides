@@ -10,7 +10,7 @@ def test_peri_apo_finding(profile, embed_plot):
     np.random.seed(42)
     prof = standard_profiles(profile)
     
-    rp = np.logspace(-10, 6, 1333)
+    rp = np.logspace(-10, 5, 1333)
     ra = rp * 10.**np.random.uniform(0,5,len(rp))
     r = rp * (ra/rp)**np.random.uniform(0,1,len(rp))
     
@@ -28,7 +28,7 @@ def test_actions_rel(profile, embed_plot):
     np.random.seed(42)
     prof = standard_profiles(profile)
     
-    rp = np.logspace(-10, 6, 1333)
+    rp = np.logspace(-10, 5, 1333)
     ra = rp * 10.**np.random.uniform(0,5,len(rp))
     r = rp * (ra/rp)**np.random.uniform(0,1,len(rp))
     

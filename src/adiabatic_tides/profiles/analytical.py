@@ -80,7 +80,7 @@ def rhoc_rs_to_conc_m200c(rhoc, rs, h=0.679, delta=200., G=43.0071057317063e-10)
 
 
 class NFWProfile(RadialProfile):
-    default_config = Config(general=GeneralConfig(rmin=1e-15, rmax=1e15))
+    default_config = Config(general=GeneralConfig(rmin=1e-15, rmax=1e10))
 
     def __init__(self, conc, m200c=None, r200c=None, h=0.679, anisotropy=0., config : Config | None = None):
         """Set up an NFW profile with a given mass and concentration
