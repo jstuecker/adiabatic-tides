@@ -317,54 +317,46 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
+    if accr is not None: 
+        # Set up lcirc interpolator for handling near-circular orbits
+        # Note that this is only used as a guess in the search and doesn't have to be very accurate
+        ri = np.unique(rpgrid)
+        lc = np.sqrt(np.clip(-accr(ri)*ri**3, 0, None))
+
+        def rcirc_of_lcirc(l):
+            return np.interp(l, lc, ri)
+
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
     e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
 
     rpmin, ramax = np.min(rpgrid), np.max(ragrid)
     lmax, jmax = np.max(l), np.max(j)
 
-    # assert np.all(j > 0) and np.all(l > 0)
-    sel = (j > 0) & (l > 0)
-
     l0, j0, facl = np.min(l[l>0]), np.min(j[j>0]), 0
 
+    sel = (j > 0) & (l > 0)
     xy_ip = CloughTocher2DInterpolator(np.stack((np.log(j+j0+l*facl),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
-    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0+l*facl),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
 
     def rpra_of_jl(j, l):
-        # assert np.all(j > 0) and np.all(l > 0)
-
         # Use NN interpolator for first guess
         ftarget, gtarget = np.log(j+l*facl+j0), np.log(l+l0)
         xynew = xy_ip(np.stack((ftarget, gtarget), axis=-1))
-
-        # Points can be outside of the domain because rp < rmin, ra > rmax
-        # or because of ra/rp -> 1
-        # For points that are outside because they are close to circular orbits
-        # we can use the nearest neighbor and use a special circular treatment below
-        invalid_circ = np.isnan(xynew[...,0]) & (l < lmax) & (j < jmax)
-        if np.sum(invalid_circ) > 0:
-            xynew[invalid_circ] = xy_nn(np.stack((ftarget[invalid_circ], gtarget[invalid_circ]), axis=-1))
+        rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
 
         # For almost circular orbits we use a more accurate method that avoids cancellation
-        rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
         if (accr is not None) and (daccdr is not None):
-            sel = (j <= l*(eps_circ/10.)) & (rp > 0) & (ra > 0)
-            rp[sel], ra[sel] = rp_ra_of_j_l_near_circ(accr, daccdr, j[sel], l[sel], 0.5*(rp[sel]+ra[sel]))
+            sel = (j <= l*(eps_circ/10.)) & (l < lmax) & (j < jmax)
+            rp[sel], ra[sel] = rp_ra_of_j_l_near_circ(accr, daccdr, j[sel], l[sel], r0=rcirc_of_lcirc(l[sel]))
 
-        # Optionally improve the result with Newton-Raphson
-        # This makes the result practically independent of the table discretization
-        # assuming that the starting point is close enough to the true solution
-        # Even a single step dramatically improves accuracy in that case
-        # accr is additionally needed as an input to evaluate the gradient
-
-        # assert np.all(rp > 0) and np.all(ra > 0)
-        if nsteps_newton > 0:
-            # Avoid circular orbits, they lead to cancellation
-            sel = (ra > rp*(1. + eps_circ)) & (j > 0) & (l > 0) & (rp > 0) & (ra > 0)
-            # sel = np.ones_like(rp, dtype=bool)
-            rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
-        # assert np.all(rp > 0) and np.all(ra > 0)
+            # Optionally improve the result with Newton-Raphson
+            # This makes the result practically independent of the table discretization
+            # assuming that the starting point is close enough to the true solution
+            # Even a single step dramatically improves accuracy in that case
+            # accr is additionally needed as an input to evaluate the gradient
+            if nsteps_newton > 0:
+                # Avoid circular orbits, they lead to cancellation
+                sel = (ra > rp*(1. + eps_circ)) & (j > 0) & (l > 0) & (rp > 0) & (ra > 0)
+                rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
 
         invalid = (rp < rpmin) | (ra > ramax) | (rp > ra)
         rp[invalid], ra[invalid] = np.nan, np.nan
