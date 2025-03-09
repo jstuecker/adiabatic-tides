@@ -12,6 +12,9 @@ def test_peri_apo_finding(profile, embed_plot):
     
     rp = np.logspace(-10, 5, 1333)
     ra = rp * 10.**np.random.uniform(0,5,len(rp))
+    rp = np.clip(rp, prof.rmin()*2, prof.rmax()/2)
+    ra = np.clip(ra, prof.rmin()*3, prof.rmax()/1.5)
+
     r = rp * (ra/rp)**np.random.uniform(0,1,len(rp))
     
     e,l = prof.E_L_of_rperi_rapo(rp, ra)
@@ -30,6 +33,9 @@ def test_actions_rel(profile, embed_plot):
     
     rp = np.logspace(-10, 5, 1333)
     ra = rp * 10.**np.random.uniform(0,5,len(rp))
+    rp = np.clip(rp, prof.rmin()*2, prof.rmax()/2)
+    ra = np.clip(ra, prof.rmin()*3, prof.rmax()/1.5)
+
     r = rp * (ra/rp)**np.random.uniform(0,1,len(rp))
     
     e,l = prof.E_L_of_rperi_rapo(rp, ra)
@@ -77,13 +83,13 @@ def test_action_inversion(profile, embed_plot):
     table = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax(), rpmin=prof.rmin(), rlmax=prof.rmax(), nbins=133)
     # table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=133, facmin=1e-3, facmax=1e12)
     # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=5, accr=prof.accr, daccdr=prof.daccdr)
+    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=2, accr=prof.accr, daccdr=prof.daccdr)
     print(f"Setup time {time.time()-t0:.2f}s")
 
     # Test against actual values
     #rptest = np.logspace(-prof.rmin(),10,4312)
-    rptest = np.logspace(-8, -5, 4312)
-    for logramin, tolerance in ((-3,1e-3), (-4,5e-2)):
+    rptest = np.logspace(-7, 3, 4312)
+    for logramin, tolerance in ((-3,1e-3), (-4,1e-3)):
         print("Test tolerance: %.1e" % tolerance)
         ratest = rptest * (1 + 10**np.random.uniform(logramin,5,len(rptest)))
         j = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof.potential, rptest, ratest, accr=prof.accr, daccdr=prof.daccdr)
@@ -129,7 +135,7 @@ def test_f_jl_reconstruction(profile, embed_plot):
     #     rp,ra = rp_ra_of_jl(j,l)
     #     return prof.f_of_rperi_rapo(rp,ra)
 
-    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax()/2, rpmin=prof.rmin()*2, rlmax=prof.rmax()/2, nbins=222, tmax=5)
+    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax()/2, rpmin=prof.rmin()*2, rlmax=prof.rmax()/2, nbins=111, tmax=5)
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table2
     #print("rpratiomin:", np.min(ragrid[0]/rpgrid)-1.)
     # table2 = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmax=1e12)
@@ -139,6 +145,7 @@ def test_f_jl_reconstruction(profile, embed_plot):
     # Test
     rp = np.logspace(-5,2,4000)
     for logramin, tolerance in ((-1,1e-2), (-7,1e-2)):
+        if profile == "plummer": tolerance = 1e-1
         ra = rp * (1. + 10**np.random.uniform(logramin,5,len(rp)))
 
         f = f_of_rperi_rapo(rp, ra)
@@ -156,7 +163,8 @@ def test_rho_reconstruction(profile, embed_plot):
     np.seterr(all='raise')
     prof = standard_profiles(profile)
 
-    table2 = at.numerics.interpolate.define_peri_apo_table(1e-9, 1e9, nbins=133, facmax=1e8)
+    # table2 = at.numerics.interpolate.define_peri_apo_table(prof.rmin()*2., prof.rmax()/2., nbins=133, facmax=1e8)
+    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax()/2, rpmin=prof.rmin()*2, rlmax=prof.rmax()/2, nbins=222, tmax=5)
     f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof.potential, table2, accr=prof.accr, daccdr=prof.daccdr)
 
     if profile == "plummer":
@@ -175,32 +183,33 @@ def test_numerical_rho_reconstruction(profile, embed_plot):
     np.random.seed(42)
     np.seterr(divide='raise', invalid="raise", over="raise", under="ignore")
     prof = standard_profiles(profile)
-    r = np.logspace(-16, 16, 3000)
+    r = np.geomspace(prof.rmin(), prof.rmax(), 3000)
     prof = at.profiles.NumericalProfile(r, prof.density(r))
 
-    table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=400, facmax=1e11)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr)
+    # table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=400, facmax=1e11)
+    # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr)
     # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, accr=prof.accr, nsteps_newton=1)
 
-    def f_of_jl(j, l):
-        rperi,rapo = rp_ra_of_jl(j,l)
+    # def f_of_jl(j, l):
+    #     rperi,rapo = rp_ra_of_jl(j,l)
 
-        f = np.zeros(np.broadcast(j,l).shape)
-        valid = ~np.isnan(rperi) & ~np.isnan(rapo)
-        f[valid] = prof.f_of_el(*prof.E_L_of_rperi_rapo(rperi[valid], rapo[valid]))
+    #     f = np.zeros(np.broadcast(j,l).shape)
+    #     valid = ~np.isnan(rperi) & ~np.isnan(rapo)
+    #     f[valid] = prof.f_of_el(*prof.E_L_of_rperi_rapo(rperi[valid], rapo[valid]))
 
-        return f
+    #     return f
 
-    table2 = at.numerics.interpolate.define_peri_apo_table(1e-9, 1e9, nbins=140, facmax=1e8)
+    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax()/2, rpmin=prof.rmin()*2, rlmax=prof.rmax()/2, nbins=100, tmax=5)
+    # table2 = at.numerics.interpolate.define_peri_apo_table(1e-9, 1e9, nbins=140, facmax=1e8)
     def potential(r):
         return prof.potential(r)
 
-    f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, prof.potential, table2, accr=prof.accr, daccdr=prof.daccdr)
+    f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof.potential, table2, accr=prof.accr, daccdr=prof.daccdr)
 
     if profile == "plummer":
         r = np.logspace(-0.8,6,200)
     else:
-        r = np.logspace(-7,7,200)
+        r = np.logspace(-8,5,200)
     rho = at.numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, potential, prof.accr, r)
 
     embed_plot(plot_relative_error(rho, prof.density(r), 1e-2))

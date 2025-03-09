@@ -14,24 +14,13 @@ def test_single_step_tidal_convergence(profile, embed_plot):
     tprof = at.profiles.RadialTidalProfile(-prof.accr(rt)/rt)
     prof_t = at.profiles.CompositeProfile(dm=prof, tide=tprof)
 
-    # Define Initial profile phase space
-    table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=100, facmax=1e14)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, nsteps_newton=5, accr=prof.accr, daccdr=prof.daccdr)
-    #rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr)
-
-    def f_of_jl(j, l):
-        assert np.all(~np.isnan(l))
-        rperi,rapo = rp_ra_of_jl(j,l)
-
-        return prof.f_of_el(*prof.E_L_of_rperi_rapo(rperi, rapo))
-
     rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=10000, rmax=prof.rmax())
 
     table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp, 1e-10, rlmax, nbins=100)
     def fbelow(rp, ra):
         return prof.f_of_el(*prof.E_L_of_rperi_rapo(rp, ra))
 
-    f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, prof_t.potential, table2, k=3, fpa_below=fbelow, accr=prof_t.accr, daccdr=prof_t.daccdr)
+    f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof_t.potential, table2, k=3, fpa_below=fbelow, accr=prof_t.accr, daccdr=prof_t.daccdr)
 
     if profile == "plummer":
         r = np.logspace(-3,3,100)
@@ -52,14 +41,6 @@ def test_multi_step_tidal_convergence(profile, embed_plot):
 
     prof = standard_profiles(profile)
 
-    table = at.numerics.interpolate.define_peri_apo_table(1e-12, 1e12, nbins=200)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr)
-    # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, accr=prof.accr, nsteps_newton=1)
-
-    def f_of_jl(j, l):
-        rperi,rapo = rp_ra_of_jl(j,l)
-        return prof.f_of_el(*prof.E_L_of_rperi_rapo(rperi, rapo))
-    
     if profile == "plummer":
         rpmin = 1e-11
         tide = np.abs(prof.accr(1e1)/1e1)
@@ -77,11 +58,11 @@ def test_multi_step_tidal_convergence(profile, embed_plot):
     rho_hr, m_hr, phi_hr = prof.density, prof.m_of_r, phi0
 
     for i in range(0,5):
-        rnew, rhonew = at.adiabatic.adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=200, nintegrate=32, ninterp=50, G=prof.G, rmax=prof.rmax())
+        rnew, rhonew = at.adiabatic.adiabatic_tidal_iteration(prof.f_of_jl, rho, m, phi, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=200, nintegrate=32, ninterp=50, G=prof.G, rmax=prof.rmax())
         assert  np.min(rhonew) >= 0
         rho, m, phi = at.numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew, rhonew, lower_boundary=lower_boundary, G=prof.G)
 
-        rnew_hr, rhonew_hr = at.adiabatic.adiabatic_tidal_iteration(f_of_jl, rho_hr, m_hr, phi_hr, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=177, nintegrate=43, ninterp=77, G=prof.G, rmax=prof.rmax())
+        rnew_hr, rhonew_hr = at.adiabatic.adiabatic_tidal_iteration(prof.f_of_jl, rho_hr, m_hr, phi_hr, tide=tide, rpmin=rpmin, fpa_below=prof.f_of_rperi_rapo, nr=177, nintegrate=43, ninterp=77, G=prof.G, rmax=prof.rmax())
         assert  np.min(rnew_hr) >= 0
         rho_hr, m_hr, phi_hr = at.numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(rnew_hr, rhonew_hr, lower_boundary=lower_boundary, G=prof.G)
 

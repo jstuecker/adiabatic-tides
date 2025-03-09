@@ -64,7 +64,7 @@ def test_known_f_of_e(profile, embed_plot):
     prof.cfg.eddington.nr = 4000
     phasespace = at.phasespace.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg.general, prof.cfg.eddington, anisotropy=0.)
 
-    rtest = np.logspace(-8, 8, 7*33)
+    rtest = np.geomspace(prof.rmin()*1e2, prof.rmax()/100, 7*33)
     
     e1 = prof.potential(rtest)
     e2 = prof.potential(rtest, zero_at_zero=True)
@@ -113,7 +113,6 @@ def test_rho_f_rho_cored(profile, embed_plot):
 @pytest.mark.parametrize("profile", ["nfw", "plummer", "powerlaw0.5", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8"])
 def test_rho_f_rho_adaptive(profile, embed_plot):
     np.seterr(all='raise', under="ignore")
-    rsetup = np.logspace(-20, 15, 2111)
 
     if profile == "plummer":
         tolerance = 1e-2
@@ -124,7 +123,7 @@ def test_rho_f_rho_adaptive(profile, embed_plot):
     prof.phase_space = at.phasespace.EddingtonPhaseSpace(prof.density, prof.potential, prof.cfg.general, prof.cfg.eddington, anisotropy=0.)
     # prof = at.profiles.NumericalProfile(rsetup, prof.density(rsetup))
 
-    rev = np.logspace(-15,5, 7*31)
+    rev = np.geomspace(max(1e-10, prof.rmin()*1e2), min(1e10, prof.rmax()/1e2), 7*31)
     # prof.f_of_e(E=(0.1,0.2), nintegrate=400)
     def phi(r): return prof.potential(r, zero_at_zero=True)
     # rho_new = at.numerics.integrals.integrate_f_paspace(prof.f_of_el, phi, prof.accr, rev, N=200) # , rperirange=(rsetup[0], rsetup[-1]), raporange=(rsetup[0], rsetup[-1])

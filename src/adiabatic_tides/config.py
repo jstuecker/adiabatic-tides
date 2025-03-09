@@ -29,12 +29,12 @@ class ActionsConfig:
     # For Action integral:
     nintegrate: int = 40
     # For mapping rp_ra(j, l) via an interpolation table
-    nbins_rp: int = 250
+    nbins_rp: int = 200
     nbins_ra: int = 100 # zero means that it uses the same as rp
     # Some newton iteration steps on top of that. These are very expensive
     # but quickly get the error down to 0. If you need more speed it may
     # be worth to use 0 here:
-    nsteps_newton: int = 5  
+    nsteps_newton: int = 1
     rafac_max: float = 1e10
     rpfac_eps: float = 1e-5
 

@@ -42,7 +42,8 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
     rpmax = rt0*10
 
     table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: rpmax, rpmin=rpmin, rlmax=rpmax, nbins=nbins_fini)
-    rp_ra_of_jl = numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr, eps_circ=eps_circ)
+    # rp_ra_of_jl = numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr, eps_circ=eps_circ)
+    rp_ra_of_jl = numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, accr=prof.accr, daccdr=prof.daccdr, eps_circ=eps_circ)
 
     if rpmin2 is None:
         rpmin2 = rpmin*1e1

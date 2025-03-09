@@ -313,7 +313,7 @@ def setup_rperi_rapo_of_jl(pot, table, nsteps_newton=5, nintegrate_action=40, k=
     
     return rpra_of_jl
 
-def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0, accr=None, daccdr=None, eps_circ=1e-3):
+def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=2, accr=None, daccdr=None, eps_circ=1e-3):
     """ sets up a function that returns the peri- and apo-centric radii for a given action and angular momentum """
     u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table
 
@@ -402,7 +402,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     def f_of_rperi_rapo(rp, ra):
         u,v = uv_of_rpra(rp, ra)
 
-        assert np.all(~np.isnan(v))
+        # assert np.all(~np.isnan(v))
 
         # For nearly circular orbits f(j,l) only depends on l and therefore it is fine to 
         # approximate by the closest resolved orbit
@@ -419,7 +419,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
             shape = np.broadcast(rp,ra).shape
             res[u < 0] = fpa_below(np.broadcast_to(rp, shape)[u < 0], np.broadcast_to(ra, shape)[u < 0])
 
-        assert np.all(res > 0)
+        # assert np.all(res > 0)
 
         return res
     

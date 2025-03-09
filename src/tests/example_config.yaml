@@ -18,9 +18,9 @@ actions:
   niter_pa: 30
   search_method: "ridders"
   nintegrate: 40
-  nbins_rp: 250
+  nbins_rp: 200
   nbins_ra: 100
-  nsteps_newton: 5
+  nsteps_newton: 1
   rafac_max: 1e10
   rpfac_eps: 1e-5
 
