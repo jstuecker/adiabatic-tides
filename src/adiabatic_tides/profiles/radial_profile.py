@@ -452,7 +452,15 @@ class RadialProfile():
         p["rrho"] = ri
         p["rho"] = rho
 
-        if mode == "dict":
+        if ("pos" in mode) or ("vel" in mode):
+            p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
+            if "vel" in mode:
+                vr = p["pos"] * (p["vr"] / p["r"])[...,np.newaxis]
+                vt_xy = numerics.sample.random_direction(ntot, ndim=2) * (p["l"]/p["r"])[...,np.newaxis]
+                e1, e2 = numerics.sample.orthogonal_vectors(vr)
+                p["vel"] = vr + e1 * vt_xy[...,0,np.newaxis] + e2 * vt_xy[...,1,np.newaxis]
+
+        if "dict" in mode:
             return p
         else:
             res = []
@@ -475,13 +483,21 @@ class RadialProfile():
             res.append(self.sample_particles(size_per_split, mode=mode, rpmin=rpsplits[i], rpmax=rpsplits[i+1], rmax=rmax, **kwargs))
 
         outputs = []
-        ncol = len(res[0])
-        for j in range(ncol):
-            outputs.append(np.stack([r[j] for r in res], axis=0))
-        if flat:
-            return [o.flatten() for o in outputs]
+        if "dict" in mode:
+            out = {}
+            for key in res[0]:
+                out[key] = np.stack([r[key] for r in res], axis=0)
+                if flat:
+                    out[key] = out[key].reshape((-1,) + out[key].shape[2:])
+            return out
         else:
-            return outputs
+            ncol = len(res[0])
+            for j in range(ncol):
+                outputs.append(np.stack([r[j] for r in res], axis=0))
+            if flat:
+                return [o.reshape((-1,) + o.shape[2:]) for o in outputs]
+            else:
+                return outputs
 
     # ----------- Utility Methods --------------#
     # these help with estimating some important scales etc.

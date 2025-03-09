@@ -62,6 +62,16 @@ def get_anisotropy_profile(ri, mi, vri, li, rbins, reduced=False):
 
 # ================== Generic functions for sampling ======================== #
 
+def orthogonal_vectors(v):
+    """Returns two unit vectors orthogonal to each other and v"""
+    v = v / np.linalg.norm(v, keepdims=True, axis=-1)
+    v1 = np.random.normal(size=3)
+    v1 = v1 - np.sum(v1*v, keepdims=True, axis=-1) * v
+    v1 = v1 / np.linalg.norm(v1, keepdims=True, axis=-1)
+    v2 = np.cross(v, v1)
+    return v1, v2
+    
+
 def random_direction(size, ndim):
     """Samples random unit vectors
     
@@ -70,6 +80,7 @@ def random_direction(size, ndim):
     
     returns : array with shape (*size, ndim)
     """
+    if isinstance(size, int): size = (size,)
     x = np.random.normal(size=tuple(size) + (ndim,))
     r = np.sqrt(np.sum(x**2,axis=-1))
     return x/r[...,np.newaxis]
