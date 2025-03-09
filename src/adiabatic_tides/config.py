@@ -36,7 +36,7 @@ class ActionsConfig:
     # be worth to use 0 here:
     nsteps_newton: int = 1
     rafac_max: float = 1e10
-    rpfac_eps: float = 1e-5
+    eps_circ: float = 1e-3 # sets when close-to-circular approximations are used. Usually you should not modify this
 
 @dataclass
 class AdiabaticConfig:
@@ -188,9 +188,6 @@ class Config():
         """
         self.general.rmin = self.general.rmin / scale
         self.general.rmax = self.general.rmax * scale
-
-        self.actions.rafac_max = self.actions.rafac_max * np.sqrt(scale)
-        self.actions.rpfac_eps = self.actions.rpfac_eps / np.sqrt(scale)
 
         self.adiabatic.rminfac = self.adiabatic.rminfac * np.sqrt(scale)
 

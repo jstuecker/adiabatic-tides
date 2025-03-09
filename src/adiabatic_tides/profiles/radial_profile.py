@@ -164,7 +164,7 @@ class RadialProfile():
     
     def E_L_of_rperi_rapo(self, rperi, rapo):
         "Maps peri- and apo-center radii to energy and angular-momentum"
-        return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo, accr=self.accr)
+        return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo, accr=self.accr, eps_circ=self.cfg.actions.eps_circ)
     
     def posvel_to_rEL(self, pos, vel):
         """Calculates the radius, energy and angular momentum of particles
@@ -287,15 +287,20 @@ class RadialProfile():
         rp, ra = self.rperi_rapo_of_r_e_l(r, e, l)
         return self.radial_action_of_rp_ra(rp, ra)
 
-    def radial_action_of_rp_ra(self, rp, ra, nintegrate=None):
-        """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
+    def radial_action_of_rp_ra(self, rp, ra, nintegrate=None, eps_circ=None):
+        """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224
+        
+        orbits are approximated as close to circular if ra <= rp*(1+eps_circ)
+        """
         nintegrate = nintegrate or self.cfg.actions.nintegrate
-        return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr)
+        eps_circ = eps_circ or self.cfg.actions.eps_circ
+        return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr, eps_circ=eps_circ)
 
-    def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None):
+    def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None, eps_circ=None):
         """Numerically infer the radial orbital period time"""
         nintegrate = nintegrate or self.cfg.actions.nintegrate
-        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr)
+        eps_circ = eps_circ or self.cfg.actions.eps_circ
+        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr, eps_circ=eps_circ)
         return djde*2.*np.pi
     
     #----------- Integrals and Moments --------------#
