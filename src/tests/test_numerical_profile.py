@@ -77,12 +77,12 @@ def test_boundaries(profile, embed_plot):
     nprof_t = at.profiles.CompositeProfile(dm=nprof, tide=tprof)
 
     for p in (prof, nprof):
-        rlmax, rtid = at.numerics.search.find_rlmax(p.accr, p.daccdr), at.numerics.search.find_rphimax(p.accr)
+        rlmax, rtid = at.numerics.search.find_rlmax(p.accr, rmin=p.rmin(), rmax=p.rmax()), at.numerics.search.find_rphimax(p.potential, rmin=p.rmin(), rmax=p.rmax())
         print("Without tide: boundary: %.5e %.5e" % (rlmax, rtid))
         assert (rlmax == np.infty) and (rtid == np.infty)
     print("With Tide:")
     for p in (prof_t, nprof_t):
-        rlmax, rtid = at.numerics.search.find_rlmax(p.accr, p.daccdr), at.numerics.search.find_rphimax(p.accr)
+        rlmax, rtid = at.numerics.search.find_rlmax(p.accr, rmin=p.rmin(), rmax=p.rmax()), at.numerics.search.find_rphimax(p.potential, rmin=p.rmin(), rmax=p.rmax())
         print("With tide: boundary: %.5e %.5e" % (rlmax, rtid))
         assert np.abs(rtid/rtid0 - 1.) < 1e-3
 
@@ -92,8 +92,8 @@ def test_boundaries(profile, embed_plot):
         # Check that rtid corresponds to the maximum of the potential
         assert np.all(p.potential(rtest) <= p.potential(rtid))
 
-    rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
-    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)
+    rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555, rmax=prof_t.rmax())
+    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555, rmax=nprof_t.rmax())
 
     rtest = np.logspace(-8, -0.1, 33) * rlmax
     tc.check_max_relative_error(ramax_of_rp(rtest), nramax_of_rp(rtest), 1e-2)
@@ -115,8 +115,8 @@ def test_boundaries_orbits(profile, embed_plot):
     prof_t = at.profiles.CompositeProfile(dm=prof, tide=tprof)
     nprof_t = at.profiles.CompositeProfile(dm=nprof, tide=tprof)
 
-    rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555)
-    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555)
+    rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(prof_t.potential, prof_t.accr, prof_t.daccdr, nbins=555, rmax=prof_t.rmax())
+    nrperi, nrapo, nrlmax, nrtid, nramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(nprof_t.potential, nprof_t.accr, nprof_t.daccdr, nbins=555, rmax=nprof_t.rmax())
 
     # js = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof_t.potential, rperi[:-1], rapo[:-1], invalid_vr_to_zero=False)
     # assert np.all(~np.isnan(js))
@@ -125,7 +125,7 @@ def test_boundaries_orbits(profile, embed_plot):
     
     for p in (prof_t, nprof_t):
         print("----")
-        rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(p.potential, p.accr, p.daccdr, nbins=555)
+        rperi, rapo, rlmax, rtid, ramax_of_rp = at.numerics.interpolate.define_paspace_boundaries(p.potential, p.accr, p.daccdr, nbins=555, rmax=p.rmax())
 
         rp = 10**np.random.uniform(-5, np.log10(rlmax), 1000)
         ra = rp * 10 ** np.random.uniform(0, np.log10(ramax_of_rp(rp)/rp), rp.shape)
@@ -145,16 +145,15 @@ def test_tidal_boundary_detection(profile, embed_plot):
     nprof = at.profiles.NumericalProfile(r, prof0.density(r))
 
     for prof in prof0, nprof:
-
-        assert np.isnan(prof.rtid())
-        assert np.isnan(prof.rlmax())
+        assert not np.isfinite(prof.rtid())
+        assert not np.isfinite(prof.rlmax())
 
         rmax, vmax = prof.rmax_vmax()
         print(f"rmax {rmax:.2g}, vmax: {vmax:.2g}")
 
         if isinstance(prof0, at.profiles.PowerlawProfile):
             # Powerlaw profiles should have undefined rmax vmax
-            assert np.isnan(rmax) and np.isnan(vmax)
+            assert (not np.isfinite(rmax)) and (not np.isfinite(vmax))
         else:
             assert rmax > 0 and vmax > 0
 

@@ -82,8 +82,11 @@ class RadialProfile():
     
     def rmax_vmax(self):
         """Radius and velocity where the circular velocity is maximal"""
-        opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)/r, (self.rmin(), self.rmax()))
-        return opt.x, self.vcirc(opt.x)
+        rmax = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)/r, (self.rmin(), self.rmax())).x
+        if(np.isfinite(rmax)):
+            return rmax, self.vcirc(rmax)
+        else:
+            return np.infty, np.infty
     
     def rapo_max(self):
         """The maximal radius at which orbital apo-centers can lie
@@ -197,10 +200,10 @@ class RadialProfile():
         rlmax = self.rlmax() # radius where circular energy is maximal
 
         if mode == "asc":
-            rup = self.rmax() if np.isnan(rlmax) else rlmax
+            rup = min(self.rmax(), rlmax)
             return self._search_radius(f, rup=rup)
         elif mode == "desc":
-            if np.isnan(rlmax):
+            if not np.isfinite(rlmax):
                 raise ValueError("Cannot search for descending part, as there is no maximum")
             return self._search_radius(f, rlow=rlmax)
         else:
@@ -211,10 +214,10 @@ class RadialProfile():
         rlmax = self.rlmax() # radius where circular angular momentum is maximal
 
         if mode == "asc":
-            rup = self.rmax() if np.isnan(rlmax) else rlmax
+            rup = min(self.rmax(), rlmax)
             return self._search_radius(f, rup=rup)
         elif mode == "desc":
-            if np.isnan(rlmax):
+            if not np.isfinite(rlmax):
                 raise ValueError("Cannot search for descending part, as there is no maximum")
             return self._search_radius(f, rlow=rlmax, rup=self.rtid())
         else:
@@ -306,7 +309,7 @@ class RadialProfile():
 
         is_limited = numerics.search.profile_is_limited(self.accr, rpmin=self.rmin())
         if is_limited:
-            rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin())
+            rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
             rperirange, raporange = (self.rmin(), rlmax), (self.rmin(), ramax_of_rp)
         else:
             rperirange, raporange = (self.rmin(), np.infty), (self.rmin(), np.infty)

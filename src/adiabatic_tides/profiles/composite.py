@@ -5,17 +5,17 @@ from functools import partial
 from ..numerics.search import maximize_scalar
 from ..config import Config
 
-def combine_functions(f, mode, internal, external, *args, **kwargs):
+def combine_functions(f, mode, internal, external, *args, func_combine=np.sum, **kwargs):
     if mode == "alldict":
         return {label: f[label](*args, **kwargs) for label in f}
     elif mode == "all":
         return (f[label](*args, **kwargs) for label in f)
     if mode == "total":
-        return np.sum([f[label](*args, **kwargs) for label in f], axis=0)
+        return func_combine([f[label](*args, **kwargs) for label in f], axis=0)
     elif mode == "self":
-        return np.sum([f[label](*args, **kwargs) for label in internal], axis=0)
+        return func_combine([f[label](*args, **kwargs) for label in internal], axis=0)
     elif mode == "external":
-        return np.sum([f[label](*args, **kwargs) for label in external], axis=0)
+        return func_combine([f[label](*args, **kwargs) for label in external], axis=0)
     elif mode in f:
         return f[mode](*args, **kwargs)
     else:
@@ -60,6 +60,12 @@ class CompositeProfile(RadialProfile):
     def _combine_profiles(self, d, func_name, mode, *args, **kwargs):
         functions = {label: getattr(d[label], func_name) for label in d}
         return combine_functions(functions, mode, self.internal, self.external, *args, **kwargs)
+    
+    def rmin(self, mode="total"):
+        return self._combine_profiles(self.profiles, 'rmin', mode, func_combine=np.max)
+    
+    def rmax(self, mode="total"):
+        return self._combine_profiles(self.profiles, 'rmax', mode, func_combine=np.min)
         
     def density(self, r, mode="total"):
         return self._combine_profiles(self.profiles, 'density', mode, r)

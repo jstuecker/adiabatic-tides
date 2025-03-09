@@ -320,7 +320,7 @@ class IsothermalSphere(RadialProfile):
         return f"IsothermalSphere(rho0={self.rho0:.5g}, r0={self.rad0:.5g})"
 
 class PlummerProfile(RadialProfile):
-    default_config = Config(general=GeneralConfig(rmin=1e-10, rmax=1e10))
+    # default_config = Config(general=GeneralConfig(rmin=1e-10, rmax=1e10))
     def __init__(self, M=1, a=1, config : Config | None = None):
         """Set up a Plummer profile
         """
@@ -329,7 +329,7 @@ class PlummerProfile(RadialProfile):
         self.M = M
         self.a = a
 
-        self.cfg.scale_base_radius(self.a) # Make rmin and rmax be given in units of rs
+        # self.cfg.scale_base_radius(self.a) # Make rmin and rmax be given in units of rs
 
         self.phi0 = - self.G * self.M / self.a
 

@@ -211,7 +211,7 @@ def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tma
     
     return rpra_of_uv, uv_of_rpra
 
-def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., facmin=1e-4):
+def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., facmin=1e-3):
     if (nbins_apo is None) or (nbins_apo == 0):
         nbins_apo = nbins
 
@@ -242,8 +242,8 @@ def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_ap
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
 
-def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e-6):
-    rlmax, rtid = search.find_rlmax(accr, daccdr), search.find_rphimax(accr)
+def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e-6, rmax=1e10):
+    rlmax, rtid = search.find_rlmax(accr, rmin=rpmin, rmax=rmax), search.find_rphimax(pot, rmin=rpmin, rmax=rmax)
     rperi = np.geomspace(rpmin, rlmax, nbins)
     rapo = np.append(search.find_rapo_max_of_rperi(pot, accr, rperi[:-1], rlmax, rtid), rlmax)
     
@@ -342,6 +342,7 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
 
         # For almost circular orbits we use a more accurate method that avoids cancellation
         rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
+        assert np.all(rp > 0) and np.all(ra > 0)
         if (accr is not None) and (daccdr is not None):
             sel = ra <= rp*(1. + eps_circ)
             rp[sel], ra[sel] = rp_ra_of_j_l_near_circ(accr, daccdr, j[sel], l[sel], 0.5*(rp[sel]+ra[sel]))
