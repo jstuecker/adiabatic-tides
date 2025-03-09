@@ -252,8 +252,8 @@ def profile_is_limited(accr, rpmin=1e-10):
     rtid = find_single_root(accr, rpmin, warning=False)
     return (rtid < np.infty)
 
-def maximize_scalar(f, bounds, boundary_eps=1e-1, tol=1e-8):
-    opt = minimize_scalar(lambda x: -f(x), bounds=bounds, tol=tol)
+def maximize_scalar(f, bounds, boundary_eps=1e-1):
+    opt = minimize_scalar(lambda x: -f(x), bounds=bounds)
     opt.fun = -opt.fun
 
     if not opt.success:
