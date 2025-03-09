@@ -129,19 +129,22 @@ def test_f_jl_reconstruction(profile, embed_plot):
     #     rp,ra = rp_ra_of_jl(j,l)
     #     return prof.f_of_rperi_rapo(rp,ra)
 
-    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax(), rpmin=prof.rmin(), rlmax=prof.rmax(), nbins=133)
+    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax()/2, rpmin=prof.rmin()*2, rlmax=prof.rmax()/2, nbins=222, tmax=5)
+    u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra = table2
+    #print("rpratiomin:", np.min(ragrid[0]/rpgrid)-1.)
     # table2 = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmax=1e12)
     #table2 = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100)
     f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof.potential, table2, accr=prof.accr, daccdr=prof.daccdr)
 
     # Test
-    rp = np.logspace(-5,5,4000)
-    for logramin, tolerance in ((-1,1e-2), (-3,0.5)):
+    rp = np.logspace(-5,2,4000)
+    for logramin, tolerance in ((-1,1e-2), (-7,1e-2)):
         ra = rp * (1. + 10**np.random.uniform(logramin,5,len(rp)))
-        
 
         f = f_of_rperi_rapo(rp, ra)
         fref = prof.f_of_el(*prof.E_L_of_rperi_rapo(rp, ra))
+
+        assert np.all(f > 0)
 
         embed_plot(plot_relative_error(f, fref, tolerance))
 

@@ -188,7 +188,7 @@ def map_peri_apo_space_log_log(rpmin, rpmax, facmax=None, rpoff=0., facmin=1e-4)
         return u,v
     return rpra_of_uv, uv_of_rpra
 
-def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tmax=4):
+def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tmax=5):
     def rpra_of_uv(u,v):
         rp = (rpmin+rpoff) * ((rpmax+rpoff)/(rpmin+rpoff))**u - rpoff
         
@@ -226,7 +226,7 @@ def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, 
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
 
-def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_apo=None, rpoff=0.):
+def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_apo=None, rpoff=0., tmax=5):
     """like define_peri_apo_table, but for profiles where valid apo centers are limited"""
     if (nbins_apo is None) or (nbins_apo == 0):
         nbins_apo = nbins
@@ -237,7 +237,7 @@ def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_ap
     uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=4) # 1+np.cbrt(nbins_apo)
+    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=tmax) # 1+np.cbrt(nbins_apo)
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
@@ -345,7 +345,7 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
 
         # For almost circular orbits we use a more accurate method that avoids cancellation
         if (accr is not None) and (daccdr is not None):
-            sel = (j <= l*(eps_circ/10.)) & (l < lmax) & (j < jmax)
+            sel =  (j <= eps_circ*l) & (l < lmax) & (j < jmax) & (l > 0)
             rp[sel], ra[sel] = rp_ra_of_j_l_near_circ(accr, daccdr, j[sel], l[sel], r0=rcirc_of_lcirc(l[sel]))
 
             # Optionally improve the result with Newton-Raphson
@@ -390,17 +390,27 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
     e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
     
+    
     f = f_of_jl(j,l)
-    assert np.all(f >= 0)
+
     f0 = np.min(f[f>0])
 
     ip = RectBivariateSpline(ui, vi, np.log(f+f0), kx=k, ky=k)
 
+    umin, umax, vmin, vmax = np.min(ui), np.max(ui), np.min(vi), np.max(vi)
+
     def f_of_rperi_rapo(rp, ra):
         u,v = uv_of_rpra(rp, ra)
+
+        assert np.all(~np.isnan(v))
+
+        # For nearly circular orbits f(j,l) only depends on l and therefore it is fine to 
+        # approximate by the closest resolved orbit
+        v = np.clip(v, vmin, None) 
+
         res = np.exp(ip.ev(u,v)) - f0
 
-        valid = (u >= np.min(ui)) & (u <= np.max(ui)) & (v >= np.min(vi)) & (v <= np.max(vi))
+        valid = (u >= umin) & (u <= umax) & (v >= vmin) & (v <= vmax)
         res[~valid] = 0
 
         if fpa_below is not None: 
@@ -408,6 +418,8 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
             # it is possible to define a distribution function that we assume for those
             shape = np.broadcast(rp,ra).shape
             res[u < 0] = fpa_below(np.broadcast_to(rp, shape)[u < 0], np.broadcast_to(ra, shape)[u < 0])
+
+        assert np.all(res > 0)
 
         return res
     
