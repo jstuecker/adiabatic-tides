@@ -320,6 +320,9 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
     e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
 
+    rpmin, ramax = np.min(rpgrid), np.max(ragrid)
+    lmax, jmax = np.max(l), np.max(j)
+
     # assert np.all(j > 0) and np.all(l > 0)
     sel = (j > 0) & (l > 0)
 
@@ -335,16 +338,18 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
         ftarget, gtarget = np.log(j+l*facl+j0), np.log(l+l0)
         xynew = xy_ip(np.stack((ftarget, gtarget), axis=-1))
 
-        # For points outside the domain we use the nearest neighbor
-        invalid = np.isnan(xynew[...,0])
-        if np.sum(invalid) > 0:
-            xynew[invalid] = xy_nn(np.stack((ftarget[invalid], gtarget[invalid]), axis=-1))
+        # Points can be outside of the domain because rp < rmin, ra > rmax
+        # or because of ra/rp -> 1
+        # For points that are outside because they are close to circular orbits
+        # we can use the nearest neighbor and use a special circular treatment below
+        invalid_circ = np.isnan(xynew[...,0]) & (l < lmax) & (j < jmax)
+        if np.sum(invalid_circ) > 0:
+            xynew[invalid_circ] = xy_nn(np.stack((ftarget[invalid_circ], gtarget[invalid_circ]), axis=-1))
 
         # For almost circular orbits we use a more accurate method that avoids cancellation
         rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
-        assert np.all(rp > 0) and np.all(ra > 0)
         if (accr is not None) and (daccdr is not None):
-            sel = ra <= rp*(1. + eps_circ)
+            sel = (j <= l*(eps_circ/10.)) & (rp > 0) & (ra > 0)
             rp[sel], ra[sel] = rp_ra_of_j_l_near_circ(accr, daccdr, j[sel], l[sel], 0.5*(rp[sel]+ra[sel]))
 
         # Optionally improve the result with Newton-Raphson
@@ -353,13 +358,17 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=0
         # Even a single step dramatically improves accuracy in that case
         # accr is additionally needed as an input to evaluate the gradient
 
-        assert np.all(rp > 0) and np.all(ra > 0)
+        # assert np.all(rp > 0) and np.all(ra > 0)
         if nsteps_newton > 0:
             # Avoid circular orbits, they lead to cancellation
-            sel = (ra > rp*(1. + eps_circ)) & (j > 0) & (l > 0)
+            sel = (ra > rp*(1. + eps_circ)) & (j > 0) & (l > 0) & (rp > 0) & (ra > 0)
             # sel = np.ones_like(rp, dtype=bool)
             rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
-        assert np.all(rp > 0) and np.all(ra > 0)
+        # assert np.all(rp > 0) and np.all(ra > 0)
+
+        invalid = (rp < rpmin) | (ra > ramax) | (rp > ra)
+        rp[invalid], ra[invalid] = np.nan, np.nan
+
         return rp, ra
 
     return rpra_of_jl
@@ -390,6 +399,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
     
     f = f_of_jl(j,l)
+    assert np.all(f >= 0)
     f0 = np.min(f[f>0])
 
     ip = RectBivariateSpline(ui, vi, np.log(f+f0), kx=k, ky=k)

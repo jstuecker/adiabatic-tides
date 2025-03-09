@@ -74,9 +74,10 @@ def test_action_inversion(profile, embed_plot):
 
     # Setup interpolator
     t0 = time.time()
-    table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=133, facmin=1e-3, facmax=1e12)
+    table = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax(), rpmin=prof.rmin(), rlmax=prof.rmax(), nbins=133)
+    # table = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=133, facmin=1e-3, facmax=1e12)
     # rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl(prof.potential, table)
-    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=1, accr=prof.accr, daccdr=prof.daccdr)
+    rp_ra_of_jl = at.numerics.interpolate.setup_rperi_rapo_of_jl_new(prof.potential, table, nsteps_newton=5, accr=prof.accr, daccdr=prof.daccdr)
     print(f"Setup time {time.time()-t0:.2f}s")
 
     # Test against actual values
@@ -128,7 +129,8 @@ def test_f_jl_reconstruction(profile, embed_plot):
     #     rp,ra = rp_ra_of_jl(j,l)
     #     return prof.f_of_rperi_rapo(rp,ra)
 
-    table2 = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmax=1e8)
+    table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=lambda r: prof.rmax(), rpmin=prof.rmin(), rlmax=prof.rmax(), nbins=133)
+    # table2 = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100, facmax=1e12)
     #table2 = at.numerics.interpolate.define_peri_apo_table(1e-10, 1e10, nbins=100)
     f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof.potential, table2, accr=prof.accr, daccdr=prof.daccdr)
 
