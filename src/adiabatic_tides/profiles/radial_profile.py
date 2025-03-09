@@ -282,10 +282,22 @@ class RadialProfile():
 
     #----------- Action Calculation Methods --------------#
 
+    def orbit_valid(self, e, l):
+        if np.isfinite(self.rtid()):
+            raise NotImplementedError("Not implemented for profiles with boundary")
+        else:
+            return e - l**2/(2.*self.rmax()**2) - self.potential(self.rmax()) < 0. # may not have apo-center beyond rmax
+
     def radial_action_of_r_e_l(self, r, e, l):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
-        rp, ra = self.rperi_rapo_of_r_e_l(r, e, l)
-        return self.radial_action_of_rp_ra(rp, ra)
+        valid = self.orbit_valid(e, l)
+        j = np.ones_like(r)*np.nan
+
+        rp, ra = self.rperi_rapo_of_r_e_l(r[valid], e[valid], l[valid])
+        j[valid] = self.radial_action_of_rp_ra(rp, ra)
+        
+        return j
+
 
     def radial_action_of_rp_ra(self, rp, ra, nintegrate=None, eps_circ=None):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224
