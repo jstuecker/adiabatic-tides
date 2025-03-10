@@ -48,6 +48,9 @@ class CompositeProfile(RadialProfile):
 
         self.add_profiles(external=external, **profiles)
 
+        self.cfg.general.rmin = self.rmin()
+        self.cfg.general.rmax = self.rmax()
+
     def add_profiles(self, external=(), **profiles):
         self.profiles.update(profiles)
         self.external += tuple(external)
