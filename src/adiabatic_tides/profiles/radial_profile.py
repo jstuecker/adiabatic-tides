@@ -228,6 +228,11 @@ class RadialProfile():
         def func(r): return np.log(self.f_of_el(self.potential(r), l)/f)
         return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
     
+    def radius_of_pot(self, phi, rlow=None, rup=None):
+        "Radius where potential(r) = phi"
+        def func(r): return self.potential(r) - phi
+        return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
+    
     def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True):
         def energy_permitted(r):
             return e - 0.5*l**2/r**2 - self.potential(r)
@@ -279,6 +284,15 @@ class RadialProfile():
     def f_of_jl(self, j, l):
         rp,ra = self.action_map.rp_ra_of_jl(j, l)
         return self.f_of_rperi_rapo(rp, ra)
+    
+    def g_of_e(self, e, nintegrate=100):
+        """Density of states g(E) associated with some energy. dm/de = g(E) * f(E)"""
+        def integrand(r):
+            return r**2 * np.sqrt(2.*(e[...,np.newaxis] - self.potential(r)))
+        
+        rmax = self.radius_of_pot(e)
+
+        return (4.*np.pi)**2 * numerics.integrate.integrate_exp_tanh_a_b(integrand, self.rmin(), rmax, N=nintegrate)
 
     #----------- Action Calculation Methods --------------#
 
