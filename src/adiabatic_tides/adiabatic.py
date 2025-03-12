@@ -81,17 +81,31 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
 # === Object oriented interface ===
 
 class AdiabaticTransformation():
-    def __init__(self, prof_initial : RadialProfile, prof_pert : RadialProfile, nr=None, verbose=1):
+    def __init__(self, prof_initial : RadialProfile, nr=None, verbose=1):
         # Combine with the config from the initial profile
         self.cfg = prof_initial.cfg
         self.cfg.adiabatic.nr = nr or self.cfg.adiabatic.nr
 
         self.prof_initial = prof_initial
-        self.prof_pert = prof_pert
         self.verbose = verbose
 
         r0 = np.logspace(np.log10(prof_initial.rmin()), np.log10(prof_initial.rmax()), self.cfg.adiabatic.nr)
         self.history = [(r0, prof_initial.density(r0), prof_initial.density, prof_initial.m_of_r, prof_initial.potential)]
+
+    def _define_fpa_below(self, mode=None):
+        if self.cfg.adiabatic.lower_boundary == "initial":
+            fpa_below = self.prof_initial.f_of_rperi_rapo
+            if mode is not None:
+                fpa_below = partial(fpa_below, mode=mode)
+        else:
+            fpa_below = None
+        return fpa_below
+    
+    def _define_f0_of_jl(self, mode=None):
+        f0_of_jl = self.prof_initial.f_of_jl
+        if mode is not None:
+            f0_of_jl = partial(f0_of_jl, mode=mode)
+        return f0_of_jl
 
     def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
         raise NotImplementedError("This method should be implemented in a subclass")
@@ -147,38 +161,37 @@ class AdiabaticTransformation():
                 remnants[label] = self.assemble_single_profile(mode=label, iter=iter)
             for label in self.prof_initial.external:
                 remnants[label] = self.prof_initial.profiles[label]
-            return CompositeProfile(**remnants, perturbation=self.prof_pert, external=self.prof_initial.external + ("perturbation",), phase_space_mode="children", config=self.cfg)
+            cp = CompositeProfile(**remnants, external=self.prof_initial.external, phase_space_mode="children", config=self.cfg)
         else:
             remnant = self.assemble_single_profile(iter=iter)
-            return CompositeProfile(remnant=remnant, perturbation=self.prof_pert, external=("perturbation",), phase_space_mode="children", config=self.cfg)
+            cp = CompositeProfile(remnant=remnant, phase_space_mode="children", config=self.cfg)
+        
+        return cp
+        
+
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1):
         assert tide > 0, "Tide must be positive"
         self.tide = tide
-        prof_pert = profiles.RadialTidalProfile(tide=tide, config=prof_initial.cfg)
-        super().__init__(prof_initial=prof_initial, prof_pert=prof_pert, nr=nr, verbose=verbose)
+        self.prof_tide = profiles.RadialTidalProfile(tide=tide, config=prof_initial.cfg)
+        super().__init__(prof_initial=prof_initial, nr=nr, verbose=verbose)
 
     @classmethod
     def from_rtid(cls, prof_initial : RadialProfile, rtid=1., **kwargs):
         return cls(prof_initial=prof_initial, tide=-prof_initial.accr(rtid)/rtid, **kwargs)
+    
+    def assemble_total_profile(self, iter=-1):
+        cp = super().assemble_total_profile(iter)
+        cp.add_profiles(tide=self.prof_tide, external=("tide",))
+
+        return cp
 
     def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
-        if cfg.lower_boundary == "initial":
-            fpa_below = self.prof_initial.f_of_rperi_rapo
-            if mode is not None:
-                fpa_below = partial(fpa_below, mode=mode)
-        else:
-            fpa_below = None
-
-        f0_of_jl = self.prof_initial.f_of_jl
-        if mode is not None:
-            f0_of_jl = partial(f0_of_jl, mode=mode)
-
-        return adiabatic_tidal_iteration(f0_of_jl, rho, m, phi, tide=self.tide, fpa_below=fpa_below, getf=getf, G=self.cfg.G(), **kwargs)
+        return adiabatic_tidal_iteration(self._define_f0_of_jl(mode=mode), rho, m, phi, tide=self.tide, fpa_below=self._define_fpa_below(mode=mode), getf=getf, G=self.cfg.G(), **kwargs)
 
 class AdiabaticResultProfile(RadialProfile):
     def __init__(self, result, f_of_rp_ra, config : Config | None = None):
