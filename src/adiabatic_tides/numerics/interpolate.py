@@ -397,8 +397,9 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     j = calculate_radial_action_tanh_peri_apo(pot, rpgrid, ragrid, nintegrate=nintegrate_action, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
     e,l = utility.e_l_of_rp_ra(pot, rpgrid, ragrid, accr=accr, eps_circ=eps_circ)
     
-    
     f = f_of_jl(j,l)
+
+    assert np.all(f >= 0)
 
     f0 = np.min(f[f>0])
 
@@ -427,6 +428,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
             res[u < 0] = fpa_below(np.broadcast_to(rp, shape)[u < 0], np.broadcast_to(ra, shape)[u < 0])
 
         # assert np.all(res > 0)
+        assert np.all(~np.isnan(res))
 
         return res
     

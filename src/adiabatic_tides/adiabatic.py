@@ -19,6 +19,8 @@ def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=20
 
     rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi, accr, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
 
+    assert np.all(~np.isnan(rhonew))
+
     if getf:
         return rnew, rhonew, f_of_rperi_rapo
     else:
@@ -108,8 +110,11 @@ class AdiabaticTransformation():
         return f0_of_jl
 
     def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
-        raise NotImplementedError("This method should be implemented in a subclass")
-    
+        cfg = self.cfg.adiabatic
+
+        kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
+        return adiabatic_iteration(self._define_f0_of_jl(mode=mode), rho, m, phi, fpa_below=self._define_fpa_below(mode=mode), getf=getf, G=self.cfg.G(), **kwargs)
+
     def solve_poisson(self, ri, rhoi, mode=None):
         lb = self.cfg.adiabatic.lower_boundary
         if lb == "initial":
@@ -124,6 +129,7 @@ class AdiabaticTransformation():
     def iterate(self):
         ri, rhoi, rho0, m0, phi0 = self.history[-1]
         rnew, rhonew = self.integrate_phasespace(rho0, m0, phi0)
+        assert np.all(~np.isnan(rhonew))
 
         rho, m, phi = self.solve_poisson(rnew, rhonew)
         
@@ -167,8 +173,6 @@ class AdiabaticTransformation():
             cp = CompositeProfile(remnant=remnant, phase_space_mode="children", config=self.cfg)
         
         return cp
-        
-
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1):
