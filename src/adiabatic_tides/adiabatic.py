@@ -8,28 +8,30 @@ from functools import partial
 
 # === pure functions ===
 
+def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10):
+    def accr(r): return -G * m(r) / r**2
+    def daccdr(r): return 2 * G * m(r) / r**3 - 4.*np.pi * rho(r) * G
+
+    rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(phi, accr, daccdr, rpmin=rpmin, rmax=rmax)
+    table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=ninterp)
+    f_of_rperi_rapo = numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi, table, fpa_below=fpa_below, accr=accr, daccdr=daccdr)
+    rnew = np.geomspace(rpmin,rtid,nr)
+
+    rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi, accr, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
+
+    if getf:
+        return rnew, rhonew, f_of_rperi_rapo
+    else:
+        return rnew, rhonew
+
 def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10):
     assert tide > 0, "Tide must be positive"
     
     def m_tot(r): return m(r) - tide/G * r**3
     def rho_tot(r): return rho(r) - 3.* tide / (4.*np.pi*G)
     def phi_tot(r): return phi(r) - 0.5 * tide* r**2
-    def accr_tot(r): return -G * m_tot(r) / r**2
-    def daccdr_tot(r): return 2 * G * m_tot(r) / r**3 - 4.*np.pi * rho_tot(r) * G
-
-    assert numerics.search.profile_is_limited(accr_tot, rpmin), "Profile with tide is not limited... this should not happen"
     
-    rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(phi_tot, accr_tot, daccdr_tot, rpmin=rpmin, rmax=rmax)
-    table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=ninterp)
-    f_of_rperi_rapo = numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi_tot, table, fpa_below=fpa_below, accr=accr_tot, daccdr=daccdr_tot)
-    rnew = np.geomspace(rpmin,rtid,nr)
-
-    rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi_tot, accr_tot, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
-
-    if getf:
-        return rnew, rhonew, f_of_rperi_rapo
-    else:
-        return rnew, rhonew
+    return adiabatic_iteration(f_of_jl, rho_tot, m_tot, phi_tot, fpa_below=fpa_below, rpmin=rpmin, nr=nr, ninterp=ninterp, nintegrate=nintegrate, G=G, getf=getf, rmax=rmax)
 
 def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial", G=43.0071057317063e-10, eps_circ=1e-4, rmax=1e10):
     #Define Initial profile phase space

@@ -244,13 +244,20 @@ def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_ap
 
 def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e-6, rmax=1e10):
     rlmax, rtid = search.find_rlmax(accr, rmin=rpmin, rmax=rmax), search.find_rphimax(pot, rmin=rpmin, rmax=rmax)
-    rperi = np.geomspace(rpmin, rlmax, nbins)
-    rapo = np.append(search.find_rapo_max_of_rperi(pot, accr, rperi[:-1], rlmax, rtid), rlmax)
-    
-    def ramax_of_rp(rp):
-        return np.interp(rp, rperi, rapo)
+    if np.isfinite(rlmax) and np.isfinite(rtid):
+        rperi = np.geomspace(rpmin, rlmax, nbins)
+        rapo = np.append(search.find_rapo_max_of_rperi(pot, accr, rperi[:-1], rlmax, rtid), rlmax)
+        
+        def ramax_of_rp(rp):
+            return np.interp(rp, rperi, rapo)
 
-    return rperi, rapo, rlmax, rtid, ramax_of_rp
+        return rperi, rapo, rlmax, rtid, ramax_of_rp
+    else: # profile is not actually limited
+        rlmax, rtid = rmax, rmax
+        rperi = np.geomspace(rpmin, rmax, nbins)
+        rapo = np.ones_like(rperi)*rmax
+
+        return rperi, rapo, rlmax, rtid, lambda rp: rmax
 
 # =========== Functions for calculating interpolation tables =============== #
 
