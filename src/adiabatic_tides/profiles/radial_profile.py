@@ -437,7 +437,7 @@ class RadialProfile():
     
     #----------- Sampling Methods --------------#
 
-    def sample_particles(self, ntot=10000, mode="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None):
+    def sample_particles(self, ntot=10000, mode="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -448,6 +448,9 @@ class RadialProfile():
         rmax : maximal radius to sample
         rpmin : If given, all particles have a peri-center rp > rpmin
         rpmax : If given, all particles have a peri-center rp < rpmax
+        weight_rp_ra : Can be a function f(rp,ra) to adapt sampling rate for differt orbits
+                       Can also be "equal_log" to use a sampling rate that is generally good
+                       as it has roughly equal varaince in each logarithmic bin in radius
 
         get_rho: If true, the density profile is returned as well
 
@@ -469,11 +472,26 @@ class RadialProfile():
 
         p = {}
 
-        rho = numerics.integrate.integrate_f_paspace(self.f_of_rperi_rapo, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
+        if weight_rp_ra is None:
+            def weight_rp_ra(rp, ra):
+                return 1.
+        elif (type(weight_rp_ra) == str) and (weight_rp_ra == "equal_logr"):
+            def weight_rp_ra(rp, ra): # choose so that we have equal uncertainty in log-r bins
+                rm = np.sqrt(rp*ra)
+                return 1./(4.*np.pi*rm**3* self.density(rm))
+        else:
+            assert callable(weight_rp_ra)
+        
+        def fpa(rp, ra):
+            return self.f_of_rperi_rapo(rp, ra) * weight_rp_ra(rp, ra)
+
+        rho = numerics.integrate.integrate_f_paspace(fpa, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
         p["r"],p["m"] = numerics.sample.sample_rimi_from_density(ri, rho, ntot)
 
-        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(self.f_of_rperi_rapo, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
+        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(fpa, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
         p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
+
+        p["m"] /= weight_rp_ra(p["rp"], p["ra"] )
 
         p["rrho"] = ri
         p["rho"] = rho
