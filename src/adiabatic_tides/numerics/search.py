@@ -228,12 +228,9 @@ def rperi_rapo_valid_continuous(pot, accr, rperi, rapo):
     """Like rperi_rapo_valid but returns a float that is >= 0 if valid and < 0 if not"""
     phip, phia = pot(rperi), pot(rapo)
 
-    assert np.all(rapo > rperi)
-
     f1 = phia - phip
     # L2 = np.clip(2. * save_divide(phia - phip, rperi**-2 - rapo**-2), 0, None)
     L2 = np.clip(2. * save_divide((phia - phip)*rperi**2*rapo**2, rapo**2 - rperi**2), 0, None)
-    assert np.all(L2 > 0)
     f2 = -(accr(rapo) + L2/rapo**3)
 
     f = f1*f2 * (0.5 - 1.0*((f1 < 0)&(f2<0)))
@@ -243,7 +240,7 @@ def find_rapo_max_of_rperi(pot, accr, rperi, rlmax, rtid):
     def valid(rapo):
         return rperi_rapo_valid_continuous(pot, accr, rperi, rapo)
     
-    return ridders_method(valid, np.sqrt(rperi*rlmax), rtid*1.1, mode="positive", niter=10)
+    return ridders_method(valid, np.sqrt(rperi*rlmax), rtid*1.1, mode="positive", niter=10, invalid_val=np.nan)
 
 def profile_is_disrupted(accr, rpmin=1e-10):
     return (accr(rpmin) > 0)

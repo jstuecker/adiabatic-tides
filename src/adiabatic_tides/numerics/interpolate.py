@@ -247,6 +247,7 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
     if np.isfinite(rlmax) and np.isfinite(rtid):
         rperi = np.geomspace(rpmin, rlmax, nbins)
         rapo = np.append(search.find_rapo_max_of_rperi(pot, accr, rperi[:-1], rlmax, rtid), rlmax)
+        rperi, rapo = rperi[~np.isnan(rapo)], rapo[~np.isnan(rapo)]
         
         def ramax_of_rp(rp):
             return np.interp(rp, rperi, rapo)
