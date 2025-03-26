@@ -357,6 +357,16 @@ class RadialProfile():
 
         return rho_x_vr2/rho, rho_x_vt2/rho
     
+    def compute_line_of_sight_vdisp2_and_dens(self, R, nintegrate=40, ninterp=100):
+        """computes the line of sight velocity dispersion and the column density at projected radius R"""
+        rip = np.geomspace(self.rmin(), self.rmax(), ninterp+2)[1:-1]
+        vr2, vt2 = self.compute_vr2_vt2(rip)
+        assert np.all((vr2 >= 0) & (vt2 >= 0))
+        def ip_vr2_vt2(r):
+            return np.exp(np.interp(np.log(r), np.log(rip), np.log(vr2))), np.exp(np.interp(np.log(r), np.log(rip), np.log(vt2)))
+        
+        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(self.density, ip_vr2_vt2, R, nintegrate=nintegrate)
+    
     def integral_density_squared(self, rmin=None, rmax=None, nintegrate=100):
         if rmin is None: rmin = self.rmin()
         if rmax is None: rmax = self.rmax()

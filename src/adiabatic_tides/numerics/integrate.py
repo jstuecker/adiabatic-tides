@@ -642,6 +642,29 @@ def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, 
     I = integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
     return 4.*np.pi*I  / r**2
 
+def integrate_line_of_sight(f, R, Rmax=np.infty, nintegrate=100):
+    """Integrates a function along the line of sight with minimal distance R"""
+    def integrand(r):
+        return 2. * utility.save_divide(r*f(r), np.sqrt(np.clip(r**2 - R[...,np.newaxis]**2, 0, None)))
+
+    if Rmax == np.infty:
+        return integrate_double_exponential_a_inf(integrand, R, N=nintegrate)
+    else:
+        return integrate_double_exponential_a_infb(integrand, R, Rmax, N=nintegrate)
+    
+def integrate_line_of_sight_vdisp2_and_dens(density, sigmar2_sigmat2, R, nintegrate=100):
+    """Calculates the line-of-sight velocity dispersion and column density
+    
+    density and sigmar2_sigmat2 are functions of r
+    """
+    I = integrate_line_of_sight(density, R)
+    def integrand(r):
+        sigmar2, sigmat2 = sigmar2_sigmat2(r)
+        sigmaz2 = sigmar2 + (R[...,np.newaxis]**2/r**2) * (sigmat2 - sigmar2)
+        return density(r) * sigmaz2
+    Iv2 = integrate_line_of_sight(integrand, R, nintegrate=nintegrate)
+    return Iv2/I, I
+
 # ================= Methods for calculating Actions  ======================= #
 
 def vr_near_circ(daccdr, r, rp, ra, l):
