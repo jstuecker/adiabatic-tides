@@ -2,6 +2,7 @@ from .radial_profile import RadialProfile
 from ..phasespace import EddingtonPhaseSpace
 import numpy as np
 from functools import partial
+from .. import numerics
 from ..numerics.search import maximize_scalar
 from ..config import Config
 
@@ -106,7 +107,7 @@ class CompositeProfile(RadialProfile):
         for label in self.profiles:
             if not label in self.external:
                 assert self.profiles[label].phase_space is not None, "Only external profiles can have undefined phase space"
-                self.phase_spaces[label] = EddingtonPhaseSpace(self.profiles[label].density, self.potential, self.config.general, self.config.eddington, anisotropy=self.profiles[label].anisotropy)
+                self.phase_spaces[label] = EddingtonPhaseSpace(self.profiles[label].density, self.potential, self.cfg.general, self.cfg.eddington, anisotropy=self.profiles[label].anisotropy)
        
         self._phase_space_initialized = True
     
@@ -160,6 +161,18 @@ class CompositeProfile(RadialProfile):
             return {key: rho_x_vr2[key] / rho[key] for key in rho}, {rho_x_vt2[key] / rho[key] for key in rho}
         else:
             return rho_x_vr2 / rho, rho_x_vt2 / rho
+        
+    def compute_line_of_sight_vdisp2_and_dens(self, R, mode="self", nintegrate=40, ninterp=100):
+        """computes the line of sight velocity dispersion and the column density at projected radius R"""
+        assert not "dict" in mode, "This function does not support dict mode"
+
+        rip = np.geomspace(self.rmin(), self.rmax(), ninterp+2)[1:-1]
+        vr2, vt2 = self.compute_vr2_vt2(rip, mode=mode)
+        assert np.all((vr2 >= 0) & (vt2 >= 0))
+        def ip_vr2_vt2(r):
+            return np.exp(np.interp(np.log(r), np.log(rip), np.log(vr2))), np.exp(np.interp(np.log(r), np.log(rip), np.log(vt2)))
+        
+        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(lambda r: self.density(r, mode=mode), ip_vr2_vt2, R, nintegrate=nintegrate)
         
     def __str__(self):
         s = "CompositeProfile:"
