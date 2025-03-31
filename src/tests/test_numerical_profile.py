@@ -79,7 +79,7 @@ def test_boundaries(profile, embed_plot):
     for p in (prof, nprof):
         rlmax, rtid = at.numerics.search.find_rlmax(p.accr, rmin=p.rmin(), rmax=p.rmax()), at.numerics.search.find_rphimax(p.potential, rmin=p.rmin(), rmax=p.rmax())
         print("Without tide: boundary: %.5e %.5e" % (rlmax, rtid))
-        assert (rlmax == np.infty) and (rtid == np.infty)
+        assert (rlmax == np.inf) and (rtid == np.inf)
     print("With Tide:")
     for p in (prof_t, nprof_t):
         rlmax, rtid = at.numerics.search.find_rlmax(p.accr, rmin=p.rmin(), rmax=p.rmax()), at.numerics.search.find_rphimax(p.potential, rmin=p.rmin(), rmax=p.rmax())

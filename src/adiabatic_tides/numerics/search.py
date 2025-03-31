@@ -170,7 +170,7 @@ def find_single_root(acc, r0=1., maxiter=100, eps=1e-8, warning=True, mode="nega
                 if warning:
                     print("Warning, I couldn't find any radius where the profile is repulsive, rtid=infty")
                 
-                return np.infty
+                return np.inf
 
     for i in range(0, maxiter):
         r = 0.5*(rpos + rneg)
@@ -247,7 +247,7 @@ def profile_is_disrupted(accr, rpmin=1e-10):
 
 def profile_is_limited(accr, rpmin=1e-10):
     rtid = find_single_root(accr, rpmin, warning=False)
-    return (rtid < np.infty)
+    return (rtid < np.inf)
 
 def maximize_scalar(f, bounds, boundary_eps=1e-1):
     opt = minimize_scalar(lambda x: -f(x), bounds=bounds)
@@ -259,7 +259,7 @@ def maximize_scalar(f, bounds, boundary_eps=1e-1):
         opt.x, opt.fun, opt.succes = np.nan, np.nan, False
         opt.message = "Lower boundary reached during optimization"
     elif opt.x > bounds[1] -  np.abs(bounds[1]) * boundary_eps:
-        opt.x, opt.fun, opt.succes = np.infty, np.nan, False
+        opt.x, opt.fun, opt.succes = np.inf, np.nan, False
         opt.message = "Upper boundary reached during optimization"
     
     return opt

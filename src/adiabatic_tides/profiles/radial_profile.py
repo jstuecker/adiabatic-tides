@@ -86,7 +86,7 @@ class RadialProfile():
         if(np.isfinite(rmax)):
             return rmax, self.vcirc(rmax)
         else:
-            return np.infty, np.infty
+            return np.inf, np.inf
     
     def rapo_max(self):
         """The maximal radius at which orbital apo-centers can lie
@@ -369,9 +369,9 @@ class RadialProfile():
         # Zero-densities can cause some errors with log-interpolation, let's remopve them and set the right boundary to zero
         rip, rho, rho_x_vr2, rho_x_vt2 = rip[rho > 0], rho[rho > 0], rho_x_vr2[rho > 0], rho_x_vt2[rho > 0]
 
-        def ip_rho(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho), right=-np.infty))
-        def ip_rho_x_vr2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vr2), right=-np.infty))
-        def ip_rho_x_vt2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vt2), right=-np.infty))
+        def ip_rho(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho), right=-np.inf))
+        def ip_rho_x_vr2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vr2), right=-np.inf))
+        def ip_rho_x_vt2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vt2), right=-np.inf))
         
         return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(ip_rho, ip_rho_x_vr2, ip_rho_x_vt2, R, nintegrate=nintegrate)
     

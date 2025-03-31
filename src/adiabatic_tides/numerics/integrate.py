@@ -466,7 +466,7 @@ def integrate_f_to_density_adaptive(f_of_e, phi, nintegrate=200):
     
     return integrate_exp_a_inf(integrand, N=nintegrate, xscale=phiscale)* (np.sqrt(2.)*4.*np.pi)
 
-def integrate_f_to_density_perisplit_adaptive(ri, pot, f_of_e, rp1=0, rp2=np.infty, nintegrate=None, rmaxfac=1e10):
+def integrate_f_to_density_perisplit_adaptive(ri, pot, f_of_e, rp1=0, rp2=np.inf, nintegrate=None, rmaxfac=1e10):
     """Integrates a phase space distribution to obtain the density
     but limits to orbits which have pericenters in rp1 < rp < rp2
     """
@@ -505,7 +505,7 @@ def integrate_fiso_cumulative_phi_e(ei, fi):
     
     return rho_phi
 
-def integrate_to_density_of_states(ri, phii, rmax=np.infty):
+def integrate_to_density_of_states(ri, phii, rmax=np.inf):
     """Calculates the density of states
     See Binney and Tremaine (4.56)
     """
@@ -587,7 +587,7 @@ def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=1
     
     return rho
 
-def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, np.infty), raporange=(0, np.infty), vrmoment=0, vtmoment=0, vmoment=0):
+def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, np.inf), raporange=(0, np.inf), vrmoment=0, vtmoment=0, vmoment=0):
     """Integrates a distribution function, discretizing the integral in "paspace"
     paspace is the space of possible peri- and apocenter radii and maps one to one
     to (E,L) space
@@ -633,7 +633,7 @@ def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, 
         else:
             b = np.clip(raporange[1], r, None)[...,np.newaxis]
 
-        if np.max(raporange[1]) == np.infty:
+        if np.max(raporange[1]) == np.inf:
             I = integrate_double_exponential_a_inf(integrand, a=a, N=N2,c=1, tmax=4., xscale=a)
         else: # We have a finite upper limit
             I = integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
@@ -644,12 +644,12 @@ def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, 
     I = integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
     return 4.*np.pi*I  / r**2
 
-def integrate_line_of_sight(f, R, Rmax=np.infty, nintegrate=100):
+def integrate_line_of_sight(f, R, Rmax=np.inf, nintegrate=100):
     """Integrates a function along the line of sight with minimal distance R"""
     def integrand(r):
         return 2. * utility.save_divide(r*f(r), np.sqrt(np.clip(r**2 - R[...,np.newaxis]**2, 0, None)))
 
-    if Rmax == np.infty:
+    if Rmax == np.inf:
         return integrate_double_exponential_a_inf(integrand, R, N=nintegrate)
     else:
         return integrate_double_exponential_a_infb(integrand, R, Rmax, N=nintegrate)

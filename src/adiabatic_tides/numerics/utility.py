@@ -3,7 +3,7 @@ import numpy as np
 # ====================== Generic helper functions ========================== #
 
 def save_divide(a, b):
-    return np.divide(a, b, out=np.zeros_like(a), where=(b!=0)) # &(a!=np.infty)&(~np.isnan(a))&(~np.isnan(b)
+    return np.divide(a, b, out=np.zeros_like(a), where=(b!=0)) # &(a!=np.inf)&(~np.isnan(a))&(~np.isnan(b)
 
 def cosh_space(fmax, n, pow=1.):
     x = np.linspace(0., np.arccosh(fmax), n)

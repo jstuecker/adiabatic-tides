@@ -221,7 +221,7 @@ def sample_conditional_energy_adaptive(phisamp, f_of_e, emax=None, nintegrate=10
     
     return Esamp
 
-def sample_conditional_energy_perisplit_adaptive(rsamp, pot, f_of_e, rp1=0, rp2=np.infty, nintegrate=1000, rmaxfac=1e10):
+def sample_conditional_energy_perisplit_adaptive(rsamp, pot, f_of_e, rp1=0, rp2=np.inf, nintegrate=1000, rmaxfac=1e10):
     """Samples the energy, given that the particle is at a radius where the potential is phi
     but limits to orbits which have pericenters in rp1 < rp < rp2
     phisamp : potential energies of sampled particles
@@ -351,7 +351,7 @@ def sample_E_L_vr_given_r_metropolis(f_of_el, pot, vcirc, rs, nsteps_chain=100):
 
     return Es, Ls, vrs
 
-def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None, phimax=np.infty):
+def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_chain=40, rp1=None, rp2=None, phimax=np.inf):
     # we have to sample from
     # f(E,L) v^2 sin(theta) dv dtheta
     # L = v r sin(theta)
@@ -411,7 +411,7 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
         return f
     
     s0 = np.random.uniform(-1, 1, rs.shape)
-    if phimax < np.infty:
+    if phimax < np.inf:
         u0 = u_of_s(s0)
         mumin = u0 * np.sqrt((phimax-pot(u0*rs))/(phimax-phis))
     else:
@@ -435,7 +435,7 @@ def sample_E_L_vr_given_r_metropolis_perisplit(f_of_el, pot, accr, rs, nsteps_ch
 
     return es, ls, vrs
 
-def sample_rp_ra_given_r_metropolis_perisplit(f_of_rp_ra, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.infty)):
+def sample_rp_ra_given_r_metropolis_perisplit(f_of_rp_ra, pot, accr, rs, nsteps_chain=64, rperirange=(0., np.inf)):
     """Samples particle's peri-apo-centers given their radii and an allowed range of peri-center"""
     assert (np.min(rs) >= rperirange[0]) & (rperirange[1] >= rperirange[0])
 

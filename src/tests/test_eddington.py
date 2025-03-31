@@ -17,8 +17,8 @@ def test_nfw_galpy(record_property):
     prof_num = prof_nfw
 
     galpy_nfw = potential.NFWPotential(amp=1,a=1) # these don't matter, we normalize the profile anyway
-    galpy_df_widrow = isotropicNFWdf(pot=galpy_nfw, widrow=True, rmax=np.infty)
-    galpy_df_lane = isotropicNFWdf(pot=galpy_nfw, widrow=False, rmax=np.infty)
+    galpy_df_widrow = isotropicNFWdf(pot=galpy_nfw, widrow=True, rmax=np.inf)
+    galpy_df_lane = isotropicNFWdf(pot=galpy_nfw, widrow=False, rmax=np.inf)
 
     rtest = np.logspace(-5, 5, 500)
     f_nfw = prof_num.f_of_e(prof_num.potential(rtest, zero_at_zero=True))
