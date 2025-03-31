@@ -417,6 +417,8 @@ def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator,
     """
     if np.min(phi) <= 0:
         raise ValueError("For Eddington inversion potential should approach 0 at 0 and be negative nowhere")
+    
+    assert (beta >= -0.5) and (beta <= 0.5), f"Anisotropy of beta = {beta:.2f}. Valid range is (-0.5,0.5)"
 
     rho_rbeta2 = rho * ri**(2*beta)
     Ei = phi
