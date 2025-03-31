@@ -147,7 +147,7 @@ class CompositeProfile(RadialProfile):
         
         return combine_functions(fs, mode, self.internal, self.external, r, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate)
     
-    def compute_vr2_vt2(self, r, mode="self", nintegrate=40):
+    def compute_vr2_vt2(self, r, mode="self", nintegrate=40, nint2=40):
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
         # For velocity dispersions we have to combine the phase space integral
         # and then divide by the density afterwards!
@@ -155,7 +155,7 @@ class CompositeProfile(RadialProfile):
 
         rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate, mode=mode)
         rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate, mode=mode)
-        rho = self.compute_pa_space_integral(r, mode=mode)
+        rho = self.compute_pa_space_integral(r, mode=mode, nintegrate=nintegrate)
 
         if isinstance(rho, dict):
             return {key: rho_x_vr2[key] / rho[key] for key in rho}, {rho_x_vt2[key] / rho[key] for key in rho}

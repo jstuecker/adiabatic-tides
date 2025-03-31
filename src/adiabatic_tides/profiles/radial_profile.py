@@ -343,9 +343,9 @@ class RadialProfile():
             rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
             rperirange, raporange = (self.rmin(), rlmax), (self.rmin(), ramax_of_rp)
         else:
-            rperirange, raporange = (self.rmin(), np.infty), (self.rmin(), np.infty)
+            rperirange, raporange = (self.rmin(), self.rmax()), (self.rmin(), self.rmax())
 
-        return numerics.integrate.integrate_f_paspace(f_of_rp_ra, self.potential, self.accr, r, N=nintegrate,
+        return numerics.integrate.integrate_f_paspace(f_of_rp_ra, self.potential, self.accr, r, N=nintegrate, N2=nintegrate,
                                                       rperirange=rperirange, raporange=raporange, 
                                                       vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment)
     
@@ -353,7 +353,7 @@ class RadialProfile():
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
         rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate)
         rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate)
-        rho = self.compute_pa_space_integral(r)
+        rho = self.compute_pa_space_integral(r, nintegrate=nintegrate)
 
         return rho_x_vr2/rho, rho_x_vt2/rho
     
