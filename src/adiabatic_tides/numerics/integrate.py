@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import simps, trapezoid
+from scipy.integrate import simpson, trapezoid
 from scipy.interpolate import CubicSpline, PchipInterpolator
 from scipy.special import gamma
 from . import utility
@@ -292,12 +292,12 @@ def simpson_2d(fgrid, xi, ygrid, axisx=0, axisy=1):
 
     newy = remove_zero_intervals(ygrid)
 
-    Iy = simps(fgrid, x=newy, axis=axisy) # x = ygrid
+    Iy = simpson(fgrid, x=newy, axis=axisy) # x = ygrid
     
     assert np.max(np.isnan(Iy)) == False
 
     newx  = remove_zero_intervals(xi)
-    Ixy = simps(Iy, x=newx, axis=axisx) # x = xi
+    Ixy = simpson(Iy, x=newx, axis=axisx) # x = xi
 
     assert np.max(np.isnan(Ixy)) == False
     

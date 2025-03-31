@@ -1,8 +1,4 @@
 import numpy as np
-from scipy.interpolate import interp1d, RectBivariateSpline, NearestNDInterpolator
-from scipy.integrate import simps, trapezoid
-from scipy.interpolate import CubicSpline, PchipInterpolator
-from scipy.special import gamma
 
 # ====================== Generic helper functions ========================== #
 
