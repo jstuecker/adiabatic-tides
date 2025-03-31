@@ -359,13 +359,21 @@ class RadialProfile():
     
     def compute_line_of_sight_vdisp2_and_dens(self, R, nintegrate=40, ninterp=100):
         """computes the line of sight velocity dispersion and the column density at projected radius R"""
+
         rip = np.geomspace(self.rmin(), self.rmax(), ninterp+2)[1:-1]
-        vr2, vt2 = self.compute_vr2_vt2(rip)
-        assert np.all((vr2 >= 0) & (vt2 >= 0))
-        def ip_vr2_vt2(r):
-            return np.exp(np.interp(np.log(r), np.log(rip), np.log(vr2))), np.exp(np.interp(np.log(r), np.log(rip), np.log(vt2)))
+        rho_x_vr2 = self.compute_pa_space_integral(rip, vrmoment=2, nintegrate=nintegrate)
+        rho_x_vt2 = self.compute_pa_space_integral(rip, vtmoment=2, nintegrate=nintegrate)
+        # We also integrate the density numerically to inherit the same discreteness error
+        rho = self.compute_pa_space_integral(rip, nintegrate=nintegrate) 
+
+        # Zero-densities can cause some errors with log-interpolation, let's remopve them and set the right boundary to zero
+        rip, rho, rho_x_vr2, rho_x_vt2 = rip[rho > 0], rho[rho > 0], rho_x_vr2[rho > 0], rho_x_vt2[rho > 0]
+
+        def ip_rho(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho), right=-np.infty))
+        def ip_rho_x_vr2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vr2), right=-np.infty))
+        def ip_rho_x_vt2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vt2), right=-np.infty))
         
-        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(self.density, ip_vr2_vt2, R, nintegrate=nintegrate)
+        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(ip_rho, ip_rho_x_vr2, ip_rho_x_vt2, R, nintegrate=nintegrate)
     
     def integral_density_squared(self, rmin=None, rmax=None, nintegrate=100):
         if rmin is None: rmin = self.rmin()

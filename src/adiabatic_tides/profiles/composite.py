@@ -147,14 +147,11 @@ class CompositeProfile(RadialProfile):
         
         return combine_functions(fs, mode, self.internal, self.external, r, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate)
     
-    def compute_vr2_vt2(self, r, mode="self", nintegrate=40, nint2=40):
+    def compute_vr2_vt2(self, r, mode="self", nintegrate=40):
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
-        # For velocity dispersions we have to combine the phase space integral
-        # and then divide by the density afterwards!
-        # Therefore this function requires a separate implementation
-
         rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate, mode=mode)
         rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate, mode=mode)
+
         rho = self.compute_pa_space_integral(r, mode=mode, nintegrate=nintegrate)
 
         if isinstance(rho, dict):
@@ -167,12 +164,19 @@ class CompositeProfile(RadialProfile):
         assert not "dict" in mode, "This function does not support dict mode"
 
         rip = np.geomspace(self.rmin(), self.rmax(), ninterp+2)[1:-1]
-        vr2, vt2 = self.compute_vr2_vt2(rip, mode=mode)
-        assert np.all((vr2 >= 0) & (vt2 >= 0))
-        def ip_vr2_vt2(r):
-            return np.exp(np.interp(np.log(r), np.log(rip), np.log(vr2))), np.exp(np.interp(np.log(r), np.log(rip), np.log(vt2)))
+        rho_x_vr2 = self.compute_pa_space_integral(rip, vrmoment=2, nintegrate=nintegrate, mode=mode)
+        rho_x_vt2 = self.compute_pa_space_integral(rip, vtmoment=2, nintegrate=nintegrate, mode=mode)
+        # We also integrate the density numerically to inherit the same discreteness error
+        rho = self.compute_pa_space_integral(rip, nintegrate=nintegrate, mode=mode) 
+
+        # Zero-densities can cause some errors with log-interpolation, let's remopve them and set the right boundary to zero
+        rip, rho, rho_x_vr2, rho_x_vt2 = rip[rho > 0], rho[rho > 0], rho_x_vr2[rho > 0], rho_x_vt2[rho > 0]
+
+        def ip_rho(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho), right=-np.infty))
+        def ip_rho_x_vr2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vr2), right=-np.infty))
+        def ip_rho_x_vt2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vt2), right=-np.infty))
         
-        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(lambda r: self.density(r, mode=mode), ip_vr2_vt2, R, nintegrate=nintegrate)
+        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(ip_rho, ip_rho_x_vr2, ip_rho_x_vt2, R, nintegrate=nintegrate)
         
     def __str__(self):
         s = "CompositeProfile:"

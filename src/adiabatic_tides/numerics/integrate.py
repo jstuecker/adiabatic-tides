@@ -651,17 +651,22 @@ def integrate_line_of_sight(f, R, Rmax=np.infty, nintegrate=100):
         return integrate_double_exponential_a_inf(integrand, R, N=nintegrate)
     else:
         return integrate_double_exponential_a_infb(integrand, R, Rmax, N=nintegrate)
-    
-def integrate_line_of_sight_vdisp2_and_dens(density, sigmar2_sigmat2, R, nintegrate=100):
+
+def integrate_line_of_sight_vdisp2_and_dens(density, rho_x_sigmar2, rho_x_sigmat2, R, nintegrate=100):
     """Calculates the line-of-sight velocity dispersion and column density
+
+    rho_x_sigmar2: function that returns rho(r) * sigmar2(r) 
+    rho_x_sigmat2: rho(r) * sigmat2(r)
     
     density and sigmar2_sigmat2 are functions of r
     """
-    I = integrate_line_of_sight(density, R)
+    I = integrate_line_of_sight(density, R, nintegrate=nintegrate)
     def integrand(r):
-        sigmar2, sigmat2 = sigmar2_sigmat2(r)
-        sigmaz2 = sigmar2 + (R[...,np.newaxis]**2/r**2) * (sigmat2 - sigmar2)
-        return density(r) * sigmaz2
+        # All of these are already density weighted
+        sigmar2, sigmat2 = rho_x_sigmar2(r), rho_x_sigmat2(r)
+
+        sigmaz2 = sigmar2 + (R[...,np.newaxis]**2/r**2) * (0.5*sigmat2 - sigmar2)
+        return sigmaz2
     Iv2 = integrate_line_of_sight(integrand, R, nintegrate=nintegrate)
     return Iv2/I, I
 
