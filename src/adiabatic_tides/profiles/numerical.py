@@ -5,7 +5,7 @@ from ..config import Config
 import zlib
 
 class NumericalProfile(RadialProfile):
-    def __init__(self, ri, rho, boundary="powerlaw", anisotropy=0., config : Config | None = None):
+    def __init__(self, ri, rho, boundary="powerlaw", upper_boundary="exp", anisotropy=0., config : Config | None = None):
         """A radial profile of which only the density form is known
         
         ri : radius sampling points
@@ -13,6 +13,7 @@ class NumericalProfile(RadialProfile):
         boundary : How to handle radii r < min(ri). Can be "constant" or "powerlaw"
                    For the powerlaw case a powerlaw profile is fitted based on the
                    two smallest radii. This is the recommended mode if applicable.
+        upper_boundary : How to handle radii r > max(ri). Can be "vacuum" or "exp"
         anisotropy : anisotropy parameter beta
         """
 
@@ -25,6 +26,7 @@ class NumericalProfile(RadialProfile):
         super().__init__(anisotropy=anisotropy, config=config)
         
         self.boundary = boundary
+        self.upper_boundary = upper_boundary
 
         self.set_density_profile(ri, rho)
 
@@ -43,7 +45,7 @@ class NumericalProfile(RadialProfile):
         else:
             rhoi = rho
 
-        self.ip_rho, self.ip_m, self.ip_phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, lower_boundary=self.boundary, G=self.G)
+        self.ip_rho, self.ip_m, self.ip_phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, lower_boundary=self.boundary, upper_boundary=self.upper_boundary, G=self.G)
         self.rhoi = rhoi
 
         if callable(rho):
@@ -99,7 +101,7 @@ class ParticleProfile(NumericalProfile):
 
         rho, mprof = numerics.sample.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
 
-        super().__init__(np.sqrt(rbins[1:]*rbins[:-1]), rho, boundary="zero", anisotropy=None, config=config)
+        super().__init__(np.sqrt(rbins[1:]*rbins[:-1]), rho, boundary="zero", upper_boundary="vacuum", anisotropy=None, config=config)
 
     def _update_mass_profile(self):
         rho, mprof = numerics.sample.get_mass_profile(self.p["r"], self.p["m"], self.rbins)
@@ -118,7 +120,6 @@ class ParticleProfile(NumericalProfile):
         elif len(particles) == 4:
             self.p["r"], self.p["m"], self.p["vr"], self.p["l"] = particles
         elif len(particles) == 3:
-            assert 0, "not tested"
             pos, vel, self.p["m"] = particles
             self.p["r"] = np.linalg.norm(pos, axis=-1)
             self.p["vr"] = np.sum(vel*pos, axis=-1)/self.p["r"]
