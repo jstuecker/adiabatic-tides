@@ -100,7 +100,7 @@ class NFWProfile(RadialProfile):
         
         if m200c is not None:
             self.m200c = m200c
-            self.r200c = RvirOfMvir(m200c, h=h) * (self.cfg.units.length/1e6) # Convert from Mpc units
+            self.r200c = RvirOfMvir(m200c, h=h) * (1e6/self.cfg.units.length) # Convert from Mpc units
         elif r200c is not None:
             assert m200c is None, "You provided both m200c and r200c, please only provide one"
             self.r200c = r200c
