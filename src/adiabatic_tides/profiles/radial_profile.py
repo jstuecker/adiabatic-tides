@@ -1,6 +1,6 @@
 import numpy as np
 from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
-from ..config import Config
+from ..config import Config, time_in_years
 from .. import numerics
 import functools
 import copy
@@ -114,15 +114,12 @@ class RadialProfile():
         return r / self.vcirc(r)
     
     def tcirc(self, r, inyears=False):
-        """Time needed for a circular orbit at radius r. Default unit is (mpc/km) s
+        """Time needed for a circular orbit at radius r in code-units
         
         inyears : transform to years
         """
         if inyears:
-            assert 0, "***Have to fix this"
-            si_parsec, si_year = 3.085677581491367e+16, 31536000.0
-            tunit = (1e6*si_parsec / (1e3)) / si_year
-            return(2.*np.pi*r / self.vcirc(r) * tunit)
+            return time_in_years(2.*np.pi*r / self.vcirc(r), self.cfg.units)
         else:
             return 2.*np.pi*r / self.vcirc(r)
     

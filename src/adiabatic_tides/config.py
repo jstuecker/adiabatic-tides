@@ -11,6 +11,11 @@ class UnitConfig:
     mass: float = 1.0     # solar masses
     velocity: float = 1.0 # km/s
 
+def time_in_years(t, units: UnitConfig) -> float:
+    si_parsec, si_year = 3.085677581491367e+16, 31536000.0
+    to_year = (units.length*si_parsec) / (units.velocity*1e3)  / si_year
+    return t * to_year
+
 @dataclass
 class GeneralConfig:
     rmin: float = 1e-20
