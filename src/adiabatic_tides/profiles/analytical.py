@@ -121,8 +121,8 @@ class NFWProfile(RadialProfile):
     def from_rhoc_rs(cls, rhoc, rs, h=0.679, config=None, **kwargs):
         """Create an NFW profile from characteristic density and scale radius"""
         config = Config.flexible_init(config, cls.default_config)
-        rhoc_msol_ov_mpc3 = rhoc * 1e9 * config.units.mass / config.units.length**3
-        rs_mpc = rs * (1e6/config.units.length)
+        rhoc_msol_ov_mpc3 = rhoc * config.units.mass / config.units.length**3 * 1e18
+        rs_mpc = rs * (config.units.length/1e6)
         conc, m200c = rhoc_rs_to_conc_m200c(rhoc_msol_ov_mpc3, rs_mpc, h=h)
         return cls(conc, m200c=m200c,  h=h, config=config, **kwargs)
 
