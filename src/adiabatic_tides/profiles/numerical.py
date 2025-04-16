@@ -17,7 +17,7 @@ class NumericalProfile(RadialProfile):
         anisotropy : anisotropy parameter beta
         """
 
-        if config is not None:
+        if (config is not None) and (isinstance(config, Config)):
             if config.general.rmin != ri[0]:
                 print("Warning: Overriding the config value of rmin by the smallest radius in the profile")
             if config.general.rmax != ri[-1]:

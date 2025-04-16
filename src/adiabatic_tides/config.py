@@ -153,7 +153,7 @@ class Config():
             # return copy.deepcopy(config)
             return config
         else:
-            raise ValueError(f"Cannot initialize Config from {config}")
+            raise ValueError(f"Cannot initialize Config from {config} of type {type(config)}")
     
     def G(self):
         """Gravitational constant in the units of the Config object"""
