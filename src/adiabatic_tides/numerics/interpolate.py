@@ -400,7 +400,9 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     
     f = f_of_jl(j,l)
 
-    assert np.all(f >= 0)
+    if not np.all(f >= 0):
+        print("Warning the distribution function is negative for some points")
+        f = np.clip(f, 0, None)
 
     f0 = np.min(f[f>0])
 
