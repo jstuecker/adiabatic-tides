@@ -76,3 +76,28 @@ def test_adiabatic_class(profile, embed_plot):
     aprof = at.adiabatic.AdiabaticTidalTransformation.from_rtid(prof, 1.).run(5).assemble_total_profile()
 
     print(repr(aprof))
+
+@pytest.mark.slow
+def test_assembly_consistency():
+    prof = standard_profiles("powerlaw1.5")
+    lam = np.abs(prof.accr(1.)/1.)
+
+    atr = at.adiabatic.AdiabaticTidalTransformation(prof, lam, verbose=1).run(eps = 0, nitermax=5)
+    pi0 = atr.assemble_total_profile(0)
+    pi2 = atr.assemble_total_profile(2)
+    pi5 = atr.assemble_total_profile(-1)
+    atr2 = at.adiabatic.AdiabaticTidalTransformation(pi2, lam, verbose=1).run(eps = 0, nitermax=3)
+    pi5b = atr2.assemble_total_profile(-1)
+    atr3 = at.adiabatic.AdiabaticTidalTransformation(pi0, lam, verbose=1).run(eps = 0, nitermax=5)
+    pi5c = atr3.assemble_total_profile(-1)
+
+    print(pi0.rtid(), pi0.m_of_r(pi0.rtid(), mode="self"))
+    print(pi2.rtid(), pi2.m_of_r(pi2.rtid(), mode="self"))
+    print(pi5.rtid(), pi5.m_of_r(pi5.rtid(), mode="self"))
+    print(pi5b.rtid(), pi5b.m_of_r(pi5b.rtid(), mode="self"))
+    print(pi5c.rtid(), pi5c.m_of_r(pi5c.rtid(), mode="self"))
+
+    assert np.allclose(pi5.rtid(), pi5b.rtid(), rtol=1e-3)
+    assert np.allclose(pi5.rtid(), pi5c.rtid(), rtol=1e-3)
+    assert np.allclose(pi5.m_of_r(pi5.rtid()), pi5b.m_of_r(pi5b.rtid()), rtol=1e-3)
+    assert np.allclose(pi5.m_of_r(pi5.rtid()), pi5c.m_of_r(pi5c.rtid()), rtol=1e-3)

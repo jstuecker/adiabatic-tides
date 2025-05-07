@@ -400,6 +400,10 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     
     f = f_of_jl(j,l)
 
+    if np.any(np.isnan(f)):
+        print("Warning, the distribution function is NaN for some points")
+        f = np.nan_to_num(f, 0)
+
     if not np.all(f >= 0):
         print("Warning the distribution function is negative for some points")
         f = np.clip(f, 0, None)
@@ -407,6 +411,7 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
     f0 = np.min(f[f>0])
 
     ip = RectBivariateSpline(ui, vi, np.log(f+f0), kx=k, ky=k)
+    
 
     umin, umax, vmin, vmax = np.min(ui), np.max(ui), np.min(vi), np.max(vi)
 
