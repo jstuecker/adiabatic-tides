@@ -27,7 +27,7 @@ def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=20
         return rnew, rhonew
 
 def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10):
-    assert tide > 0, "Tide must be positive"
+    assert tide >= 0, "Tide must be positive"
     
     def m_tot(r): return m(r) - tide/G * r**3
     def rho_tot(r): return rho(r) - 3.* tide / (4.*np.pi*G)
@@ -91,8 +91,14 @@ class AdiabaticTransformation():
         self.prof_initial = prof_initial
         self.verbose = verbose
 
-        r0 = np.logspace(np.log10(prof_initial.rmin()), np.log10(prof_initial.rmax()), self.cfg.adiabatic.nr)
-        self.history = [(r0, prof_initial.density(r0), prof_initial.density, prof_initial.m_of_r, prof_initial.potential)]
+        r0 = np.geomspace(prof_initial.rmin(), prof_initial.rmax(), self.cfg.adiabatic.nr)
+
+        if isinstance(prof_initial, CompositeProfile):
+            if len(prof_initial.external) > 0:
+                print("Note: we are ignoring the external components of the initial profile", prof_initial.external)
+            self.history = [(r0, prof_initial.density(r0, mode="self"), partial(prof_initial.density, mode="self"), partial(prof_initial.m_of_r, mode="self"), partial(prof_initial.potential, mode="self"))]
+        else:
+            self.history = [(r0, prof_initial.density(r0), prof_initial.density, prof_initial.m_of_r, prof_initial.potential)]
 
     def _define_fpa_below(self, mode=None):
         if self.cfg.adiabatic.lower_boundary == "initial":
@@ -154,10 +160,18 @@ class AdiabaticTransformation():
     
     def assemble_single_profile(self, mode=None, iter=-1):
         """Assemble the final profile, perturbation not included -- may be a sub-population"""
-        _, _, rhotot, mtot, phitot = self.history[iter]
-        ri, rhoi, fi = self.integrate_phasespace(rhotot, mtot, phitot, mode=mode, getf=True)
-        rho,m,phi = self.solve_poisson(ri, rhoi, mode=mode)
-        return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg, f0_j_l=self._define_f0_of_jl(mode=mode))
+        assert iter < len(self.history)
+        if iter % len(self.history) == 0:
+            if mode is None:
+                return self.prof_initial
+            else:
+                return self.prof_initial.profiles[mode]
+        else:
+            # have to subtract 1, because the following per-species integration is equivalent to an iteration
+            _, _, rhotot, mtot, phitot = self.history[iter-1]
+            ri, rhoi, fi = self.integrate_phasespace(rhotot, mtot, phitot, mode=mode, getf=True)
+            rho,m,phi = self.solve_poisson(ri, rhoi, mode=mode)
+            return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg, f0_j_l=self._define_f0_of_jl(mode=mode))
     
     def assemble_total_profile(self, iter=-1):
         """Assemble the final profile, perturbation included"""
@@ -176,7 +190,7 @@ class AdiabaticTransformation():
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
     def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1):
-        assert tide > 0, "Tide must be positive"
+        assert tide >= 0, "Tide must be positive"
         self.tide = tide
         self.prof_tide = profiles.RadialTidalProfile(tide=tide, config=prof_initial.cfg)
         super().__init__(prof_initial=prof_initial, nr=nr, verbose=verbose)
