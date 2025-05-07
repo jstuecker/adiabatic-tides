@@ -101,3 +101,21 @@ def test_assembly_consistency():
     assert np.allclose(pi5.rtid(), pi5c.rtid(), rtol=1e-3)
     assert np.allclose(pi5.m_of_r(pi5.rtid()), pi5b.m_of_r(pi5b.rtid()), rtol=1e-3)
     assert np.allclose(pi5.m_of_r(pi5.rtid()), pi5c.m_of_r(pi5c.rtid()), rtol=1e-3)
+
+@pytest.mark.slow
+def test_double_adiabatic():
+    prof = standard_profiles("nfw")
+
+    # We choose a weak tide to get faster convergence here
+    lam = np.abs(prof.accr(50.)/50.)
+
+    prof1 = at.adiabatic.AdiabaticTidalTransformation(prof, lam).run(eps = 1e-3).assemble_total_profile()
+    prof2 = at.adiabatic.AdiabaticTidalTransformation(prof, 2*lam).run(eps = 1e-3).assemble_total_profile()
+    prof2b = at.adiabatic.AdiabaticTidalTransformation(prof1, 2*lam).run(eps = 1e-3).assemble_total_profile()
+
+    print(prof1.rtid(), prof1.m_of_r(prof1.rtid(), mode="self"))
+    print(prof2.rtid(), prof2.m_of_r(prof2.rtid(), mode="self"))
+    print(prof2b.rtid(), prof2b.m_of_r(prof2b.rtid(), mode="self"))
+
+    assert np.allclose(prof2.rtid(), prof2b.rtid(), rtol=1e-3)
+    assert np.allclose(prof2.m_of_r(prof2.rtid(), mode="self"), prof2b.m_of_r(prof2b.rtid(), mode="self"), rtol=1e-3)
