@@ -230,7 +230,7 @@ class RadialProfile():
         def func(r): return self.potential(r) - phi
         return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
     
-    def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True):
+    def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True, invalid_val=None):
         def energy_permitted(r):
             return e - 0.5*l**2/r**2 - self.potential(r)
 
@@ -243,8 +243,8 @@ class RadialProfile():
             rp = numerics.search.vectorized_binary_search(energy_permitted, rlow*np.ones_like(r), r, niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
             ra = numerics.search.vectorized_binary_search(energy_permitted, r, rup*np.ones_like(r), niter=niter, return_err=return_err, exceptions=exceptions, xfallback=r)
         elif search_method == "ridders":
-            rp = numerics.search.ridders_method(energy_permitted, rlow*np.ones_like(r), r, mode="positive", niter=niter, logspace=True)
-            ra = numerics.search.ridders_method(energy_permitted, r, rup*np.ones_like(r), mode="positive", niter=niter, logspace=True)
+            rp = numerics.search.ridders_method(energy_permitted, rlow*np.ones_like(r), r, mode="positive", niter=niter, logspace=True, invalid_val=invalid_val)
+            ra = numerics.search.ridders_method(energy_permitted, r, rup*np.ones_like(r), mode="positive", niter=niter, logspace=True, invalid_val=invalid_val)
         else:
             raise ValueError("Unknown mode %s" % search_method)
         
@@ -270,7 +270,12 @@ class RadialProfile():
         assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_e(e)
     
-    def f_of_el(self, e, l):
+    def f_of_el(self, e, l, r=None):
+        """Phase space distribution function of energy and angular momentum f(e,l).
+        
+        Providing r may be necessary if the function is defined implicity through f(rp,ra)
+            (as may be the case for subclasses based on adiabatic remnants)
+        """
         assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_el(e, l)
     
@@ -281,6 +286,30 @@ class RadialProfile():
     def f_of_jl(self, j, l):
         rp,ra = self.action_map.rp_ra_of_jl(j, l)
         return self.f_of_rperi_rapo(rp, ra)
+    
+    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None):
+        """A general wrapper for the phase space distribution function
+        
+        Orbits can be characterized uniquely by (e,l), (j,l) or (rp,ra)
+        So in principle any of these combinations should be sufficient to get the phase space density
+        However, in some situations phase space densities may be defined implicity for some variables
+        but explicity for others. For this scenario it can be benficial to provide additional variables
+        and the implementation can make the optimal choice
+
+        if you know peri and apocenters, the (rp,ra) version is always a good choice
+        if you know energy and angular momentum (e,l) in some cases also passing r may be required (for finding rp,ra)
+        For isotropic profiles passing just e is enough
+        """
+        if rp is not None and ra is not None:
+            return self.f_of_rperi_rapo(rp, ra)
+        elif e is not None and l is not None:
+            return self.f_of_el(e, l, r=r)
+        elif j is not None and l is not None:
+            return self.f_of_jl(j,l)
+        elif e is not None:
+            return self.f_of_e(e)
+        else:
+            raise ValueError("Unknown combination of variables")
     
     def g_of_e(self, e, nintegrate=100):
         """Density of states g(E) associated with some energy. dm/de = g(E) * f(E)"""

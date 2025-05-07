@@ -261,7 +261,7 @@ class PowerlawProfile(RadialProfile):
         
         self.fc = self.rhoc / Cby / self.phic**(-gamma-anisotropy+1.5)
 
-        def f_of_el(e, l):
+        def f_of_el(e, l, r=None):
             return self.fc * e**-self.gamma * l**(-2.*self.anisotropy)
 
         self.set_phase_space(AnalyticPhaseSpace(f_of_el=f_of_el, anisotropy=self.anisotropy))

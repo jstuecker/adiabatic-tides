@@ -111,19 +111,19 @@ class CompositeProfile(RadialProfile):
        
         self._phase_space_initialized = True
     
-    def f_of_e(self, E, mode="self"):
+    def f_of_e(self, e, mode="self"):
         if self.phase_space_mode == "children":
-            return self._combine_profiles(self.profiles, 'f_of_e', mode, E)
+            return self._combine_profiles(self.profiles, 'f_of_e', mode, e)
         elif self.phase_space_mode == "joint_inversion":
             self._initialize_phasespace()
-            return self._combine_profiles(self.phase_spaces, 'f_of_e', mode, E)
+            return self._combine_profiles(self.phase_spaces, 'f_of_e', mode, e)
     
-    def f_of_el(self, E, L, mode="self"):
+    def f_of_el(self, e, l, r=None, mode="self"):
         if self.phase_space_mode == "children":
-            return self._combine_profiles(self.profiles, 'f_of_el', mode, E, L)
+            return self._combine_profiles(self.profiles, 'f_of_el', mode, e, l, r=r)
         elif self.phase_space_mode == "joint_inversion":
             self._initialize_phasespace()
-            return self._combine_profiles(self.phase_spaces, 'f_of_el', mode, E, L)
+            return self._combine_profiles(self.phase_spaces, 'f_of_el', mode, e, l, r=r)
     
     def f_of_rperi_rapo(self, rp, ra, mode="self"):
         if self.phase_space_mode == "children":
@@ -135,6 +135,18 @@ class CompositeProfile(RadialProfile):
     def f_of_jl(self, j, l, mode="self"):
         rp,ra = self.action_map.rp_ra_of_jl(j,l)
         return self.f_of_rperi_rapo(rp,ra, mode=mode)
+    
+    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None, mode="self"):
+        if rp is not None and ra is not None:
+            return self.f_of_rperi_rapo(rp, ra, mode=mode)
+        elif e is not None and l is not None:
+            return self.f_of_el(e, l, r=r, mode=mode)
+        elif j is not None and l is not None:
+            return self.f_of_jl(j,l, mode=mode)
+        elif e is not None:
+            return self.f_of_e(e, mode=mode)
+        else:
+            raise ValueError("Unknown combination of variables")
     
     def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, mode="self"):
         if f_of_rp_ra is not None: # In this case it doesn't make sense to speak of separate components
