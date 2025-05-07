@@ -129,7 +129,7 @@ class CompositeProfile(RadialProfile):
         if self.phase_space_mode == "children":
             return self._combine_profiles(self.profiles, 'f_of_rperi_rapo', mode, rp, ra)
         elif self.phase_space_mode == "joint_inversion":
-            e,l = self.E_L_of_rperi_rapo(rp,ra)
+            e,l = self.e_l_of_rperi_rapo(rp,ra)
             return self.f_of_el(e,l, mode=mode)
     
     def f_of_jl(self, j, l, mode="self"):

@@ -17,7 +17,7 @@ def test_peri_apo_finding(profile, embed_plot):
 
     r = rp * (ra/rp)**np.random.uniform(0,1,len(rp))
     
-    e,l = prof.E_L_of_rperi_rapo(rp, ra)
+    e,l = prof.e_l_of_rperi_rapo(rp, ra)
     rp2, ra2, = prof.rperi_rapo_of_r_e_l(r, e, l)
 
     # embed_plot(plot_relative_error(rp, rp2, 1e-5))
@@ -38,7 +38,7 @@ def test_actions_rel(profile, embed_plot):
 
     r = rp * (ra/rp)**np.random.uniform(0,1,len(rp))
     
-    e,l = prof.E_L_of_rperi_rapo(rp, ra)
+    e,l = prof.e_l_of_rperi_rapo(rp, ra)
     j1 = prof.radial_action_of_r_e_l(r, e, l)
     j2 = prof.radial_action_of_rp_ra(rp, ra)
 
@@ -93,7 +93,7 @@ def test_action_inversion(profile, embed_plot):
         print("Test tolerance: %.1e" % tolerance)
         ratest = rptest * (1 + 10**np.random.uniform(logramin,5,len(rptest)))
         j = at.numerics.integrate.calculate_radial_action_tanh_peri_apo(prof.potential, rptest, ratest, accr=prof.accr, daccdr=prof.daccdr)
-        e,l = prof.E_L_of_rperi_rapo(rptest, ratest)
+        e,l = prof.e_l_of_rperi_rapo(rptest, ratest)
 
         rpn, ran = rp_ra_of_jl(j,l)
 
@@ -106,8 +106,8 @@ def test_action_inversion(profile, embed_plot):
         check_max_relative_error(ran, ratest, tolerance)
 
         # Check energies
-        En, Ln = prof.E_L_of_rperi_rapo(rpn, ran)
-        E, L = prof.E_L_of_rperi_rapo(rptest, ratest)
+        En, Ln = prof.e_l_of_rperi_rapo(rpn, ran)
+        E, L = prof.e_l_of_rperi_rapo(rptest, ratest)
 
         embed_plot(plot_relative_error(En, E, tolerance))
         embed_plot(plot_relative_error(Ln, L, tolerance))
@@ -149,7 +149,7 @@ def test_f_jl_reconstruction(profile, embed_plot):
         ra = rp * (1. + 10**np.random.uniform(logramin,5,len(rp)))
 
         f = f_of_rperi_rapo(rp, ra)
-        fref = prof.f_of_el(*prof.E_L_of_rperi_rapo(rp, ra))
+        fref = prof.f_of_el(*prof.e_l_of_rperi_rapo(rp, ra))
 
         assert np.all(f > 0)
 

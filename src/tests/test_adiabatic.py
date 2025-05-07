@@ -18,7 +18,7 @@ def test_single_step_tidal_convergence(profile, embed_plot):
 
     table2 = at.numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp, 1e-10, rlmax, nbins=100)
     def fbelow(rp, ra):
-        return prof.f_of_el(*prof.E_L_of_rperi_rapo(rp, ra))
+        return prof.f_of_el(*prof.e_l_of_rperi_rapo(rp, ra))
 
     f_of_rperi_rapo = at.numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(prof.f_of_jl, prof_t.potential, table2, k=3, fpa_below=fbelow, accr=prof_t.accr, daccdr=prof_t.daccdr)
 

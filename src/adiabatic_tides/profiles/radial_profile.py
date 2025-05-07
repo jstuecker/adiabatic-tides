@@ -159,7 +159,7 @@ class RadialProfile():
 
         return np.array((lam_r, lam_phi, lam_phi))
     
-    def E_L_of_rperi_rapo(self, rperi, rapo):
+    def e_l_of_rperi_rapo(self, rperi, rapo):
         "Maps peri- and apo-center radii to energy and angular-momentum"
         return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo, accr=self.accr, eps_circ=self.cfg.actions.eps_circ)
     
@@ -266,17 +266,17 @@ class RadialProfile():
         else:
             self.anisotropy = anisotropy
 
-    def f_of_e(self, E):
+    def f_of_e(self, e):
         assert self.phase_space is not None, "No phase space defined"
-        return self.phase_space.f_of_e(E)
+        return self.phase_space.f_of_e(e)
     
-    def f_of_el(self, E, L):
+    def f_of_el(self, e, l):
         assert self.phase_space is not None, "No phase space defined"
-        return self.phase_space.f_of_el(E, L)
+        return self.phase_space.f_of_el(e, l)
     
     def f_of_rperi_rapo(self, rp, ra):
-        E, L = self.E_L_of_rperi_rapo(rp, ra)
-        return self.f_of_el(E, L)
+        e, l = self.e_l_of_rperi_rapo(rp, ra)
+        return self.f_of_el(e, l)
     
     def f_of_jl(self, j, l):
         rp,ra = self.action_map.rp_ra_of_jl(j, l)
@@ -566,7 +566,7 @@ class RadialProfile():
         is possible and the angular-momentum in units of the circular angular momentum
         
         useful for translating results to DASH simulations"""
-        e, l = self.E_L_of_rperi_rapo(rperi, rapo)
+        e, l = self.e_l_of_rperi_rapo(rperi, rapo)
 
         rcirc = self.r_of_ecirc(np.atleast_1d(e))
         lcirc = self.vcirc(rcirc)*rcirc
