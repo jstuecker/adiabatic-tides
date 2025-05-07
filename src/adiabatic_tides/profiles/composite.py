@@ -133,8 +133,13 @@ class CompositeProfile(RadialProfile):
             return self.f_of_el(e,l, mode=mode)
     
     def f_of_jl(self, j, l, mode="self"):
-        rp,ra = self.action_map.rp_ra_of_jl(j,l)
-        return self.f_of_rperi_rapo(rp,ra, mode=mode)
+        if self.phase_space_mode == "children":
+            # rp,ra = self.action_map.rp_ra_of_jl(j,l)
+            # jlvalid = np.isfinite(rp) & np.isfinite(ra)
+            return self._combine_profiles(self.profiles, 'f_of_jl', mode, j, l) #* jlvalid
+        else:
+            rp,ra = self.action_map.rp_ra_of_jl(j,l)
+            return self.f_of_rperi_rapo(rp,ra, mode=mode)
     
     def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None, mode="self"):
         if rp is not None and ra is not None:

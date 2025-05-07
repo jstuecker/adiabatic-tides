@@ -157,7 +157,7 @@ class AdiabaticTransformation():
         _, _, rhotot, mtot, phitot = self.history[iter]
         ri, rhoi, fi = self.integrate_phasespace(rhotot, mtot, phitot, mode=mode, getf=True)
         rho,m,phi = self.solve_poisson(ri, rhoi, mode=mode)
-        return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg)
+        return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg, f0_j_l=self._define_f0_of_jl(mode=mode))
     
     def assemble_total_profile(self, iter=-1):
         """Assemble the final profile, perturbation included"""
@@ -198,12 +198,13 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
         return adiabatic_tidal_iteration(self._define_f0_of_jl(mode=mode), rho, m, phi, tide=self.tide, fpa_below=self._define_fpa_below(mode=mode), getf=getf, G=self.cfg.G(), **kwargs)
 
 class AdiabaticResultProfile(RadialProfile):
-    def __init__(self, result, f_of_rp_ra, config : Config | None = None):
+    def __init__(self, result, f_of_rp_ra, f0_j_l=None, config : Config | None = None):
         super().__init__(phase_space=None, anisotropy=None, config=config)
         ri, rhoi, rho, m, phi = result
 
         self.q = dict(ri=ri, rhoi=rhoi)
         self.ip = dict(rho=rho, m=m, phi=phi, f_of_rp_ra=f_of_rp_ra)
+        self.f0_j_l = f0_j_l
 
     def density(self, r):
         return self.ip["rho"](r)
@@ -220,6 +221,8 @@ class AdiabaticResultProfile(RadialProfile):
         rp,ra = self.rperi_rapo_of_r_e_l(r, e, l, invalid_val=np.nan)
         return self.f_of_rperi_rapo(rp, ra)
     def f_of_jl(self, j, l):
+        return self.f0_j_l(j, l)
+        
         raise NotImplementedError("f_of_jl makes sense for Adiabatic Remnants, but we first need to define the selection function")
     
     def __str__(self):
