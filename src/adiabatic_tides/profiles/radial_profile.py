@@ -87,6 +87,13 @@ class RadialProfile():
             return rmax, self.vcirc(rmax)
         else:
             return np.inf, np.inf
+        
+    def rperi_max(self):
+        """The maximal radius at which orbital peri-centers can lie
+        Either corresponds to rmax or to the rlmax
+        """
+        rlmax, rmax = self.rlmax(), self.rmax()
+        return rlmax if rlmax < rmax else rmax
     
     def rapo_max(self):
         """The maximal radius at which orbital apo-centers can lie
