@@ -134,9 +134,10 @@ class CompositeProfile(RadialProfile):
     
     def f_of_jl(self, j, l, mode="self"):
         if self.phase_space_mode == "children":
-            # rp,ra = self.action_map.rp_ra_of_jl(j,l)
-            # jlvalid = np.isfinite(rp) & np.isfinite(ra)
-            return self._combine_profiles(self.profiles, 'f_of_jl', mode, j, l) #* jlvalid
+            # Since children cannot determine what is a valid orbit, we need to check it
+            # on the level of the composite profile
+            jlvalid = self.action_map.orbit_valid_jl(j,l)
+            return self._combine_profiles(self.profiles, 'f_of_jl', mode, j, l) * jlvalid
         else:
             rp,ra = self.action_map.rp_ra_of_jl(j,l)
             return self.f_of_rperi_rapo(rp,ra, mode=mode)

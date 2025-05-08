@@ -153,7 +153,7 @@ class AdiabaticTransformation():
         if reset:
             self.history = self.history[:1]
         nitermax = nitermax or self.cfg.adiabatic.nitermax
-        eps = eps or self.cfg.adiabatic.eps_done
+        eps = eps if eps is not None else self.cfg.adiabatic.eps_done
         
         for i in range(nitermax):
             t0 = time.time()

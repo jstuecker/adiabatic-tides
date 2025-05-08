@@ -78,6 +78,9 @@ class ActionMap():
         self.cfg_gen = profile.cfg.general
         self.cfg_act = profile.cfg.actions
 
+    def orbit_valid_jl(self, j, l):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
+
     def rp_ra_of_jl(self, j, l):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
@@ -93,14 +96,34 @@ class InterpolatorActionMap(ActionMap):
         cfg_gen : GeneralConfig = self.cfg_gen
         cfg_act : ActionsConfig = self.cfg_act
 
+        # Define boundaries of the orbit space
         rmin, rmax = self.profile.rmin(), self.profile.rmax()
         rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.profile.potential, self.profile.accr, self.profile.daccdr, rpmin=rmin, rmax=rmax)
 
+        jmax = self.profile.radial_action_of_rp_ra(rperi, rapo)
+        ei, li = self.profile.e_l_of_rperi_rapo(rperi, rapo)
+
+        self.q["lmax"] = self.profile.vcirc(rlmax) * rlmax
+
+        self.ip["ramax_of_rp"] = ramax_of_rp
+        self.ip["jmax_of_l"] = lambda l: np.interp(l, li, jmax)
+
         table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=ramax_of_rp, rpmin=rmin, rlmax=rlmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra)
-        
+
         self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl_new(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, accr=self.profile.accr, daccdr=self.profile.daccdr, eps_circ=self.cfg_act.eps_circ)
+
+    def orbit_valid_jl(self, j, l):
+        self.setup_rp_ra_of_jl()
+
+        return (l <= self.q["lmax"]) & (j <= self.ip["jmax_of_l"](l))
 
     def rp_ra_of_jl(self, j, l):
         self.setup_rp_ra_of_jl()
 
-        return self.ip["rp_ra_of_jl"](j, l)
+        jlvalid = self.orbit_valid_jl(j,l)
+        rp, ra = self.ip["rp_ra_of_jl"](j, l)
+        
+        rp[~jlvalid] = np.nan
+        ra[~jlvalid] = np.nan
+
+        return rp, ra
