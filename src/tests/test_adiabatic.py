@@ -119,3 +119,22 @@ def test_double_adiabatic():
 
     assert np.allclose(prof2.rtid(), prof2b.rtid(), rtol=1e-3)
     assert np.allclose(prof2.m_of_r(prof2.rtid(), mode="self"), prof2b.m_of_r(prof2b.rtid(), mode="self"), rtol=1e-3)
+
+@pytest.mark.slow
+def test_tide_reduction():
+    prof = standard_profiles("nfw")
+    lam = np.abs(prof.accr(100.)/100.) # we use a weak tide for cheap convergence
+
+    p1 = at.adiabatic.AdiabaticTidalTransformation(prof, lam, verbose=1).run(eps = 0, nitermax=15).assemble_total_profile()
+    # Since the scales are not quite optimal for the tide reduction,
+    # it may be necessary to use slightly more interpolation points
+    p1.cfg.adiabatic.ninterp = 80
+    p2 = at.adiabatic.AdiabaticTidalTransformation(p1, lam*1e-1, verbose=1).run(eps = 0, nitermax=5).assemble_total_profile()
+
+    # Since mass is conserved and not additional mass is lost 
+    # it should be m1 ~ m2
+    m1, m2 = p1.m_of_r(10*p1.rtid(), mode="self"), p2.m_of_r(10*p1.rtid(), mode="self")
+    print(m1, p1.rtid())
+    print(m2, p2.rtid())
+    
+    assert np.allclose(m1, m2, rtol=1e-2)
