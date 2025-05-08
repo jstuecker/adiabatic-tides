@@ -83,22 +83,29 @@ def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-
 # === Object oriented interface ===
 
 class AdiabaticTransformation():
-    def __init__(self, prof_initial : RadialProfile, nr=None, verbose=1):
+    def __init__(self, prof_initial : RadialProfile, nr=None, verbose=1, prof_initial_density=None):
+        """prof_inital: defines the phase space
+        prof_initial_density: if defined, the initial guess of the density profile (defaults to prof_initial)
+                              note that the choice of this should not matter in principle
+        """
         # Combine with the config from the initial profile
         self.cfg = prof_initial.cfg
         self.cfg.adiabatic.nr = nr or self.cfg.adiabatic.nr
 
         self.prof_initial = prof_initial
+        if prof_initial_density is None:
+            prof_initial_density = prof_initial
+
         self.verbose = verbose
 
         r0 = np.geomspace(prof_initial.rmin(), prof_initial.rmax(), self.cfg.adiabatic.nr)
 
-        if isinstance(prof_initial, CompositeProfile):
+        if isinstance(prof_initial_density, CompositeProfile):
             if len(prof_initial.external) > 0:
                 print("Note: we are ignoring the external components of the initial profile", prof_initial.external)
-            self.history = [(r0, prof_initial.density(r0, mode="self"), partial(prof_initial.density, mode="self"), partial(prof_initial.m_of_r, mode="self"), partial(prof_initial.potential, mode="self"))]
+            self.history = [(r0, prof_initial_density.density(r0, mode="self"), partial(prof_initial_density.density, mode="self"), partial(prof_initial_density.m_of_r, mode="self"), partial(prof_initial_density.potential, mode="self"))]
         else:
-            self.history = [(r0, prof_initial.density(r0), prof_initial.density, prof_initial.m_of_r, prof_initial.potential)]
+            self.history = [(r0, prof_initial_density.density(r0), prof_initial_density.density, prof_initial_density.m_of_r, prof_initial_density.potential)]
 
     def _define_fpa_below(self, mode=None):
         if self.cfg.adiabatic.lower_boundary == "initial":
@@ -162,6 +169,7 @@ class AdiabaticTransformation():
         """Assemble the final profile, perturbation not included -- may be a sub-population"""
         assert iter < len(self.history)
         if iter % len(self.history) == 0:
+            print("i=0 -> returning initial profile")
             if mode is None:
                 return self.prof_initial
             else:
@@ -189,11 +197,11 @@ class AdiabaticTransformation():
         return cp
 
 class AdiabaticTidalTransformation(AdiabaticTransformation):
-    def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1):
+    def __init__(self, prof_initial : RadialProfile, tide=1., nr=None, verbose=1, prof_initial_density=None):
         assert tide >= 0, "Tide must be positive"
         self.tide = tide
         self.prof_tide = profiles.RadialTidalProfile(tide=tide, config=prof_initial.cfg)
-        super().__init__(prof_initial=prof_initial, nr=nr, verbose=verbose)
+        super().__init__(prof_initial=prof_initial, nr=nr, verbose=verbose, prof_initial_density=prof_initial_density)
 
     @classmethod
     def from_rtid(cls, prof_initial : RadialProfile, rtid=1., **kwargs):
