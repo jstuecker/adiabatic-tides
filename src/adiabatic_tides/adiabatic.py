@@ -239,7 +239,6 @@ class AdiabaticResultProfile(RadialProfile):
     def f_of_e(self, e):
         raise NotImplementedError("f_of_e is not meaningful for Adiabatic Remnants")
     def f_of_el(self, e, l, r=None):
-        raise NotImplementedError("This functions has not been tested yet")
         rp,ra = self.rperi_rapo_of_r_e_l(r, e, l, invalid_val=np.nan)
         return self.f_of_rperi_rapo(rp, ra)
     def f_of_jl(self, j, l):

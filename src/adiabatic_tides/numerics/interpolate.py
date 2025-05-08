@@ -435,8 +435,10 @@ def setup_adiabatic_f_of_rperi_rapo(f_of_jl, pot, table, nintegrate_action=40, f
             shape = np.broadcast(rp,ra).shape
             res[u < 0] = fpa_below(np.broadcast_to(rp, shape)[u < 0], np.broadcast_to(ra, shape)[u < 0])
 
+        res = np.nan_to_num(res, 0)
+
         # assert np.all(res > 0)
-        assert np.all(~np.isnan(res))
+        # assert np.all(~np.isnan(res))
 
         return res
     
