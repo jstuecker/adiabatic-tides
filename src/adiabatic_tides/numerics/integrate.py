@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import simpson, trapezoid
 from scipy.interpolate import CubicSpline, PchipInterpolator
-from scipy.special import gamma
+from scipy.special import gamma as GammaFunc
 from . import utility
 from .utility import save_divide
 
@@ -403,15 +403,13 @@ def anisotropic_inversion_old(ri, rho, phi=None, beta=0.):
         t = (np.clip(phi - E, 0, None))**(beta + 0.5)
         f[i] = trapezoid(integrand, x=t)
 
-    from scipy.special import gamma
-
-    Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
+    Ibeta = np.sqrt(np.pi) * GammaFunc(1. - beta) / GammaFunc(1.5 - beta)
     fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
     fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) * (0.5 + beta)
 
     return phi, f*fac
 
-def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator, nintegrate=100):
+def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator, nintegrate=100, remove_singularity=False):
     """Assuming a profile with constant anisotropy beta, calculates f1(E)
     assuming that f(E,L) = f1(E) * L**(-2beta)
     """
@@ -420,18 +418,32 @@ def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator,
     
     assert (beta >= -0.5) and (beta <= 0.5), f"Anisotropy of beta = {beta:.2f}. Valid range is (-0.5,0.5)"
 
+    if beta <= -0.48:
+        print(f"Warning: Anisotropy of {beta:.3g} is very close to -0.5 -- possibly leading to numerical problems. I'll do my best, but no warranties!")
+
     rho_rbeta2 = rho * ri**(2*beta)
     Ei = phi
 
     d2rb2 = utility.second_deriv_avoid_cancelation(rho_rbeta2, Ei)
     ip_d2rb2 = spline_class(Ei, d2rb2)
 
-    def integrand(phi):
-        return save_divide(ip_d2rb2(phi), np.clip(phi - Ei[...,np.newaxis], 0, None)**(0.5 - beta))
+    if remove_singularity: 
+        # See numerical recipes Eq. (4.4.3)
+        gamma = 0.5 - beta # slope of the divergence
+        # explicitly remove the singularity that occurs
+        def integrand(t):
+            phi = t**(1./(1-gamma)) + Ei[...,np.newaxis]
 
-    f = integrate_exp_double_exp_a_b(integrand, Ei,  phi[-1], N=nintegrate, tmax=4.)
+            return ip_d2rb2(phi) / (1. - gamma)
 
-    Ibeta = np.sqrt(np.pi) * gamma(1. - beta) / gamma(1.5 - beta)
+        f = integrate_double_exponential_a_infb(integrand, 0,  (phi[-1]-Ei)**(1-gamma), N=nintegrate, tmax=4., xscale=Ei)
+    else:
+        def integrand(phi):
+            return save_divide(ip_d2rb2(phi), np.clip(phi - Ei[...,np.newaxis], 0, None)**(0.5 - beta))
+
+        f = integrate_exp_double_exp_a_b(integrand, Ei,  phi[-1], N=nintegrate, tmax=4.)
+
+    Ibeta = np.sqrt(np.pi) * GammaFunc(1. - beta) / GammaFunc(1.5 - beta)
     fac = 2**(beta - 0.5) * np.cos(beta*np.pi) 
     fac /= 2.*np.pi**2 * Ibeta * (0.5 - beta) #* (0.5 + beta)
 
@@ -694,8 +706,7 @@ def vr_integral_near_circ(accr, daccdr, rp, ra, p=0.5):
     elif p == -0.5: # integral over 1/sqrt(vr2) as needed for dj/de
         return np.pi/np.sqrt(c)
     else: # for other cases get the pre-factor numerically
-        from scipy.special import gamma
-        fac = gamma(p+1)**2 / gamma(2*p+2)
+        fac = GammaFunc(p+1)**2 / GammaFunc(2*p+2)
         return fac * c**p * (ra - rp)**(2*p+1)
 
 def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
@@ -851,7 +862,7 @@ def describe_upper_boundary(rho, m, phi, ri, mode="exp", G=43.0071057317063e-10)
     if mode =="vacuum":
         def rho(r): return 0.*r
         def m(r): return mmax + 0.*r
-        def phi(r): return phimax + G * mmax * (1./rmax - 1./np.clip(r, rmax, None))
+        def phi(r): return phimax + G * mmax * (1./np.clip(r, rmax, None) - 1./np.clip(r, rmax, None))
     elif mode =="exp":
         def rho(r): return rhomax*np.exp((-r + rmax)/rmax)
         def m(r): return mmax + 20*np.pi*rhomax*rmax**3 + (-4*np.pi*r**2*rhomax*rmax - 8*np.pi*r*rhomax*rmax**2 - 8*np.pi*rhomax*rmax**3)*np.exp((-r + rmax)/rmax)
