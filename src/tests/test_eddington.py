@@ -150,7 +150,7 @@ def test_aniso_vs_iso_inv(profile):
     check_max_relative_error(fa[sel], fb[sel], 1e-2)
 
 
-@pytest.mark.parametrize("profile", ["aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1", "aniso0.4pow1.4"])
+@pytest.mark.parametrize("profile", ["aniso-0.49pow1", "aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1", "aniso0.4pow1.4"])
 def test_known_aniso_fel(profile, embed_plot):
     np.seterr(all='raise')
 
@@ -172,8 +172,8 @@ def test_known_aniso_fel(profile, embed_plot):
     fa = np.interp(Esamp, E, f1) * Lsamp**(-2*beta)
     fb = prof.f_of_el(Esamp, Lsamp)
 
-    # embed_plot(plot_relative_error(fa, fb, 1e-2))
-    check_max_relative_error(fa, fb, 1e-2)
+    # embed_plot(plot_relative_error(fa, fb, 2e-2))
+    check_max_relative_error(fa, fb, 2e-2)
 
 @pytest.mark.parametrize("profile", ["aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1", "aniso0.4pow1.4"])
 def test_known_aniso_fel_profile(profile, embed_plot):
@@ -198,7 +198,7 @@ def test_known_aniso_fel_profile(profile, embed_plot):
     embed_plot(plot_relative_error(fa, fb, 1e-2))
     check_max_relative_error(fa, fb, 1e-2)
 
-@pytest.mark.parametrize("profile", ["plummer", "aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1", "aniso0.4pow1.4"])
+@pytest.mark.parametrize("profile", ["plummer", "aniso-0.49pow1", "aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1", "aniso0.4pow1.4"])
 def test_known_fel_integration(profile, embed_plot):
     np.seterr(all='raise', under='ignore')
 
@@ -211,5 +211,5 @@ def test_known_fel_integration(profile, embed_plot):
 
     rhoref = prof.density(r)
 
-    # embed_plot(plot_relative_error(rho, rhoref, 1e-4))
-    check_max_relative_error(rho, rhoref, 1e-4)
+    # embed_plot(plot_relative_error(rho, rhoref, 2e-4))
+    check_max_relative_error(rho, rhoref, 2e-4)

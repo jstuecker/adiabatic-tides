@@ -409,7 +409,7 @@ def anisotropic_inversion_old(ri, rho, phi=None, beta=0.):
 
     return phi, f*fac
 
-def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator, nintegrate=100, remove_singularity=False):
+def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator, nintegrate=100, remove_singularity=True):
     """Assuming a profile with constant anisotropy beta, calculates f1(E)
     assuming that f(E,L) = f1(E) * L**(-2beta)
     """
@@ -428,15 +428,20 @@ def anisotropic_inversion(ri, rho, phi, beta=0., spline_class=PchipInterpolator,
     ip_d2rb2 = spline_class(Ei, d2rb2)
 
     if remove_singularity: 
+        # explicitly remove the singularity that occurs
         # See numerical recipes Eq. (4.4.3)
         gamma = 0.5 - beta # slope of the divergence
-        # explicitly remove the singularity that occurs
+        
+        # Also we add a constant to make it possible to use an integrator
+        # that operates well in log-space
+        t0 = Ei**(1-gamma)
+
         def integrand(t):
-            phi = t**(1./(1-gamma)) + Ei[...,np.newaxis]
+            phi = np.clip(t-t0[...,np.newaxis], 0, None)**(1./(1-gamma)) + Ei[...,np.newaxis]
 
             return ip_d2rb2(phi) / (1. - gamma)
 
-        f = integrate_double_exponential_a_infb(integrand, 0,  (phi[-1]-Ei)**(1-gamma), N=nintegrate, tmax=4., xscale=Ei)
+        f = integrate_exp_double_exp_a_b(integrand, t0,  t0+(phi[-1]-Ei)**(1-gamma), N=nintegrate, tmax=4.)
     else:
         def integrand(phi):
             return save_divide(ip_d2rb2(phi), np.clip(phi - Ei[...,np.newaxis], 0, None)**(0.5 - beta))
