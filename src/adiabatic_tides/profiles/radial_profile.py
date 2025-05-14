@@ -243,7 +243,7 @@ class RadialProfile():
 
         if niter is None: niter = self.cfg.actions.niter_pa
         if rlow is None: rlow = self.rmin()
-        if rup is None: rup = self.rmax()
+        if rup is None: rup = self.rapo_max()
         if search_method is None: search_method = self.cfg.actions.search_method
 
         if search_method == "binary":
@@ -364,10 +364,16 @@ class RadialProfile():
     
     #----------- Integrals and Moments --------------#
 
-    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40):
+    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None):
         """Integrates a function over velocity-space through peri-apo-space discretization
         f_of_rp_ra : the phase space density (dM/d3x/d3v) with peri and apo centers as arguments
         """
+        if ramax is None: 
+            ramax = self.rapo_max()
+        else:
+            ramax = min(self.rapo_max(), ramax)
+
+
         if f_of_rp_ra is None:
             f_of_rp_ra = self.f_of_rperi_rapo
 
@@ -376,7 +382,7 @@ class RadialProfile():
             rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
             rperirange, raporange = (self.rmin(), rlmax), (self.rmin(), ramax_of_rp)
         else:
-            rperirange, raporange = (self.rmin(), self.rmax()), (self.rmin(), self.rmax())
+            rperirange, raporange = (self.rmin(), ramax), (self.rmin(), ramax)
 
         return numerics.integrate.integrate_f_paspace(f_of_rp_ra, self.potential, self.accr, r, N=nintegrate, N2=nintegrate,
                                                       rperirange=rperirange, raporange=raporange, 

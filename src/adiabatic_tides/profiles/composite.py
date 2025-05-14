@@ -154,16 +154,16 @@ class CompositeProfile(RadialProfile):
         else:
             raise ValueError("Unknown combination of variables")
     
-    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, mode="self"):
+    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None, mode="self"):
         if f_of_rp_ra is not None: # In this case it doesn't make sense to speak of separate components
-            return super().compute_pa_space_integral(r, f_of_rp_ra=f_of_rp_ra, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate)
+            return super().compute_pa_space_integral(r, f_of_rp_ra=f_of_rp_ra, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate, ramax=ramax)
         
         # Create a dictionary that includes all phase spaces
         fs = {}
         for label in self.profiles:
             fs[label] = partial(self.compute_pa_space_integral, f_of_rp_ra=partial(self.f_of_rperi_rapo, mode=label))
         
-        return combine_functions(fs, mode, self.internal, self.external, r, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate)
+        return combine_functions(fs, mode, self.internal, self.external, r, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate, ramax=ramax)
     
     def compute_vr2_vt2(self, r, mode="self", nintegrate=40):
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
