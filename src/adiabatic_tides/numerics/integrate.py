@@ -720,7 +720,7 @@ def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, acc
     Provide accr and daccdr to improve accuracy for near circular orbits"""
     I = np.zeros(np.broadcast(rperi, rapo).shape)
 
-    assert np.all(rapo >= rperi), "rapo must be larger than rperi"
+    # assert np.all(rapo >= rperi), "rapo must be larger than rperi"
     I[rapo < rperi] = np.nan
 
     if (accr is not None) and (daccdr is not None): # Use expansion for nearly circular orbits

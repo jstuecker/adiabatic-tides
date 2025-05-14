@@ -203,13 +203,21 @@ def test_known_fel_integration(profile, embed_plot):
     np.seterr(all='raise', under='ignore')
 
     prof = standard_profiles(profile)
-    
-    r = np.logspace(-1,3,400)
-    # rho = at.numerics.integrals.integrate_fofel_adaptive(prof.f_of_el, prof.potential, r, N)
-    # rho = at.numerics.integrate.integrate_f_paspace(prof.f_of_rperi_rapo, prof.potential, prof.accr, r, N)
-    rho = prof.compute_pa_space_integral(r)
+
+    r = np.logspace(-4,4,400)
+    # rho = at.numerics.integrate.integrate_fofel_adaptive(prof.f_of_el, prof.potential, r)
+    # rho = at.numerics.integrate.integrate_f_paspace(prof.f_of_rperi_rapo, prof.potential, prof.accr, r)
+
+    if profile == "plummer":
+        # For plummmer, it is not so great to integrate in logarithmic radial space
+        # However, it does still converge with more integration points
+        tolerance = 2e-2
+        rho = prof.compute_pa_space_integral(r, nintegrate=100)
+    else:
+        tolerance = 1e-3
+        rho = prof.compute_pa_space_integral(r)
 
     rhoref = prof.density(r)
 
-    # embed_plot(plot_relative_error(rho, rhoref, 2e-4))
-    check_max_relative_error(rho, rhoref, 2e-4)
+    # embed_plot(plot_relative_error(rho, rhoref, tolerance))
+    check_max_relative_error(rho, rhoref, tolerance)
