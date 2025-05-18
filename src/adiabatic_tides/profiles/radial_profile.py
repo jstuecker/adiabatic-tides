@@ -570,8 +570,21 @@ class RadialProfile():
                 res.append(p[key])
             return res
         
-    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_func=None):
-        """ Fix docstring later
+    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None):
+        """ 
+        mode : a string with the keys to be returned, separated by "_". May contain 
+               "rp", "ra", "r", "e", "l", "j", "vr", "pos", "vel", "m"
+               Returns a list of the requested keys in the order they are given.
+               If mode contains "dict", a dictionary with all keys is returned.
+               Examples: "pos_vel_m", "r_e_l_vr_m", "j_l_m", "dict", "dict_pos_vel"
+        rpmin, rpmax : minimal and maximal peri-center radius
+        ramin, ramax : minimal and maximal apo-center radius
+
+        weighted : Can be a function that determines particle number density for unequal mass sampling.
+                Weight function should only depend on orbits (but not phases) and may have signatures
+                w(rp, ra, **kwargs), w(e, l, **kwargs), w(j, l, **kwargs)
+                The larger w, the more particles (of lower mass) on those orbits. The normalization is irrelevant
+                Also supported is weighted="nice" which uses weights so that the density profile is optimally resolved
         """
         rpmin = rpmin or self.rmin()
         ramin = max(ramin or self.rmin(), rpmin)
@@ -582,19 +595,19 @@ class RadialProfile():
         ninterp = ninterp or self.cfg.sampling.ninterp
         nsteps_metropolis = nsteps_metropolis or self.cfg.sampling.nsteps_metropolis
 
-        if weight_func is None:
-            def weight_func(**kwargs): return 1.
-        elif (type(weight_func) == str) and (weight_func == "equal_logr"):
-            def weight_func(rp, ra, **kwargs):
+        if weighted is None:
+            def weighted(**kwargs): return 1.
+        elif (type(weighted) == str) and (weighted == "nice"):
+            def weighted(rp, ra, **kwargs):
                 rgeom = np.sqrt(rp*ra)
                 return 1./(4.*np.pi*rgeom**3* self.density(rgeom))
         else:
-            assert callable(weight_func)
+            assert callable(weighted)
 
         def f(j, l):
             rp, ra = self.action_map.rp_ra_of_jl(j, l)
             e,_ = self.e_l_of_rperi_rapo(rp, ra)
-            return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weight_func(rp=rp, ra=ra, j=j, l=l, e=e)
+            return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e)
         
         def jl_of_rp_ra(rp, ra):
             j = self.radial_action_of_rp_ra(rp, ra)
@@ -613,7 +626,7 @@ class RadialProfile():
         
         p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
 
-        p["m"] = msamp / weight_func(rp=p["rp"], ra=p["ra"], j=p["j"], l=p["l"], e=p["e"])
+        p["m"] = msamp / weighted(rp=p["rp"], ra=p["ra"], j=p["j"], l=p["l"], e=p["e"])
 
         if ("pos" in mode) or ("vel" in mode):
             p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
