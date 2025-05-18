@@ -260,25 +260,37 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
 
         return rperi, rapo, rlmax, rtid, lambda rp: rmax
     
-def jl_from_paspace_boundaries(jl_of_rp_ra, rperilim = (1e-10,None), rapolim = (None,10.), N=10000):
-    assert (rperilim[0] <= rperilim[1]) and (rapolim[0] <= rapolim[1]), "rperilim and rapolim must be in increasing order"
-    assert (rperilim[0] <= rapolim[0]) and (rperilim[1] <= rapolim[1]), "rperilim must be less than rapolim"
+def jl_from_paspace_boundaries(jl_of_rp_ra, rpmin=1e-10, rpmax=None, ramin=None, ramax=1e10, N=10000):
+    """
+    ramax : can be scalar or a function of rp
+    """
+    # assert (rperilim[0] <= rperilim[1]) and (rapolim[0] <= rapolim[1]), "rperilim and rapolim must be in increasing order"
+    # assert (rperilim[0] <= rapolim[0]) and (rperilim[1] <= rapolim[1]), "rperilim must be less than rapolim"
+    assert rpmin is not None, "rpmin must be set"
+    assert ramax is not None, "ramax must be set"
+    assert rpmin > 0, "rpmin must be positive (to avoid singularities at r=0)"
 
-    if rperilim[1] is None:
-        rperilim = (rperilim[0], rapolim[1])
-    if rapolim[0] is None:
-        rapolim = (rperilim[0], rperilim[1])
+    if ramin is None: ramin = rpmin
+
+    if callable(ramax):
+        ramax_of_rp = ramax
+    else:
+        ramax_of_rp = lambda rp: ramax * np.ones_like(rp)
+
+    if rpmax is None: rpmax = ramax
     
-    jmin0, lmin0 = jl_of_rp_ra(np.geomspace(rperilim[0], np.minimum(rperilim[1], rapolim[0]), N), rapolim[0]*np.ones(N))
-    jmax0, lmax0 = jl_of_rp_ra(rperilim[0]*np.ones(N), np.geomspace(rapolim[0], rapolim[1], N))
+    # minimum and maximum of j at low l:
+    jmin0, lmin0 = jl_of_rp_ra(np.geomspace(rpmin, np.minimum(rpmax, ramin), N), ramin*np.ones(N))
+    jmax0, lmax0 = jl_of_rp_ra(rpmin*np.ones(N), np.geomspace(ramin, ramax_of_rp(rpmin), N))
     # minimum and maximum of j at high l:
-    jmin1, lmin1 = jl_of_rp_ra(rperilim[1]*np.ones(N), np.geomspace(np.maximum(rperilim[1], rapolim[0]), rapolim[1], N))
-    jmax1, lmax1 = jl_of_rp_ra(np.geomspace(*rperilim, N), rapolim[1]*np.ones(N))
+    jmin1, lmin1 = jl_of_rp_ra(rpmax*np.ones(N), np.geomspace(np.maximum(rpmax, ramin), ramax_of_rp(rpmax), N))
+    rps = np.geomspace(rpmin, rpmax, N)
+    jmax1, lmax1 = jl_of_rp_ra(rps, ramax_of_rp(rps))
 
     jmin, lmin =  np.concatenate((jmin0, jmin1)), np.concatenate((lmin0, lmin1))
     jmax, lmax =  np.concatenate((jmax0, jmax1)), np.concatenate((lmax0, lmax1))
 
-    lmintot, lmaxtot = np.min(lmin), np.max(lmax)
+    lmintot, lmaxtot = np.nanmin(lmin), np.nanmax(lmax)
 
     def jmin_jmax_of_l(l):
         jmin_ev = np.interp(l, lmin, jmin) 
