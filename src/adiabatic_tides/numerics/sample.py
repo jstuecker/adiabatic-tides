@@ -3,7 +3,7 @@ from scipy.integrate import cumulative_simpson
 from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline
 
 from . import integrate
-from .utility import cosh_space, Jacobian_det_ldlde_drpdra
+from .utility import cosh_space, Jacobian_det_ldlde_drpdra, e_l_of_rp_ra
 from .interpolate import vectorized_interp
 
 # ========= Utilitys functions for binning sampled particles =============== #
@@ -559,6 +559,31 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweig
             return msamp, jsamp, lsamp, *rp_ra_of_jl(jsamp, lsamp)
         else:
             return msamp, jsamp, lsamp
+
+def sample_r_given_rp_ra_metropolis(pot, rp, ra, size=None, nsteps=40):
+    e,l = e_l_of_rp_ra(pot, rp, ra)
+
+    if size is None:
+        size = np.broadcast(rp, ra).shape
+
+    # The probability of finding a particle at radius r is 1/vr(r)
+    def pdf(r):
+        return 1./np.sqrt(2*(e - pot(r)) - l**2/r**2)
+    
+    # Use tanh transformation of variables to improve sampling domain 
+    # mapping r in (rp,ra) to t in (-inf, inf) -- but concentrated around 0
+    def r_of_t(t):
+        return 0.5*(ra+rp) + 0.5*(ra-rp) * np.tanh(t)
+    
+    def pdf_t(t):
+        with np.errstate(divide='ignore', invalid='ignore'):
+            r = r_of_t(t)
+            drdt = (2./(ra-rp)) * (ra-r)*(r-rp)
+            return np.nan_to_num(drdt * pdf(r), 0)
+    
+    tsamp = sample_metropolis_hastings(pdf_t, np.random.uniform(-1,1, size), stepsize=4, nsteps=nsteps, nhalf=nsteps//4)
+
+    return r_of_t(tsamp)
 
 # ================= Functions for integrating orbits ======================= #
 

@@ -4,7 +4,7 @@ import pytest
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from scipy.stats import ks_2samp
+from scipy.stats import ks_2samp, ks_1samp, uniform
 
 from .test_config import check_perc_relative_error, check_max_relative_error, standard_profiles, embed_plot, plot_relative_error
 
@@ -130,3 +130,31 @@ def test_ks_statistic_convergence(profile):
     for nsteps_chain in 64,32,16,8:
         p = prof.sample_particles(nsamp, rpmin=0.1, rpmax=1., rmax=1e4, nsteps_metropolis=nsteps_chain)
         compare_particles(p, pref, test_label="Nchain=%d: " % nsteps_chain, minp = 0.01 if nsteps_chain >= 64 else 0)
+
+@pytest.mark.parametrize("profile", ["nfw", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8", "aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1"])
+def test_sample_r_given_rpra(profile, embed_plot):
+    np.random.seed(43)
+    prof = standard_profiles(profile)
+    
+    rp = 10**np.random.uniform(np.log10(prof.rmin()), np.log10(prof.rmax()), 20000)
+    ra = np.clip(rp*10**np.random.uniform(0, 4, len(rp)), prof.rmin(), prof.rmax())
+
+    # Calculate something proportional to the radial angle variable
+    theta_rel_max = at.numerics.integrate.vr_integral_tanh_peri_apo(prof.potential, rp, ra, p=-0.5)
+    r = at.numerics.sample.sample_r_given_rp_ra_metropolis(prof.potential, rp, ra, nsteps=40)
+    theta_rel = at.numerics.integrate.vr_integral_tanh_peri_apo(prof.potential, rp, ra, p=-0.5, rmax=r)
+    u = theta_rel/theta_rel_max
+
+    # If the sampling is correct, u should be uniformly distributed
+    ksprob = ks_1samp(u, uniform(0, 1).cdf).pvalue
+
+    print("KS test: p-value = %.2g" % ksprob)
+
+    assert ksprob > 0.01, "KS test failed: p-value = %.2g -- Radii sampling seems biased" % ksprob
+    
+    # Optionally make a plot
+    # fig = plt.figure()
+    # plt.hist(u, bins=100, density=True, alpha=0.5)
+    
+    # plt.title("p = %.2g" % ksprob)
+    # embed_plot(fig)

@@ -714,8 +714,10 @@ def vr_integral_near_circ(accr, daccdr, rp, ra, p=0.5):
         fac = GammaFunc(p+1)**2 / GammaFunc(2*p+2)
         return fac * c**p * (ra - rp)**(2*p+1)
 
-def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
+def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3, rmax=None):
     """Calculates an integral over vr**(2p)*r**pr dr from rp to ra.
+
+    if rmax is given use as upper boundary instead of rapo
     
     Provide accr and daccdr to improve accuracy for near circular orbits"""
     I = np.zeros(np.broadcast(rperi, rapo).shape)
@@ -743,7 +745,8 @@ def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, acc
             else:
                 return np.nan_to_num(vr2**p * r**pr, 0)
 
-    I[sel] = integrate_tanh_a_b(integrand, rperi, rapo, nintegrate)
+    if rmax is None: rmax = rapo
+    I[sel] = integrate_tanh_a_b(integrand, rperi, rmax, nintegrate)
     return I
 
 def calculate_radial_action_tanh_peri_apo(pot, rperi, rapo, nintegrate=40, accr=None, daccdr=None, eps_circ=1e-3):
