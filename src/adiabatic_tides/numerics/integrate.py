@@ -720,7 +720,9 @@ def vr_integral_tanh_peri_apo(pot, rperi, rapo, p=0.5, pr=0., nintegrate=40, acc
     if rmax is given use as upper boundary instead of rapo
     
     Provide accr and daccdr to improve accuracy for near circular orbits"""
-    I = np.zeros(np.broadcast(rperi, rapo).shape)
+    rperi, rapo = np.broadcast_arrays(rperi, rapo)
+
+    I = np.zeros(rperi.shape)
 
     # assert np.all(rapo >= rperi), "rapo must be larger than rperi"
     I[rapo < rperi] = np.nan

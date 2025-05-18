@@ -58,9 +58,9 @@ class AdiabaticConfig:
 
 @dataclass
 class SamplingConfig:
-    nintegrate: int = 40
-    ninterp : int = 1001
-    nsteps_metropolis : int = 64
+    nintegrate: int = 40 # Outdated/Irrelevant, will be removed
+    ninterp : int = 200
+    nsteps_metropolis : int = 40
 
 class Config():
     def __init__(self,

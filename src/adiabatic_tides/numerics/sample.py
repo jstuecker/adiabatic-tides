@@ -509,6 +509,8 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweig
     li = np.geomspace(lmin*(1.+eps), lmax*(1.-eps), nl)
     jmin, jmax = jmin_jmax_of_l(li)
 
+    assert np.all(jmin >= 0), "jmin must be positive"
+
     # We use sinh for j, since we need to include 0 and we want to focus our integration points around j~l
     jgrid = np.sinh(np.linspace(np.arcsinh(jmin/li), np.arcsinh(jmax/li), nj, axis=1)) * li[:,np.newaxis]
     lgrid = li[...,np.newaxis]*np.ones_like(jgrid)
@@ -517,6 +519,8 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweig
     fcum_l = cumulative_simpson(2.*li*fcumj_givenl[:,-1], x=li, axis=0, initial=0) # there is 2*l here, since lz goes from -l to l
     mtot = fcum_l[-1]
 
+    assert ~np.isnan(mtot)
+
     # While it is trivial to invert the l distribution function needed for sampling,
     # we also need to invert fcum(j | l). We do this 
     # (1) by a meshfree interpolator j(l, fcum)
@@ -524,8 +528,9 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweig
 
     print(f"Total mass: {mtot:.4e}")
 
-    xy = np.stack((np.log(lgrid).flatten(), (fcumj_givenl/fcumj_givenl[:,-1:]).flatten()), axis=-1)
-    ip_asinh_jovl = LinearNDInterpolator(xy, (np.arcsinh(jgrid/li[:,np.newaxis])).flatten())
+    xy = np.stack((np.log(lgrid), fcumj_givenl/fcumj_givenl[:,-1:]), axis=-1)
+    valid =   ~np.isnan(xy[...,0]) & ~np.isnan(xy[...,1])
+    ip_asinh_jovl = LinearNDInterpolator(xy[valid], (np.arcsinh(jgrid/li[:,np.newaxis]))[valid])
 
     u, v = np.random.uniform(0, 1, (2, nsamp))
     lsamp = np.interp(u, fcum_l/fcum_l[-1:], li)

@@ -86,6 +86,8 @@ def e_l_of_rp_ra(pot, rp, ra, accr=None, eps_circ=1e-4, get_de=False):
 
     de: If true, return de = e - phi(rp) instead of E
     """
+    rp, ra = np.broadcast_arrays(rp, ra)
+
     facphip = 0. if get_de else 1.
     def el(rp, ra): 
         phip, phia = pot(rp), pot(ra)

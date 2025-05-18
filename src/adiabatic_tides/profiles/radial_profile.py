@@ -569,6 +569,68 @@ class RadialProfile():
                 assert key in p, "Unknown key %s" % key
                 res.append(p[key])
             return res
+        
+    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_func=None):
+        """ Fix docstring later
+        """
+        rpmin = rpmin or self.rmin()
+        ramin = max(ramin or self.rmin(), rpmin)
+        rpmax = rpmax or self.rlmax()
+        ramax = ramax or self.rapo_max()
+
+        nintegrate = nintegrate or self.cfg.sampling.nintegrate
+        ninterp = ninterp or self.cfg.sampling.ninterp
+        nsteps_metropolis = nsteps_metropolis or self.cfg.sampling.nsteps_metropolis
+
+        if weight_func is None:
+            def weight_func(**kwargs): return 1.
+        elif (type(weight_func) == str) and (weight_func == "equal_logr"):
+            def weight_func(rp, ra, **kwargs):
+                rgeom = np.sqrt(rp*ra)
+                return 1./(4.*np.pi*rgeom**3* self.density(rgeom))
+        else:
+            assert callable(weight_func)
+
+        def f(j, l):
+            rp, ra = self.action_map.rp_ra_of_jl(j, l)
+            e,_ = self.e_l_of_rperi_rapo(rp, ra)
+            return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weight_func(rp=rp, ra=ra, j=j, l=l, e=e)
+        
+        def jl_of_rp_ra(rp, ra):
+            j = self.radial_action_of_rp_ra(rp, ra)
+            e,l = self.e_l_of_rperi_rapo(rp, ra)
+            return j, l
+        
+        rperi, rapo, rlmax, rtid, ramax_of_rp =  numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=rpmin, rmax=ramax)
+        rpmax = min(rpmax, rlmax)
+        ramax_func = lambda rp: np.minimum(ramax_of_rp(rp), ramax)
+
+        lmintot, lmaxtot, jmin_jmax_of_l = numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin, rpmax, ramin, ramax_func)
+
+        p = {}
+        msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=True, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
+        p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)
+        
+        p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
+
+        p["m"] = msamp / weight_func(rp=p["rp"], ra=p["ra"], j=p["j"], l=p["l"], e=p["e"])
+
+        if ("pos" in mode) or ("vel" in mode):
+            p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
+            if "vel" in mode:
+                vr = p["pos"] * (p["vr"] / p["r"])[...,np.newaxis]
+                vt_xy = numerics.sample.random_direction(ntot, ndim=2) * (p["l"]/p["r"])[...,np.newaxis]
+                e1, e2 = numerics.sample.orthogonal_vectors(vr)
+                p["vel"] = vr + e1 * vt_xy[...,0,np.newaxis] + e2 * vt_xy[...,1,np.newaxis]
+
+        if "dict" in mode:
+            return p
+        else:
+            res = []
+            for key in mode.split("_"):
+                assert key in p, "Unknown key %s" % key
+                res.append(p[key])
+            return res
 
     def sample_particles_perisplits(self, size_per_split=10000, rpsplits=(None, None), mode="r_e_l_vr_m", rmax=None, flat=True, **kwargs):
         """See sample_r_E_L_vr_m_metropolis for a detailed description of optional keyword parameters
