@@ -114,9 +114,8 @@ def sample_metropolis_hastings(f, x0, stepsize=1., nsteps=1000, nhalf=None):
 
         f1 = f(x + dx)
 
-        alpha = f1 / f0
         u = np.random.uniform(0., 1., size=x.shape[0])
-        accept = u <= alpha
+        accept = u*f0 <= f1
 
         x[accept] = (x+dx)[accept]
         f0[accept] = f1[accept]
