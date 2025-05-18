@@ -259,6 +259,33 @@ def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e
         rapo = np.ones_like(rperi)*rmax
 
         return rperi, rapo, rlmax, rtid, lambda rp: rmax
+    
+def jl_from_paspace_boundaries(jl_of_rp_ra, rperilim = (1e-10,None), rapolim = (None,10.), N=10000):
+    assert (rperilim[0] <= rperilim[1]) and (rapolim[0] <= rapolim[1]), "rperilim and rapolim must be in increasing order"
+    assert (rperilim[0] <= rapolim[0]) and (rperilim[1] <= rapolim[1]), "rperilim must be less than rapolim"
+
+    if rperilim[1] is None:
+        rperilim = (rperilim[0], rapolim[1])
+    if rapolim[0] is None:
+        rapolim = (rperilim[0], rperilim[1])
+    
+    jmin0, lmin0 = jl_of_rp_ra(np.geomspace(rperilim[0], np.minimum(rperilim[1], rapolim[0]), N), rapolim[0]*np.ones(N))
+    jmax0, lmax0 = jl_of_rp_ra(rperilim[0]*np.ones(N), np.geomspace(rapolim[0], rapolim[1], N))
+    # minimum and maximum of j at high l:
+    jmin1, lmin1 = jl_of_rp_ra(rperilim[1]*np.ones(N), np.geomspace(np.maximum(rperilim[1], rapolim[0]), rapolim[1], N))
+    jmax1, lmax1 = jl_of_rp_ra(np.geomspace(*rperilim, N), rapolim[1]*np.ones(N))
+
+    jmin, lmin =  np.concatenate((jmin0, jmin1)), np.concatenate((lmin0, lmin1))
+    jmax, lmax =  np.concatenate((jmax0, jmax1)), np.concatenate((lmax0, lmax1))
+
+    lmintot, lmaxtot = np.min(lmin), np.max(lmax)
+
+    def jmin_jmax_of_l(l):
+        jmin_ev = np.interp(l, lmin, jmin) 
+        jmax_ev = np.interp(l, lmax, jmax, left=np.nan, right=np.nan)
+        return jmin_ev, jmax_ev
+    
+    return lmintot, lmaxtot, jmin_jmax_of_l
 
 # =========== Functions for calculating interpolation tables =============== #
 

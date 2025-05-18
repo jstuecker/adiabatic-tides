@@ -1,4 +1,7 @@
 import numpy as np
+from scipy.integrate import cumulative_simpson
+from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline
+
 from . import integrate
 from .utility import cosh_space, Jacobian_det_ldlde_drpdra
 from .interpolate import vectorized_interp
@@ -485,6 +488,78 @@ def E_L_vr_from_rp_r_ra(pot, rperi, r, rapo):
     vr = vr * np.sign(np.random.uniform(-1,1,size=vr.shape))
     
     return e, l, vr
+
+def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweight=None, remesh=True, rp_ra_of_jl=None):
+    """Create samples of j and l, working directly in action space.
+
+    returns msamp, jsamp, lsamp
+    or msamp, jsamp, lsamp, rpsamp, rasamp if rp_ra_of_jl is given
+
+    Working in action space has the advantage that obtaining the cumulative
+    function is quite simple (since action space volume ~ phase space volume).
+    Therefore, we can use an inverse CDF sampling sampling here that is extremely
+    efficient
+
+    f : distribution function (needs to accept j and l as input)
+    jmin_jmax_of_l : function that returns the minimum and maximum j for a given l
+    remesh : use an additional grid remeshing to speed up sampling (performance relevant for n >~ 1e5)
+    """
+
+    # perturb the boundaries a tiny bit to avoid nans etc..
+    eps = 1e-10
+    li = np.geomspace(lmin*(1.+eps), lmax*(1.-eps), nl)
+    jmin, jmax = jmin_jmax_of_l(li)
+
+    # We use sinh for j, since we need to include 0 and we want to focus our integration points around j~l
+    jgrid = np.sinh(np.linspace(np.arcsinh(jmin/li), np.arcsinh(jmax/li), nj, axis=1)) * li[:,np.newaxis]
+    lgrid = li[...,np.newaxis]*np.ones_like(jgrid)
+
+    fcumj_givenl = cumulative_simpson((2.*np.pi)**3*f(j=jgrid, l=lgrid), x=jgrid, axis=1, initial=0)
+    fcum_l = cumulative_simpson(2.*li*fcumj_givenl[:,-1], x=li, axis=0, initial=0) # there is 2*l here, since lz goes from -l to l
+    mtot = fcum_l[-1]
+
+    # While it is trivial to invert the l distribution function needed for sampling,
+    # we also need to invert fcum(j | l). We do this 
+    # (1) by a meshfree interpolator j(l, fcum)
+    # (2) by remeshing to an optional grid interpolator that improves performance by ~ 10 x
+
+    print(f"Total mass: {mtot:.4e}")
+
+    xy = np.stack((np.log(lgrid).flatten(), (fcumj_givenl/fcumj_givenl[:,-1:]).flatten()), axis=-1)
+    ip_asinh_jovl = LinearNDInterpolator(xy, (np.arcsinh(jgrid/li[:,np.newaxis])).flatten())
+
+    u, v = np.random.uniform(0, 1, (2, nsamp))
+    lsamp = np.interp(u, fcum_l/fcum_l[-1:], li)
+    msamp = (mtot/nsamp)*np.ones_like(lsamp)
+
+    if remesh:
+        fcgrid = np.linspace(0., 1., nj)
+        asinh_jovl_grid = ip_asinh_jovl(np.stack(np.meshgrid(np.log(li), fcgrid, indexing="ij"), axis=-1))
+
+        ip_asinh_jovl = RectBivariateSpline(np.log(li), fcgrid, asinh_jovl_grid, kx=1, ky=1)
+    
+        jsamp = np.sinh(ip_asinh_jovl(np.log(lsamp), v, grid=False)) * lsamp
+
+        if rp_ra_of_jl is not None:
+            rpgrid, ragrid = rp_ra_of_jl(np.sinh(asinh_jovl_grid)*lgrid, lgrid)
+
+            ip_asinh_rp = RectBivariateSpline(np.log(li), fcgrid, np.log(rpgrid), kx=1, ky=1)
+            ip_asinh_ra = RectBivariateSpline(np.log(li), fcgrid, np.log(ragrid), kx=1, ky=1)
+
+            rpsamp = np.exp(ip_asinh_rp(np.log(lsamp), v, grid=False))
+            rasamp = np.exp(ip_asinh_ra(np.log(lsamp), v, grid=False))
+
+            return msamp, jsamp, lsamp, rpsamp, rasamp
+        else:
+            return msamp, jsamp, lsamp
+        
+    else:
+        jsamp = np.sinh(ip_asinh_jovl(np.log(lsamp), v)) * lsamp
+
+        if rp_ra_of_jl is not None:
+            return msamp, jsamp, lsamp, *rp_ra_of_jl(jsamp, lsamp)
+        else:
+            return msamp, jsamp, lsamp
 
 # ================= Functions for integrating orbits ======================= #
 
