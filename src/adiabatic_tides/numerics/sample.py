@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import cumulative_simpson
-from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline
+from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline, RegularGridInterpolator
 
 from . import integrate
 from .utility import cosh_space, Jacobian_det_ldlde_drpdra, e_l_of_rp_ra
@@ -488,7 +488,7 @@ def E_L_vr_from_rp_r_ra(pot, rperi, r, rapo):
     
     return e, l, vr
 
-def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweight=None, remesh=True, rp_ra_of_jl=None):
+def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweight=None, remesh=True, rp_ra_of_jl=None):
     """Create samples of j and l, working directly in action space.
 
     returns msamp, jsamp, lsamp
@@ -505,8 +505,8 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweig
     """
 
     # perturb the boundaries a tiny bit to avoid nans etc..
-    eps = 1e-10
-    li = np.geomspace(lmin*(1.+eps), lmax*(1.-eps), nl)
+    eps = 1e-4
+    li = np.geomspace(lmin*(1+eps), lmax*(1.-eps), nl)
     jmin, jmax = jmin_jmax_of_l(li)
 
     assert np.all(jmin >= 0), "jmin must be positive"
@@ -539,19 +539,24 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=200, fweig
     if remesh:
         fcgrid = np.linspace(0., 1., nj)
         asinh_jovl_grid = ip_asinh_jovl(np.stack(np.meshgrid(np.log(li), fcgrid, indexing="ij"), axis=-1))
+        asinh_jovl_grid = np.clip(asinh_jovl_grid, 0, None) # cancellation errors can lead to slightly negative values... avoid these
 
         ip_asinh_jovl = RectBivariateSpline(np.log(li), fcgrid, asinh_jovl_grid, kx=1, ky=1)
     
         jsamp = np.sinh(ip_asinh_jovl(np.log(lsamp), v, grid=False)) * lsamp
 
+        assert np.all(jsamp > 0)
+
         if rp_ra_of_jl is not None:
             rpgrid, ragrid = rp_ra_of_jl(np.sinh(asinh_jovl_grid)*lgrid, lgrid)
 
-            ip_asinh_rp = RectBivariateSpline(np.log(li), fcgrid, np.log(rpgrid), kx=1, ky=1)
-            ip_asinh_ra = RectBivariateSpline(np.log(li), fcgrid, np.log(ragrid), kx=1, ky=1)
+            ip_logrp = RegularGridInterpolator((np.log(li), fcgrid), np.log(rpgrid), bounds_error=False, fill_value=np.nan)
+            ip_logra = RegularGridInterpolator((np.log(li), fcgrid), np.log(ragrid), bounds_error=False, fill_value=np.nan)
 
-            rpsamp = np.exp(ip_asinh_rp(np.log(lsamp), v, grid=False))
-            rasamp = np.exp(ip_asinh_ra(np.log(lsamp), v, grid=False))
+
+            rpsamp = np.exp(ip_logrp((np.log(lsamp), v)))
+            rasamp = np.exp(ip_logra((np.log(lsamp), v)))
+
 
             return msamp, jsamp, lsamp, rpsamp, rasamp
         else:

@@ -588,8 +588,8 @@ class RadialProfile():
         """
         rpmin = rpmin or self.rmin()
         ramin = max(ramin or self.rmin(), rpmin)
-        rpmax = rpmax or self.rlmax()
         ramax = ramax or self.rapo_max()
+        rpmax = min(rpmax or self.rlmax(), ramax)
 
         nintegrate = nintegrate or self.cfg.sampling.nintegrate
         ninterp = ninterp or self.cfg.sampling.ninterp
@@ -614,7 +614,7 @@ class RadialProfile():
             e,l = self.e_l_of_rperi_rapo(rp, ra)
             return j, l
         
-        rperi, rapo, rlmax, rtid, ramax_of_rp =  numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=rpmin, rmax=ramax)
+        rperi, rapo, rlmax, rtid, ramax_of_rp =  numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
         rpmax = min(rpmax, rlmax)
         ramax_func = lambda rp: np.minimum(ramax_of_rp(rp), ramax)
 
@@ -622,6 +622,9 @@ class RadialProfile():
 
         p = {}
         msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=True, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
+
+        assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
+
         p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)
         
         p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])

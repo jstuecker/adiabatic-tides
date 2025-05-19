@@ -379,16 +379,22 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=2
     rpmin, ramax = np.min(rpgrid), np.max(ragrid)
     lmax, jmax = np.max(l), np.max(j)
 
-    l0, j0, facl = np.min(l[l>0]), np.min(j[j>0]), 0
+    l0, j0 = np.min(l[l>0]), np.min(j[j>0])
 
     sel = (j > 0) & (l > 0)
-    xy_ip = CloughTocher2DInterpolator(np.stack((np.log(j+j0+l*facl),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
+    xy_ip = CloughTocher2DInterpolator(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
+    xy_nn = NearestNDInterpolator(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1)[sel], uvgrid[sel])
 
     def rpra_of_jl(j, l):
         # Use NN interpolator for first guess
-        ftarget, gtarget = np.log(j+l*facl+j0), np.log(l+l0)
-        xynew = xy_ip(np.stack((ftarget, gtarget), axis=-1))
-        rp, ra = rpra_of_uv(xynew[...,0], xynew[...,1])
+        xynew = xy_ip(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1))
+        # some values can be invalid, when outside of the convex hull
+        # use NN interpolator to fill those
+        invalid = (xynew[...,1] < 0) | (xynew[...,0] < 0) | np.isnan(xynew[...,0]) 
+        if np.sum(invalid) > 0:
+            xynew[invalid] = xy_nn(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1)[invalid])
+
+        rp, ra = np.clip(rpra_of_uv(xynew[...,0], xynew[...,1]), rpmin, ramax)
 
         # For almost circular orbits we use a more accurate method that avoids cancellation
         if (accr is not None) and (daccdr is not None):
@@ -406,7 +412,9 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=2
                 rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
 
         invalid = (rp < rpmin) | (ra > ramax) | (rp > ra)
-        rp[invalid], ra[invalid] = np.nan, np.nan
+        if np.sum(invalid) > 0:
+            print(f"Warning I have {np.sum(invalid)} invalid values ({np.mean(invalid):.2%})")
+            rp[invalid], ra[invalid] = np.nan, np.nan
 
         return rp, ra
 

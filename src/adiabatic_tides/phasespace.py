@@ -121,9 +121,9 @@ class InterpolatorActionMap(ActionMap):
         self.setup_rp_ra_of_jl()
 
         jlvalid = self.orbit_valid_jl(j,l)
-        rp, ra = self.ip["rp_ra_of_jl"](j, l)
-        
-        rp[~jlvalid] = np.nan
-        ra[~jlvalid] = np.nan
+
+        rp, ra = np.zeros_like(j), np.zeros_like(j)
+        rp[jlvalid], ra[jlvalid] = self.ip["rp_ra_of_jl"](j[jlvalid], l[jlvalid])
+        rp[~jlvalid], ra[~jlvalid] = np.nan, np.nan
 
         return rp, ra
