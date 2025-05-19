@@ -243,8 +243,19 @@ class AdiabaticResultProfile(RadialProfile):
         return self.f_of_rperi_rapo(rp, ra)
     def f_of_jl(self, j, l):
         return self.f0_j_l(j, l)
-        
-        raise NotImplementedError("f_of_jl makes sense for Adiabatic Remnants, but we first need to define the selection function")
+    
+    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None):
+        # For adiabatic profile we prioritize f(j,l) since it is defined most directly
+        if j is not None and l is not None:
+            return self.f_of_jl(j,l)
+        elif rp is not None and ra is not None:
+            return self.f_of_rperi_rapo(rp, ra)
+        elif e is not None and l is not None:
+            return self.f_of_el(e, l, r=r)
+        elif e is not None:
+            return self.f_of_e(e)
+        else:
+            raise ValueError("Unknown combination of variables")
     
     def __str__(self):
         return f"AdiabaticResultProfile with {len(self.q['ri'])} points in ({self.q['ri'][0]:.5e}, {self.q['ri'][-1]:.5e})"

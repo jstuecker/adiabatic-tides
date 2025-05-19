@@ -541,9 +541,9 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweig
         asinh_jovl_grid = ip_asinh_jovl(np.stack(np.meshgrid(np.log(li), fcgrid, indexing="ij"), axis=-1))
         asinh_jovl_grid = np.clip(asinh_jovl_grid, 0, None) # cancellation errors can lead to slightly negative values... avoid these
 
-        ip_asinh_jovl = RectBivariateSpline(np.log(li), fcgrid, asinh_jovl_grid, kx=1, ky=1)
+        ip_asinh_jovl = RegularGridInterpolator((np.log(li), fcgrid), asinh_jovl_grid, bounds_error=False, fill_value=np.nan)
     
-        jsamp = np.sinh(ip_asinh_jovl(np.log(lsamp), v, grid=False)) * lsamp
+        jsamp = np.sinh(ip_asinh_jovl((np.log(lsamp), v))) * lsamp
 
         assert np.all(jsamp > 0)
 
@@ -553,10 +553,8 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweig
             ip_logrp = RegularGridInterpolator((np.log(li), fcgrid), np.log(rpgrid), bounds_error=False, fill_value=np.nan)
             ip_logra = RegularGridInterpolator((np.log(li), fcgrid), np.log(ragrid), bounds_error=False, fill_value=np.nan)
 
-
             rpsamp = np.exp(ip_logrp((np.log(lsamp), v)))
             rasamp = np.exp(ip_logra((np.log(lsamp), v)))
-
 
             return msamp, jsamp, lsamp, rpsamp, rasamp
         else:

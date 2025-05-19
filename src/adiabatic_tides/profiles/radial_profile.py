@@ -597,17 +597,19 @@ class RadialProfile():
 
         if weighted is None:
             def weighted(**kwargs): return 1.
-        elif (type(weighted) == str) and (weighted == "nice"):
-            def weighted(rp, ra, **kwargs):
-                rgeom = np.sqrt(rp*ra)
-                return 1./(4.*np.pi*rgeom**3* self.density(rgeom))
+            def f(j, l): return self.f_of_jl(j, l)
         else:
+            if (type(weighted) == str) and (weighted == "nice"):
+                def weighted(rp, ra, **kwargs):
+                    rgeom = np.sqrt(rp*ra)
+                    return 1./(4.*np.pi*rgeom**3* self.density(rgeom))
+            
             assert callable(weighted)
 
-        def f(j, l):
-            rp, ra = self.action_map.rp_ra_of_jl(j, l)
-            e,_ = self.e_l_of_rperi_rapo(rp, ra)
-            return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e)
+            def f(j, l): # Weighting function may depend on rp and ra, so we need to infer them in this case
+                rp, ra = self.action_map.rp_ra_of_jl(j, l)
+                e,_ = self.e_l_of_rperi_rapo(rp, ra)
+                return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e)
         
         def jl_of_rp_ra(rp, ra):
             j = self.radial_action_of_rp_ra(rp, ra)
