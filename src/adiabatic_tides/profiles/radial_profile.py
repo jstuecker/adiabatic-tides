@@ -622,22 +622,24 @@ class RadialProfile():
 
         p = {}
         msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=True, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
-
-        assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
-
-        p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)
-        
-        p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
+        p["e"] = self.e_l_of_rperi_rapo(p["rp"], p["ra"])[0]
 
         p["m"] = msamp / weighted(rp=p["rp"], ra=p["ra"], j=p["j"], l=p["l"], e=p["e"])
 
-        if ("pos" in mode) or ("vel" in mode):
-            p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
-            if "vel" in mode:
-                vr = p["pos"] * (p["vr"] / p["r"])[...,np.newaxis]
-                vt_xy = numerics.sample.random_direction(ntot, ndim=2) * (p["l"]/p["r"])[...,np.newaxis]
-                e1, e2 = numerics.sample.orthogonal_vectors(vr)
-                p["vel"] = vr + e1 * vt_xy[...,0,np.newaxis] + e2 * vt_xy[...,1,np.newaxis]
+        if any(var in mode for var in ("r", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
+            assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
+
+            p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)
+            
+            p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])[2]
+
+            if ("pos" in mode) or ("vel" in mode):
+                p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
+                if "vel" in mode:
+                    vr = p["pos"] * (p["vr"] / p["r"])[...,np.newaxis]
+                    vt_xy = numerics.sample.random_direction(ntot, ndim=2) * (p["l"]/p["r"])[...,np.newaxis]
+                    e1, e2 = numerics.sample.orthogonal_vectors(vr)
+                    p["vel"] = vr + e1 * vt_xy[...,0,np.newaxis] + e2 * vt_xy[...,1,np.newaxis]
 
         if "dict" in mode:
             return p
