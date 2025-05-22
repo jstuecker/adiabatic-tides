@@ -1,5 +1,5 @@
 import numpy as np
-from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap
+from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, ActionMap, InterpolatorActionMap, ActionMapThroughLLines
 from ..config import Config, time_in_years
 from .. import numerics
 import functools
@@ -35,7 +35,7 @@ class RadialProfile():
 
         self.set_phase_space(phase_space, anisotropy=anisotropy)
         
-        self.action_map = InterpolatorActionMap(self)
+        self.action_map = ActionMapThroughLLines(self)
     
     #----------- Abstract methods  --------------#
     # These methods have to be implemented by any subclass

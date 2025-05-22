@@ -181,7 +181,7 @@ class ActionMapThroughLLines(ActionMap):
         #     return np.interp(l, lcircs, rperi)
 
         rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nl, tmax=3))
-        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1., prof.accr, nsteps=ninvertj, substeps=nsteps_int)
+        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1.01, prof.accr, nsteps=ninvertj, substeps=nsteps_int)
         rp_ev[-1], ra_ev[-1] = rlmax, rlmax
         li =  prof.e_l_of_rperi_rapo(rp_ev[:,0], ra_ev[:,0])[1]
 
@@ -215,18 +215,24 @@ class ActionMapThroughLLines(ActionMap):
 
         rpgrid[-1], ragrid[-1] = rlmax, rlmax
 
+        assert np.all((rpgrid > 0) & (ragrid > 0))
+
         assert (np.sum(np.isnan(rpgrid)) == 0) and (np.sum(np.isnan(ragrid)) == 0), f"Found nans: rpgrid {np.sum(np.isnan(rpgrid))} ragrid {np.sum(np.isnan(ragrid))}"
 
-        self.ip_rp = RectBivariateSpline(li, uj, rpgrid, kx=3, ky=3)
-        self.ip_ra = RectBivariateSpline(li, uj, ragrid, kx=3, ky=3)
+        self.ip_rp = RectBivariateSpline(np.log(li), uj, np.log(rpgrid), kx=3, ky=3)
+        self.ip_ra = RectBivariateSpline(np.log(li), uj, np.log(ragrid), kx=3, ky=3)
 
     def orbit_valid_jl(self, j, l):
+        self.setup_rp_ra_of_jl()
+
         valid = (l >= np.min(self.li)) & (l <= np.max(self.li))
         valid &= (j >= self.jmin_of_l(l)) & (j <= self.jmax_of_l(l))
 
         return valid
 
     def orbit_valid_rp_ra(self, rp, ra):
+        self.setup_rp_ra_of_jl()
+
         return (ra >= rp) & (ra <= self.ramax_of_rp(rp))
 
     def rp_ra_of_jl(self, j, l):
@@ -238,16 +244,22 @@ class ActionMapThroughLLines(ActionMap):
 
         jmin, jmax = self.jmin_of_l(l), self.jmax_of_l(l)
 
+        # assert np.all(j < jmax), f"jmax: {np.max(jmax)}, j: {np.max(j)}"
+        # assert np.all(j > jmin), f"jmin: {np.min(jmin)}, j: {np.min(j)}"
+
         if np.any(np.isnan(jmax)):
             print("Got jmax nans", np.sum(np.isnan(jmax)))
 
         u = np.arcsinh(j/jmin)/np.arcsinh(jmax/jmin)
 
         if (np.min(u) < 0) | (np.max(u) > 1):
-            print("Got u out of bounds: umax:", np.max(u), "umin:", np.min(u))
+            print("Warning: Got u out of bounds: umax:", np.max(u), "umin:", np.min(u))
+            raise ValueError("u out of bounds")
 
-        rp = self.ip_rp(l, u, grid=False)
-        ra = self.ip_ra(l, u, grid=False)
+        rp = np.exp(self.ip_rp(np.log(l), u, grid=False))
+        ra = np.exp(self.ip_ra(np.log(l), u, grid=False))
+
+        # assert np.all((ra > 0) & (rp > 0))
 
         # print("rpnans", np.mean(np.isnan(rp)), "ranans", np.mean(np.isnan(ra)))
 

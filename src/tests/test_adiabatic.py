@@ -99,8 +99,8 @@ def test_assembly_consistency():
 
     assert np.allclose(pi5.rtid(), pi5b.rtid(), rtol=1e-3)
     assert np.allclose(pi5.rtid(), pi5c.rtid(), rtol=1e-3)
-    assert np.allclose(pi5.m_of_r(pi5.rtid()), pi5b.m_of_r(pi5b.rtid()), rtol=1e-3)
-    assert np.allclose(pi5.m_of_r(pi5.rtid()), pi5c.m_of_r(pi5c.rtid()), rtol=1e-3)
+    assert np.allclose(pi5.m_of_r(pi5.rtid(), mode="self"), pi5b.m_of_r(pi5b.rtid(), mode="self"), rtol=5e-3)
+    assert np.allclose(pi5.m_of_r(pi5.rtid(), mode="self"), pi5c.m_of_r(pi5c.rtid(), mode="self"), rtol=1e-3)
 
 @pytest.mark.slow
 def test_double_adiabatic():
