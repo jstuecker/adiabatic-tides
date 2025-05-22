@@ -3,7 +3,7 @@ from scipy.integrate import simpson, trapezoid
 from scipy.interpolate import CubicSpline, PchipInterpolator
 from scipy.special import gamma as GammaFunc
 from . import utility
-from .utility import save_divide
+from .utility import save_divide, tanh_space
 
 # ===================== Generic Integration Functions ====================== #
 
@@ -902,3 +902,86 @@ def solve_poisson_via_spline_with_smart_boundaries(ri, rhoi, spline_class=PchipI
     phi = lambda r: np.where(r<ri[0], phibelow(r), np.where(r>ri[-1], phiabove(r), spl_phi(r)))
 
     return rho,m,phi
+
+# ============= Methods for Solving ODE  ==================== #
+
+def runge_kutta_2(dydx, x, y0, substeps=10):
+    """Runge-Kutta 2nd order method to integrate a function"""
+    y = np.zeros((len(x), len(y0)))
+    y[0] = y0
+    for i in range(1, len(x)):
+        xn, yn = x[i-1], y[i-1]
+
+        h = (x[i] - x[i-1]) / substeps
+        for j in range(substeps):
+            k1 = h*dydx(xn, yn)
+            k2 = h*dydx(xn + 0.5*h, yn + 0.5*k1)
+            
+            xn, yn = xn + h, yn + k2
+
+        y[i] = yn
+
+    return y
+
+def runge_kutta_2_monotonic_descending(dydx, x, y0, substeps=10):
+    """Runge-Kutta 2nd order method to integrate a function
+    
+    Like the function above, but only keeping the monotonic descending part of the solution.
+    """
+    y = np.zeros((len(x), len(y0)))
+    y[0] = y0
+
+    active = np.ones((len(y0)), dtype=bool)
+    xnew = np.copy(x) # Like x, but we may deactivte integration on the way and beyond that point it is different
+
+    for i in range(1, len(x)):
+        xn, yn = xnew[i-1], y[i-1]
+
+        for j in range(substeps):
+            h = (x[i] - x[i-1]) / substeps * active
+
+            k1 = h*dydx(xn, yn)
+            k2 = h*dydx(xn + 0.5*h, yn + 0.5*k1)
+
+
+            # new_inactive = active & (k1 < 0) & (k2 >= 0)
+            # k = k1 + (k2 - k1) / (0.5*h) * dh = 0
+            # dh = -0.5*h*k1/(k2-k1)
+            # fac = np.ones_like(k1)
+            # fac[new_inactive] = -0.5*(k1[new_inactive]/(k2[new_inactive]-k1[new_inactive]))
+            # h[new_inactive] = 0 # approximate the location where the derivative should be zero
+            # xn, yn = xn + h*fac, yn + k2*fac
+            active = active & (k2 < 0)
+
+            xn, yn = xn + h*active, yn + k2*active
+            
+
+        # The following line makes sure we only set to nan after recording the last active point
+        yn[xn == xnew[i-1]], xn[xn == xnew[i-1]] = np.nan, np.nan
+
+        xnew[i], y[i] = xn, yn
+
+    return xnew, y
+
+def rp_ra_with_rlcirc(rcirc, ramax, accr, nsteps=200, substeps=10, eps_circ=1e-4):
+    """Returns peri and apo centers that have the same angular momentum as a circular orbit at rcirc"""
+    def drp_dra(ra, rp):
+        iscirc = ra < rp*(1+eps_circ)
+        
+        with np.errstate(divide='ignore', invalid='ignore'): # For circular orbits the derivative is -1
+            res = -1.*iscirc + np.nan_to_num((~iscirc)*(-accr(ra) - l**2/ra**3) / (-accr(rp) - l**2/rp**3), 0)
+        return res
+        # return np.clip(res, None, 0) # has to be negative, otherwise we reached the maximum apo-center / minimal peri-center
+
+    # Start at a circular orbit and find nearby orbits that 
+    # have the same angular momentum
+    l = np.sqrt(np.clip(-accr(rcirc) * rcirc**3,0, None))
+    
+    # ra_ev = np.geomspace(rcirc, ramax, nsteps+1)
+    ra_ev = np.exp(tanh_space(np.log(rcirc), np.log(ramax), nsteps+1, tmax=3))
+
+    ra_ev, rp_ev = runge_kutta_2_monotonic_descending(drp_dra, ra_ev, y0=rcirc, substeps=substeps)
+
+    ra_ev[np.isnan(rp_ev)] = np.nan
+
+    return rp_ev.T, ra_ev.T

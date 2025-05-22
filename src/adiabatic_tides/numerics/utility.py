@@ -9,6 +9,11 @@ def cosh_space(fmax, n, pow=1.):
     x = np.linspace(0., np.arccosh(fmax), n)
     return np.cosh(x[-1] * (x/x[-1])**pow)
 
+def tanh_space(lrmin, lrmax, n=50, tmax=4):
+    """Puts more points close to the edges of the range. The larger tmax the more extreme"""
+    t = np.linspace(-tmax*np.ones_like(lrmin),tmax*np.ones_like(lrmax), n)
+    return lrmin + 0.5*(1 + np.tanh(t)/np.tanh(tmax)) * (lrmax-lrmin)
+
 # ===================== Differentiation functions ========================== #
 
 def second_deriv(f, x):

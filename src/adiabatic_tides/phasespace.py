@@ -1,6 +1,7 @@
 import numpy as np
 from .config import only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig
 from . import numerics
+from scipy.interpolate import PchipInterpolator, RectBivariateSpline
 
 class PhaseSpace():
     def __init__(self, anisotropy=np.nan):
@@ -133,5 +134,121 @@ class InterpolatorActionMap(ActionMap):
         rp, ra = np.zeros_like(j), np.zeros_like(j)
         rp[jlvalid], ra[jlvalid] = self.ip["rp_ra_of_jl"](j[jlvalid], l[jlvalid])
         rp[~jlvalid], ra[~jlvalid] = np.nan, np.nan
+
+        return rp, ra
+
+class ActionMapThroughLLines(ActionMap):
+    """A new version of the ActionMap
+    
+    It first determines lines rp,ra (L=const) and then inverts rp(J | L) to J(rp | L) and ra(J | L) to J(ra | L)
+    This reduces the rp,ra <-> J,L inversion to a 1D problem, which can nicely be sovled through 1D interpolators
+
+    This is faster and works much more robustly for limtied spaces (as for tidally truncated profiles)
+    """
+    def __init__(self, profile):
+        super().__init__(profile)
+
+        self.q = {}
+        self.ip = {}
+
+    @only_on_change(attributes=("cfg_gen","cfg_act")) 
+    def setup_rp_ra_of_jl(self, nl=400, ninvertj=400, nsteps_int=4, nj=2000, j0=1e-5):
+        cfg_gen : GeneralConfig = self.cfg_gen
+        cfg_act : ActionsConfig = self.cfg_act
+
+        # Define boundaries of the orbit space
+        rmin, rmax = self.profile.rmin(), self.profile.rmax()
+        rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.profile.potential, self.profile.accr, self.profile.daccdr, rpmin=rmin, rmax=rmax)
+
+        prof = self.profile
+        # def jl_of_rp_ra(rp, ra):
+        #     j = prof.radial_action_of_rp_ra(rp, ra)
+        #     e, l = prof.e_l_of_rperi_rapo(rp, ra)
+        #     return j, l
+        
+        # lmintot, lmaxtot, jmin_jmax_of_l = at.numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin=prof.rmin(), ramax=ramax_of_rp, N=4000)
+        lmaxes = prof.e_l_of_rperi_rapo(rperi, rapo)[1]
+        # jmaxes = prof.radial_action_of_rp_ra(rperi, rapo)
+
+        def ra_max_of_l(l):
+            return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
+        # def ra_max_of_l(l):
+        #     return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
+        # def rp_min_of_l(l):
+        #     return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rperi)))
+        # lcircs = cprof.vcirc(rperi) * rperi
+        # def rc_of_l(l):
+        #     return np.interp(l, lcircs, rperi)
+
+        rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nl, tmax=3))
+        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1., prof.accr, nsteps=ninvertj, substeps=nsteps_int)
+        rp_ev[-1], ra_ev[-1] = rlmax, rlmax
+        li =  prof.e_l_of_rperi_rapo(rp_ev[:,0], ra_ev[:,0])[1]
+
+        ramax_li, rpmin_li = np.nanmax(ra_ev, axis=1), np.nanmin(rp_ev, axis=1)
+        jmax_of_li = prof.radial_action_of_rp_ra(rpmin_li, ramax_li)
+
+        self.li = li
+        self.jmin_of_l = lambda l: j0 * l
+        self.jmax_of_l = lambda l: np.interp(l, li, jmax_of_li)
+
+        self.ramax_of_rp = lambda rp: np.interp(rp, rpmin_li, ramax_li)
+        self.ramax_of_rp_v2 = ramax_of_rp
+
+        jmin, jmax = self.jmin_of_l(li), self.jmax_of_l(li)
+        uj = np.linspace(0., 1., nj)
+        jgrid = np.sinh(uj*np.arcsinh(jmax/jmin)[:,np.newaxis])*jmin[:,np.newaxis]
+
+        assert np.all(~np.isnan(jgrid[:-1,:]))
+
+        # Invert  rp <-> j and ra <-> j for each l-column individually
+        rpgrid, ragrid = np.zeros_like(jgrid), np.zeros_like(jgrid)
+        for i in range(0, jgrid.shape[0]-1):
+            ji = prof.radial_action_of_rp_ra(rp_ev[i], ra_ev[i])
+            sel = (~np.isnan(rp_ev[i])) & (~np.isnan(ra_ev[i])) & (~np.isnan(ji))
+
+            # tiny numerical errors may break monotonicity, this does not matter, but it makes the interpolator
+            sel[1:] &= (ji[1:] > np.maximum.accumulate(np.nan_to_num(ji[:-1], 0)))
+            
+            rpgrid[i] = np.clip(PchipInterpolator(ji[sel], rp_ev[i,sel])(jgrid[i]), np.min(rp_ev[i,sel]), np.max(rp_ev[i,sel]))
+            ragrid[i] = np.clip(PchipInterpolator(ji[sel], ra_ev[i,sel])(jgrid[i]), np.min(ra_ev[i,sel]), np.max(ra_ev[i,sel]))
+
+        rpgrid[-1], ragrid[-1] = rlmax, rlmax
+
+        assert (np.sum(np.isnan(rpgrid)) == 0) and (np.sum(np.isnan(ragrid)) == 0), f"Found nans: rpgrid {np.sum(np.isnan(rpgrid))} ragrid {np.sum(np.isnan(ragrid))}"
+
+        self.ip_rp = RectBivariateSpline(li, uj, rpgrid, kx=3, ky=3)
+        self.ip_ra = RectBivariateSpline(li, uj, ragrid, kx=3, ky=3)
+
+    def orbit_valid_jl(self, j, l):
+        valid = (l >= np.min(self.li)) & (l <= np.max(self.li))
+        valid &= (j >= self.jmin_of_l(l)) & (j <= self.jmax_of_l(l))
+
+        return valid
+
+    def orbit_valid_rp_ra(self, rp, ra):
+        return (ra >= rp) & (ra <= self.ramax_of_rp(rp))
+
+    def rp_ra_of_jl(self, j, l):
+        self.setup_rp_ra_of_jl()
+
+        # print("lmax", np.max(l), np.max(self.li))
+        if np.max(l) > np.max(self.li):
+            print("some ls are too large", np.max(l), np.max(self.li))
+
+        jmin, jmax = self.jmin_of_l(l), self.jmax_of_l(l)
+
+        if np.any(np.isnan(jmax)):
+            print("Got jmax nans", np.sum(np.isnan(jmax)))
+
+        u = np.arcsinh(j/jmin)/np.arcsinh(jmax/jmin)
+
+        if (np.min(u) < 0) | (np.max(u) > 1):
+            print("Got u out of bounds: umax:", np.max(u), "umin:", np.min(u))
+
+        rp = self.ip_rp(l, u, grid=False)
+        ra = self.ip_ra(l, u, grid=False)
+
+        # print("rpnans", np.mean(np.isnan(rp)), "ranans", np.mean(np.isnan(ra)))
 
         return rp, ra
