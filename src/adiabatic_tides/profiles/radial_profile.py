@@ -570,7 +570,7 @@ class RadialProfile():
                 res.append(p[key])
             return res
         
-    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, remesh=True):
+    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None):
         """ 
         mode : a string with the keys to be returned, separated by "_". May contain 
                "rp", "ra", "r", "e", "l", "j", "vr", "pos", "vel", "m"
@@ -595,9 +595,11 @@ class RadialProfile():
         ninterp = ninterp or self.cfg.sampling.ninterp
         nsteps_metropolis = nsteps_metropolis or self.cfg.sampling.nsteps_metropolis
 
+        def orbit_valid(rp, ra):
+            return (rp > rpmin) & (ra > ramin) & (ra < ramax) & (rp < rpmax)
+
         if weighted is None:
-            def weighted(**kwargs): return 1.
-            def f(j, l): return self.f_of_jl(j, l)
+            def weighted(rp, ra, **kwargs): return 1.
         else:
             if (type(weighted) == str) and (weighted == "nice"):
                 def weighted(rp, ra, **kwargs):
@@ -606,29 +608,33 @@ class RadialProfile():
             
             assert callable(weighted)
 
-            def f(j, l): # Weighting function may depend on rp and ra, so we need to infer them in this case
-                rp, ra = self.action_map.rp_ra_of_jl(j, l)
-                e,_ = self.e_l_of_rperi_rapo(rp, ra)
-                return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e)
+        def f(j=None, l=None, rp=None, ra=None):
+            e,_ = self.e_l_of_rperi_rapo(rp, ra)
+            return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e) * orbit_valid(rp, ra)
         
-        def jl_of_rp_ra(rp, ra):
-            j = self.radial_action_of_rp_ra(rp, ra)
-            e,l = self.e_l_of_rperi_rapo(rp, ra)
-            return j, l
+        # def jl_of_rp_ra(rp, ra):
+        #     j = self.radial_action_of_rp_ra(rp, ra)
+        #     e,l = self.e_l_of_rperi_rapo(rp, ra)
+        #     return j, l
         
-        rperi, rapo, rlmax, rtid, ramax_of_rp =  numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
-        rpmax = min(rpmax, rlmax)
-        ramax_func = lambda rp: np.minimum(ramax_of_rp(rp), ramax)
+        # rperi, rapo, rlmax, rtid, ramax_of_rp =  numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
+        # rpmax = min(rpmax, rlmax)
+        # ramax_func = lambda rp: np.minimum(ramax_of_rp(rp), ramax)
 
-        lmintot, lmaxtot, jmin_jmax_of_l = numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin, rpmax, ramin, ramax_func)
+        # lmintot, lmaxtot, jmin_jmax_of_l = numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin, rpmax, ramin, ramax_func)
 
         p = {}
-        msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=remesh, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
+        # msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=remesh, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
+        msamp, p["j"], p["l"], p["rp"], p["ra"] = self.action_map.sample_jl(nsamp=ntot, get_rp_ra=True, f=f)
+
         p["e"] = self.e_l_of_rperi_rapo(p["rp"], p["ra"])[0]
 
         p["m"] = msamp / weighted(rp=p["rp"], ra=p["ra"], j=p["j"], l=p["l"], e=p["e"])
 
-        if any(var in mode for var in ("r", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
+        assert np.min(p["m"]) > 0, "Something went wrong with the sampling, negative masses (Maybe your weights are negative?)"
+
+        # Remember to correct the following line, it handles "r" wrongly
+        if any(var in mode for var in ("r_", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
             assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
 
             p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)

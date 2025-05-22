@@ -2,6 +2,7 @@ import numpy as np
 from .config import only_on_change, GeneralConfig, EddingtonConfig, ActionsConfig
 from . import numerics
 from scipy.interpolate import PchipInterpolator, RectBivariateSpline
+from scipy.integrate import cumulative_trapezoid
 
 class PhaseSpace():
     def __init__(self, anisotropy=np.nan):
@@ -152,7 +153,7 @@ class ActionMapThroughLLines(ActionMap):
         self.ip = {}
 
     @only_on_change(attributes=("cfg_gen","cfg_act")) 
-    def setup_rp_ra_of_jl(self, nl=400, ninvertj=400, nsteps_int=4, nj=2000, j0=1e-5):
+    def setup_rp_ra_of_jl(self, nl=600, ninvertj=400, nsteps_int=4, nj=2000, j0=1e-5):
         cfg_gen : GeneralConfig = self.cfg_gen
         cfg_act : ActionsConfig = self.cfg_act
 
@@ -208,6 +209,8 @@ class ActionMapThroughLLines(ActionMap):
         self.ip_rp = RectBivariateSpline(np.log(li), uj, np.log(rpgrid), kx=3, ky=3)
         self.ip_ra = RectBivariateSpline(np.log(li), uj, np.log(ragrid), kx=3, ky=3)
 
+        self.jgrid, self.rpgrid, self.ragrid = jgrid, rpgrid, ragrid
+
     def orbit_valid_jl(self, j, l):
         self.setup_rp_ra_of_jl()
 
@@ -250,3 +253,74 @@ class ActionMapThroughLLines(ActionMap):
         # print("rpnans", np.mean(np.isnan(rp)), "ranans", np.mean(np.isnan(ra)))
 
         return rp, ra
+    
+    def sample_jl(self, nsamp=1000, nf=1000, get_rp_ra=False, f=None):
+        self.setup_rp_ra_of_jl()
+        
+        if f is None:
+            f = self.profile.f
+
+        # fgrid = f(j=self.jgrid, l=self.li[:,np.newaxis], rp=self.rpgrid, ra=self.ragrid)
+
+        # fcumj_givenl = np.clip(cumulative_simpson((2.*np.pi)**3*fgrid, x=self.jgrid, axis=1, initial=0), 0, None)
+
+        # Save some debug outputs
+        # self.fgrid = fgrid
+
+        # print(self.fgrid.shape, np.min(self.fgrid), np.max(self.fgrid))
+
+        
+
+        # A grid used for getting j given the cumulative distribution function at fixed l
+        ftarget = np.linspace(0, 1, nf)
+
+        l, fl, j_of_fc_grid, rp_of_fc_grid, ra_of_fc_grid = [],[],[],[],[]
+
+        for i in range(0, len(self.li)):
+            # Integrate f(j,l) over j
+            fjl = f(j=self.jgrid[i], l=self.li[i], rp=self.rpgrid[i], ra=self.ragrid[i])
+            assert np.all(fjl >= 0)
+            if np.all(fjl == 0) or np.std(self.jgrid[i]) == 0:
+                continue  #Zero mass at this angular momentum (May happen e.g. at lmax or when some orbits are set to zero through f)
+
+            fcum_of_j_givenl = (2.*np.pi)**3*cumulative_trapezoid(fjl, x=self.jgrid[i], initial=0)
+
+            assert fcum_of_j_givenl[-1] > 0
+
+            sel = np.ones_like(fcum_of_j_givenl, dtype=bool)
+            sel[1:] = fcum_of_j_givenl[1:] > np.maximum.accumulate(fcum_of_j_givenl[:-1])
+
+            j_of_fc_grid.append(PchipInterpolator(fcum_of_j_givenl[sel]/fcum_of_j_givenl[-1], self.jgrid[i,sel])(ftarget))
+            if get_rp_ra:
+                rp_of_fc_grid.append(PchipInterpolator(fcum_of_j_givenl[sel]/fcum_of_j_givenl[-1], self.rpgrid[i,sel])(ftarget))
+                ra_of_fc_grid.append(PchipInterpolator(fcum_of_j_givenl[sel]/fcum_of_j_givenl[-1], self.ragrid[i,sel])(ftarget))
+
+            l.append(self.li[i])
+            fl.append(fcum_of_j_givenl[-1])
+
+        l, fl, j_of_fc_grid = np.array(l), np.array(fl), np.array(j_of_fc_grid)
+
+        # Now do the l integral. The 2*l is from the lz integral, another l from the log integral
+        fcum_l = cumulative_trapezoid(2.*l**2*fl, x=np.log(l), axis=0, initial=0)
+
+        assert np.all(~np.isnan(fcum_l))
+
+        # Sample and interpolate
+        usamp, vsamp = np.random.uniform(0, 1, size=(2, nsamp))
+        
+        msamp = fcum_l[-1] / nsamp * np.ones(nsamp)
+
+        lsamp = PchipInterpolator(fcum_l/fcum_l[-1], l)(usamp)
+        jsamp = RectBivariateSpline(np.log(l), ftarget, j_of_fc_grid, kx=1, ky=1)(np.log(lsamp), vsamp, grid=False)
+
+        assert np.all(jsamp >= 0)
+        assert np.all(lsamp >= 0)
+
+        if get_rp_ra:
+            rp_samp = RectBivariateSpline(np.log(l), ftarget, rp_of_fc_grid, kx=1, ky=1)(np.log(lsamp), vsamp, grid=False)
+            ra_samp = RectBivariateSpline(np.log(l), ftarget, ra_of_fc_grid, kx=1, ky=1)(np.log(lsamp), vsamp, grid=False)
+
+            return msamp, jsamp, lsamp, rp_samp, ra_samp
+        
+
+        return msamp, jsamp, lsamp
