@@ -161,24 +161,10 @@ class ActionMapThroughLLines(ActionMap):
         rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.profile.potential, self.profile.accr, self.profile.daccdr, rpmin=rmin, rmax=rmax)
 
         prof = self.profile
-        # def jl_of_rp_ra(rp, ra):
-        #     j = prof.radial_action_of_rp_ra(rp, ra)
-        #     e, l = prof.e_l_of_rperi_rapo(rp, ra)
-        #     return j, l
-        
-        # lmintot, lmaxtot, jmin_jmax_of_l = at.numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin=prof.rmin(), ramax=ramax_of_rp, N=4000)
-        lmaxes = prof.e_l_of_rperi_rapo(rperi, rapo)[1]
-        # jmaxes = prof.radial_action_of_rp_ra(rperi, rapo)
 
+        lmaxes = prof.e_l_of_rperi_rapo(rperi, rapo)[1]
         def ra_max_of_l(l):
             return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
-        # def ra_max_of_l(l):
-        #     return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
-        # def rp_min_of_l(l):
-        #     return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rperi)))
-        # lcircs = cprof.vcirc(rperi) * rperi
-        # def rc_of_l(l):
-        #     return np.interp(l, lcircs, rperi)
 
         rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nl, tmax=3))
         rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1.01, prof.accr, nsteps=ninvertj, substeps=nsteps_int)
