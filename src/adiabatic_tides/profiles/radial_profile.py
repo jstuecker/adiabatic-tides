@@ -604,7 +604,7 @@ class RadialProfile():
             if (type(weighted) == str) and (weighted == "nice"):
                 def weighted(rp, ra, **kwargs):
                     rgeom = np.sqrt(rp*ra)
-                    return 1./(4.*np.pi*rgeom**3* self.density(rgeom))
+                    return 1./(4.*np.pi*rgeom**3* np.clip(self.density(rgeom),0,None))
             
             assert callable(weighted)
 

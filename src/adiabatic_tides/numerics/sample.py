@@ -3,7 +3,7 @@ from scipy.integrate import cumulative_simpson
 from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline, RegularGridInterpolator, NearestNDInterpolator
 
 from . import integrate
-from .utility import cosh_space, Jacobian_det_ldlde_drpdra, e_l_of_rp_ra
+from .utility import cosh_space, Jacobian_det_ldlde_drpdra, e_l_of_rp_ra, save_divide
 from .interpolate import vectorized_interp
 
 # ========= Utilitys functions for binning sampled particles =============== #
@@ -67,10 +67,10 @@ def get_anisotropy_profile(ri, mi, vri, li, rbins, reduced=False):
 
 def orthogonal_vectors(v):
     """Returns two unit vectors orthogonal to each other and v"""
-    v = v / np.linalg.norm(v, keepdims=True, axis=-1)
+    v =  save_divide(v, np.linalg.norm(v, keepdims=True, axis=-1))
     v1 = np.random.normal(size=3)
     v1 = v1 - np.sum(v1*v, keepdims=True, axis=-1) * v
-    v1 = v1 / np.linalg.norm(v1, keepdims=True, axis=-1)
+    v1 = save_divide(v1, np.linalg.norm(v1, keepdims=True, axis=-1))
     v2 = np.cross(v, v1)
     return v1, v2
     
