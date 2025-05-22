@@ -254,7 +254,7 @@ class ActionMapThroughLLines(ActionMap):
 
         if (np.min(u) < 0) | (np.max(u) > 1):
             print("Warning: Got u out of bounds: umax:", np.max(u), "umin:", np.min(u))
-            raise ValueError("u out of bounds")
+            u[(u < 0) | (u > 1)] = np.nan
 
         rp = np.exp(self.ip_rp(np.log(l), u, grid=False))
         ra = np.exp(self.ip_ra(np.log(l), u, grid=False))

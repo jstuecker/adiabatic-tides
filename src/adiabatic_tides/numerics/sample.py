@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import cumulative_simpson
-from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline, RegularGridInterpolator
+from scipy.interpolate import LinearNDInterpolator, RectBivariateSpline, RegularGridInterpolator, NearestNDInterpolator
 
 from . import integrate
 from .utility import cosh_space, Jacobian_det_ldlde_drpdra, e_l_of_rp_ra
@@ -509,13 +509,14 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweig
     li = np.geomspace(lmin*(1+eps), lmax*(1.-eps), nl)
     jmin, jmax = jmin_jmax_of_l(li)
 
-    assert np.all(jmin >= 0), "jmin must be positive"
+    assert np.all(jmin >= 0)
+    assert np.all(jmax >= 0)
 
     # We use sinh for j, since we need to include 0 and we want to focus our integration points around j~l
     jgrid = np.sinh(np.linspace(np.arcsinh(jmin/li), np.arcsinh(jmax/li), nj, axis=1)) * li[:,np.newaxis]
     lgrid = li[...,np.newaxis]*np.ones_like(jgrid)
 
-    fcumj_givenl = cumulative_simpson((2.*np.pi)**3*f(j=jgrid, l=lgrid), x=jgrid, axis=1, initial=0)
+    fcumj_givenl = np.clip(cumulative_simpson((2.*np.pi)**3*f(j=jgrid, l=lgrid), x=jgrid, axis=1, initial=0), 0, None)
     fcum_l = cumulative_simpson(2.*li*fcumj_givenl[:,-1], x=li, axis=0, initial=0) # there is 2*l here, since lz goes from -l to l
     mtot = fcum_l[-1]
 
@@ -531,6 +532,7 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweig
     xy = np.stack((np.log(lgrid), fcumj_givenl/fcumj_givenl[:,-1:]), axis=-1)
     valid =   ~np.isnan(xy[...,0]) & ~np.isnan(xy[...,1])
     ip_asinh_jovl = LinearNDInterpolator(xy[valid], (np.arcsinh(jgrid/li[:,np.newaxis]))[valid])
+    ip_asinh_jovl_nn = NearestNDInterpolator(xy[valid], (np.arcsinh(jgrid/li[:,np.newaxis]))[valid])
 
     u, v = np.random.uniform(0, 1, (2, nsamp))
     lsamp = np.interp(u, fcum_l/fcum_l[-1:], li)
@@ -539,7 +541,13 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweig
     if remesh:
         fcgrid = np.linspace(0., 1., nj)
         asinh_jovl_grid = ip_asinh_jovl(np.stack(np.meshgrid(np.log(li), fcgrid, indexing="ij"), axis=-1))
+        invalid = np.isnan(asinh_jovl_grid) | (asinh_jovl_grid < 0)
+        if np.sum(invalid) > 0:
+            print("Fixing %d invalid points with nearest neighbor interpolation" % np.sum(invalid))
+            asinh_jovl_grid[invalid] = ip_asinh_jovl_nn(np.stack(np.meshgrid(np.log(li), fcgrid, indexing="ij"), axis=-1)[invalid])
+
         asinh_jovl_grid = np.clip(asinh_jovl_grid, 0, None) # cancellation errors can lead to slightly negative values... avoid these
+
 
         ip_asinh_jovl = RegularGridInterpolator((np.log(li), fcgrid), asinh_jovl_grid, bounds_error=False, fill_value=np.nan)
     
@@ -555,6 +563,8 @@ def sample_jl(f, lmin, lmax, jmin_jmax_of_l, nsamp=100000, nl=200, nj=201, fweig
 
             rpsamp = np.exp(ip_logrp((np.log(lsamp), v)))
             rasamp = np.exp(ip_logra((np.log(lsamp), v)))
+
+            # rpsamp, rasamp = rp_ra_of_jl(jsamp, lsamp)
 
             return msamp, jsamp, lsamp, rpsamp, rasamp
         else:

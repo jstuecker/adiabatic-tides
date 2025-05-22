@@ -319,14 +319,19 @@ def jl_from_paspace_boundaries(jl_of_rp_ra, rpmin=1e-10, rpmax=None, ramin=None,
     rps = np.geomspace(rpmin, rpmax, N)
     jmax1, lmax1 = jl_of_rp_ra(rps, ramax_of_rp(rps))
 
+
     jmin, lmin =  np.concatenate((jmin0, jmin1)), np.concatenate((lmin0, lmin1))
     jmax, lmax =  np.concatenate((jmax0, jmax1)), np.concatenate((lmax0, lmax1))
+
+    invalid1, invalid2 = np.isnan(jmin) | np.isnan(lmin), np.isnan(jmax) | np.isnan(lmax)
+    jmin, lmin = jmin[~invalid1], lmin[~invalid1]
+    jmax, lmax = jmax[~invalid2], lmax[~invalid2]
 
     lmintot, lmaxtot = np.nanmin(lmin), np.nanmax(lmax)
 
     def jmin_jmax_of_l(l):
         jmin_ev = np.interp(l, lmin, jmin) 
-        jmax_ev = np.interp(l, lmax, jmax, left=np.nan, right=np.nan)
+        jmax_ev = np.interp(l, lmax, jmax)
         return jmin_ev, jmax_ev
     
     return lmintot, lmaxtot, jmin_jmax_of_l

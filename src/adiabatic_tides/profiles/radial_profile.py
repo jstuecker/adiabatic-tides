@@ -570,7 +570,7 @@ class RadialProfile():
                 res.append(p[key])
             return res
         
-    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None):
+    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, remesh=True):
         """ 
         mode : a string with the keys to be returned, separated by "_". May contain 
                "rp", "ra", "r", "e", "l", "j", "vr", "pos", "vel", "m"
@@ -623,7 +623,7 @@ class RadialProfile():
         lmintot, lmaxtot, jmin_jmax_of_l = numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin, rpmax, ramin, ramax_func)
 
         p = {}
-        msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=True, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
+        msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=remesh, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
         p["e"] = self.e_l_of_rperi_rapo(p["rp"], p["ra"])[0]
 
         p["m"] = msamp / weighted(rp=p["rp"], ra=p["ra"], j=p["j"], l=p["l"], e=p["e"])
