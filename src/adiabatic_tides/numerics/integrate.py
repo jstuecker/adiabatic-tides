@@ -14,6 +14,8 @@ def scaled_tanh(t, a, b):
     Avoids cancellation by using different expressions on different intervals
     """
 
+    assert np.all(t[...,1:] > t[...,:-1]), "This function is currently only valid for monotonic t"
+
     t1, t2, t3 = t[t < -10], t[(t >= -10) & (t <= 10)], t[t > 10]
     x1 = a + (b-a) / (np.exp(-2*t1) + 1)
     x2 = 0.5*(b+a) + 0.5*(b-a) * np.tanh(t2)

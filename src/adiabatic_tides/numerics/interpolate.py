@@ -211,6 +211,22 @@ def map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rpmax, rpoff=0., tma
     
     return rpra_of_uv, uv_of_rpra
 
+def map_limited_peri_apo_space_log_log(ramax_of_rp, rpmin, rpmax, **kwargs):
+    def rpra_of_uv(u,v):
+        rp = np.exp(np.log(rpmin) + u*(np.log(rpmax)-np.log(rpmin)))
+        logramax = np.log(ramax_of_rp(rp))
+        ra = np.exp(np.log(rp) + v*(logramax-np.log(rp)))
+        
+        return rp, ra
+    
+    def uv_of_rpra(rp, ra):
+        u = np.log(rp/rpmin) / np.log(rpmax/rpmin)
+        v = np.log(ra/rp) / (np.log(ramax_of_rp(rp)) - np.log(rp))
+
+        return u,v
+    
+    return rpra_of_uv, uv_of_rpra
+
 def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, rpoff=0., facmin=1e-3):
     if (nbins_apo is None) or (nbins_apo == 0):
         nbins_apo = nbins
@@ -222,22 +238,38 @@ def define_peri_apo_table(rpmin, rpmax, nbins=200, facmax=None, nbins_apo=None, 
 
     # Set up functions that map between peri/apo centers and the uniform domain
     rpra_of_uv,uv_of_rpra = map_peri_apo_space_log_log(rpmin, rpmax, facmax, rpoff=rpoff, facmin=facmin)
+    
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
 
-def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_apo=None, rpoff=0., tmax=5):
+def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_apo=None, rpoff=0., tmax=5, stagger=False, map_boundaries=0.):
     """like define_peri_apo_table, but for profiles where valid apo centers are limited"""
     if (nbins_apo is None) or (nbins_apo == 0):
         nbins_apo = nbins
 
     # Set up a uniform domain
-    u = np.linspace(0, 1, nbins)
-    v = np.linspace(0, 1, nbins_apo)
-    uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
+    u = np.linspace(0, 1, nbins, endpoint=True)
+    v = np.linspace(0, 1, nbins_apo, endpoint=True)
+
+    if not stagger:
+        uvgrid = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
+    else: # create a bcc style lattice
+        uvgrid1 = np.stack(np.meshgrid(u, v, indexing="ij"), axis=-1)
+        uvgrid2 = np.stack(np.meshgrid(u+0.5/nbins, v+0.5/nbins_apo, indexing="ij"), axis=-1)
+        uvgrid = np.concatenate((uvgrid1.reshape(-1,2), uvgrid2.reshape(-1,2)), axis=0)
+
+    if map_boundaries > 0:
+        u2 = np.linspace(0,1, int(map_boundaries*nbins*nbins_apo))
+        v2 = np.ones_like(u2)
+
+        uvgrid = np.concatenate((uvgrid.reshape(-1,2), np.stack((u2,v2), axis=-1).reshape(-1,2)), axis=0)
+
 
     # Set up functions that map between peri/apo centers and the uniform domain
-    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=tmax) # 1+np.cbrt(nbins_apo)
+    # rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-1e-8), rpoff=rpoff, tmax=tmax) # 1+np.cbrt(nbins_apo)
+    # rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_log(ramax_of_rp, rpmin, rlmax)
+    rpra_of_uv,uv_of_rpra = map_limited_peri_apo_space_log_tanh(ramax_of_rp, rpmin, rlmax*(1-np.exp(-np.cbrt(nbins_apo))), rpoff=rpoff, tmax=tmax)
     rpgrid, ragrid = rpra_of_uv(uvgrid[...,0], uvgrid[...,1])
 
     return u,v,uvgrid,rpgrid,ragrid,rpra_of_uv,uv_of_rpra
@@ -277,7 +309,7 @@ def jl_from_paspace_boundaries(jl_of_rp_ra, rpmin=1e-10, rpmax=None, ramin=None,
     else:
         ramax_of_rp = lambda rp: ramax * np.ones_like(rp)
 
-    if rpmax is None: rpmax = ramax
+    if rpmax is None: rpmax = ramax_of_rp(rpmin)
     
     # minimum and maximum of j at low l:
     jmin0, lmin0 = jl_of_rp_ra(np.geomspace(rpmin, np.minimum(rpmax, ramin), N), ramin*np.ones(N))
@@ -388,10 +420,12 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=2
     def rpra_of_jl(j, l):
         # Use NN interpolator for first guess
         xynew = xy_ip(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1))
+        print("invalid", np.mean(np.isnan(xynew)))
         # some values can be invalid, when outside of the convex hull
         # use NN interpolator to fill those
         invalid = (xynew[...,1] < 0) | (xynew[...,0] < 0) | np.isnan(xynew[...,0]) 
         if np.sum(invalid) > 0:
+            print("Fixing %d invalid values with NN" % np.sum(invalid))
             xynew[invalid] = xy_nn(np.stack((np.log(j+j0),np.log(l+l0)), axis=-1)[invalid])
 
         rp, ra = np.clip(rpra_of_uv(xynew[...,0], xynew[...,1]), rpmin, ramax)
@@ -409,9 +443,15 @@ def setup_rperi_rapo_of_jl_new(pot, table, nintegrate_action=40, nsteps_newton=2
             if nsteps_newton > 0:
                 # Avoid circular orbits, they lead to cancellation
                 sel = (ra > rp*(1. + eps_circ)) & (j > 0) & (l > 0) & (rp > 0) & (ra > 0)
-                rp[sel], ra[sel] = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
+                rpnew, ranew = newton_improve_rp_ra_of_j_l(pot,accr,j[sel],l[sel], rp[sel], ra[sel], nsteps_newton=nsteps_newton, nintegrate_action=nintegrate_action, daccdr=daccdr, eps_circ=eps_circ)
+                diverge = (np.abs(np.log(rpnew/rp[sel])) > 0.1) | (np.abs(np.log(ranew/ra[sel])) > 0.1)
+                if np.sum(diverge) > 0:
+                    print("Newton diverged for %d points" % np.sum(diverge))
+                    rpnew[diverge], ranew[diverge] = np.nan, np.nan
 
-        invalid = (rp < rpmin) | (ra > ramax) | (rp > ra)
+                rp[sel], ra[sel] = rpnew, ranew
+
+        invalid = (rp < rpmin) | (ra > ramax) | (rp > ra) | np.isnan(rp) | np.isnan(ra)
         if np.sum(invalid) > 0:
             print(f"Warning I have {np.sum(invalid)} invalid values ({np.mean(invalid):.2%})")
             rp[invalid], ra[invalid] = np.nan, np.nan

@@ -80,6 +80,9 @@ class ActionMap():
 
     def orbit_valid_jl(self, j, l):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
+    
+    def orbit_valid_rp_ra(self, rp, ra):
+        raise NotImplementedError("This is an abstract class, please implement a subclass")
 
     def rp_ra_of_jl(self, j, l):
         raise NotImplementedError("This is an abstract class, please implement a subclass")
@@ -116,6 +119,11 @@ class InterpolatorActionMap(ActionMap):
         self.setup_rp_ra_of_jl()
 
         return (l <= self.q["lmax"]) & (j <= self.ip["jmax_of_l"](l))
+    
+    def orbit_valid_rp_ra(self, rp, ra):
+        self.setup_rp_ra_of_jl()
+
+        return (ra >= rp) & (ra <= self.ip["ramax_of_rp"](rp))
 
     def rp_ra_of_jl(self, j, l):
         self.setup_rp_ra_of_jl()
