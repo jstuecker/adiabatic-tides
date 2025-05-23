@@ -143,7 +143,10 @@ class CompositeProfile(RadialProfile):
             return self.f_of_rperi_rapo(rp,ra, mode=mode)
     
     def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None, mode="self"):
-        return self._combine_profiles(self.profiles, 'f', mode, e=e, l=l, j=j, r=r, rp=rp, ra=ra)
+        if self.phase_space_mode == "children":
+            return self._combine_profiles(self.profiles, 'f', mode, e=e, l=l, j=j, r=r, rp=rp, ra=ra)
+        else:
+            raise ValueError("This case not handled properly")
     
     def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None, mode="self"):
         if f_of_rp_ra is not None: # In this case it doesn't make sense to speak of separate components
