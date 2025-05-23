@@ -91,16 +91,16 @@ def test_assembly_consistency():
     atr3 = at.adiabatic.AdiabaticTidalTransformation(pi0, lam, verbose=1).run(eps = 0, nitermax=5)
     pi5c = atr3.assemble_total_profile(-1)
 
-    print(pi0.rtid(), pi0.m_of_r(pi0.rtid(), mode="self"))
-    print(pi2.rtid(), pi2.m_of_r(pi2.rtid(), mode="self"))
-    print(pi5.rtid(), pi5.m_of_r(pi5.rtid(), mode="self"))
-    print(pi5b.rtid(), pi5b.m_of_r(pi5b.rtid(), mode="self"))
-    print(pi5c.rtid(), pi5c.m_of_r(pi5c.rtid(), mode="self"))
+    print(pi0.rtid(), pi0.m_of_r(pi0.rtid(), component="self"))
+    print(pi2.rtid(), pi2.m_of_r(pi2.rtid(), component="self"))
+    print(pi5.rtid(), pi5.m_of_r(pi5.rtid(), component="self"))
+    print(pi5b.rtid(), pi5b.m_of_r(pi5b.rtid(), component="self"))
+    print(pi5c.rtid(), pi5c.m_of_r(pi5c.rtid(), component="self"))
 
     assert np.allclose(pi5.rtid(), pi5b.rtid(), rtol=1e-3)
     assert np.allclose(pi5.rtid(), pi5c.rtid(), rtol=1e-3)
-    assert np.allclose(pi5.m_of_r(pi5.rtid(), mode="self"), pi5b.m_of_r(pi5b.rtid(), mode="self"), rtol=5e-3)
-    assert np.allclose(pi5.m_of_r(pi5.rtid(), mode="self"), pi5c.m_of_r(pi5c.rtid(), mode="self"), rtol=1e-3)
+    assert np.allclose(pi5.m_of_r(pi5.rtid(), component="self"), pi5b.m_of_r(pi5b.rtid(), component="self"), rtol=5e-3)
+    assert np.allclose(pi5.m_of_r(pi5.rtid(), component="self"), pi5c.m_of_r(pi5c.rtid(), component="self"), rtol=1e-3)
 
 @pytest.mark.slow
 def test_double_adiabatic():
@@ -113,12 +113,12 @@ def test_double_adiabatic():
     prof2 = at.adiabatic.AdiabaticTidalTransformation(prof, 2*lam).run(eps = 1e-3).assemble_total_profile()
     prof2b = at.adiabatic.AdiabaticTidalTransformation(prof1, 2*lam).run(eps = 1e-3).assemble_total_profile()
 
-    print(prof1.rtid(), prof1.m_of_r(prof1.rtid(), mode="self"))
-    print(prof2.rtid(), prof2.m_of_r(prof2.rtid(), mode="self"))
-    print(prof2b.rtid(), prof2b.m_of_r(prof2b.rtid(), mode="self"))
+    print(prof1.rtid(), prof1.m_of_r(prof1.rtid(), component="self"))
+    print(prof2.rtid(), prof2.m_of_r(prof2.rtid(), component="self"))
+    print(prof2b.rtid(), prof2b.m_of_r(prof2b.rtid(), component="self"))
 
     assert np.allclose(prof2.rtid(), prof2b.rtid(), rtol=1e-3)
-    assert np.allclose(prof2.m_of_r(prof2.rtid(), mode="self"), prof2b.m_of_r(prof2b.rtid(), mode="self"), rtol=1e-3)
+    assert np.allclose(prof2.m_of_r(prof2.rtid(), component="self"), prof2b.m_of_r(prof2b.rtid(), component="self"), rtol=1e-3)
 
 @pytest.mark.slow
 def test_tide_reduction():
@@ -133,7 +133,7 @@ def test_tide_reduction():
 
     # Since mass is conserved and not additional mass is lost 
     # it should be m1 ~ m2
-    m1, m2 = p1.m_of_r(10*p1.rtid(), mode="self"), p2.m_of_r(10*p1.rtid(), mode="self")
+    m1, m2 = p1.m_of_r(10*p1.rtid(), component="self"), p2.m_of_r(10*p1.rtid(), component="self")
     print(m1, p1.rtid())
     print(m2, p2.rtid())
     

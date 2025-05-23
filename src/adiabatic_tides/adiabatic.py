@@ -103,37 +103,37 @@ class AdiabaticTransformation():
         if isinstance(prof_initial_density, CompositeProfile):
             if len(prof_initial.external) > 0:
                 print("Note: we are ignoring the external components of the initial profile", prof_initial.external)
-            self.history = [(r0, prof_initial_density.density(r0, mode="self"), partial(prof_initial_density.density, mode="self"), partial(prof_initial_density.m_of_r, mode="self"), partial(prof_initial_density.potential, mode="self"))]
+            self.history = [(r0, prof_initial_density.density(r0, component="self"), partial(prof_initial_density.density, component="self"), partial(prof_initial_density.m_of_r, component="self"), partial(prof_initial_density.potential, component="self"))]
         else:
             self.history = [(r0, prof_initial_density.density(r0), prof_initial_density.density, prof_initial_density.m_of_r, prof_initial_density.potential)]
 
-    def _define_fpa_below(self, mode=None):
+    def _define_fpa_below(self, component=None):
         if self.cfg.adiabatic.lower_boundary == "initial":
             fpa_below = self.prof_initial.f_of_rperi_rapo
-            if mode is not None:
-                fpa_below = partial(fpa_below, mode=mode)
+            if component is not None:
+                fpa_below = partial(fpa_below, component=component)
         else:
             fpa_below = None
         return fpa_below
     
-    def _define_f0_of_jl(self, mode=None):
+    def _define_f0_of_jl(self, component=None):
         f0_of_jl = self.prof_initial.f_of_jl
-        if mode is not None:
-            f0_of_jl = partial(f0_of_jl, mode=mode)
+        if component is not None:
+            f0_of_jl = partial(f0_of_jl, component=component)
         return f0_of_jl
 
-    def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
+    def integrate_phasespace(self, rho, m, phi, component=None, getf=False):
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
-        return adiabatic_iteration(self._define_f0_of_jl(mode=mode), rho, m, phi, fpa_below=self._define_fpa_below(mode=mode), getf=getf, G=self.cfg.G(), **kwargs)
+        return adiabatic_iteration(self._define_f0_of_jl(component=component), rho, m, phi, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), **kwargs)
 
-    def solve_poisson(self, ri, rhoi, mode=None):
+    def solve_poisson(self, ri, rhoi, component=None):
         lb = self.cfg.adiabatic.lower_boundary
         if lb == "initial":
             lb = self.prof_initial.density, self.prof_initial.m_of_r, self.prof_initial.potential
-            if mode is not None: # pass mode to each function
-                lb = tuple(partial(lbi, mode=mode) for lbi in lb)
+            if component is not None: # pass mode to each function
+                lb = tuple(partial(lbi, component=component) for lbi in lb)
         
         rho, m, phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(
             ri, np.clip(rhoi, 0, None), lower_boundary=lb, upper_boundary="vacuum", G=self.cfg.G())
@@ -165,28 +165,28 @@ class AdiabaticTransformation():
                 break
         return self
     
-    def assemble_single_profile(self, mode=None, iter=-1):
+    def assemble_single_profile(self, component=None, iter=-1):
         """Assemble the final profile, perturbation not included -- may be a sub-population"""
         assert iter < len(self.history)
         if iter % len(self.history) == 0:
             print("i=0 -> returning initial profile")
-            if mode is None:
+            if component is None:
                 return self.prof_initial
             else:
-                return self.prof_initial.profiles[mode]
+                return self.prof_initial.profiles[component]
         else:
             # have to subtract 1, because the following per-species integration is equivalent to an iteration
             _, _, rhotot, mtot, phitot = self.history[iter-1]
-            ri, rhoi, fi = self.integrate_phasespace(rhotot, mtot, phitot, mode=mode, getf=True)
-            rho,m,phi = self.solve_poisson(ri, rhoi, mode=mode)
-            return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg, f0_j_l=self._define_f0_of_jl(mode=mode))
+            ri, rhoi, fi = self.integrate_phasespace(rhotot, mtot, phitot, component=component, getf=True)
+            rho,m,phi = self.solve_poisson(ri, rhoi, component=component)
+            return AdiabaticResultProfile((ri, rhoi, rho, m, phi), fi, config=self.cfg, f0_j_l=self._define_f0_of_jl(component=component))
     
     def assemble_total_profile(self, iter=-1):
         """Assemble the final profile, perturbation included"""
         if isinstance(self.prof_initial, CompositeProfile):
             remnants = {}
             for label in self.prof_initial.internal:
-                remnants[label] = self.assemble_single_profile(mode=label, iter=iter)
+                remnants[label] = self.assemble_single_profile(component=label, iter=iter)
             for label in self.prof_initial.external:
                 remnants[label] = self.prof_initial.profiles[label]
             cp = CompositeProfile(**remnants, external=self.prof_initial.external, phase_space_mode="children", config=self.cfg)
@@ -213,11 +213,11 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
 
         return cp
 
-    def integrate_phasespace(self, rho, m, phi, mode=None, getf=False):
+    def integrate_phasespace(self, rho, m, phi, component=None, getf=False):
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
-        return adiabatic_tidal_iteration(self._define_f0_of_jl(mode=mode), rho, m, phi, tide=self.tide, fpa_below=self._define_fpa_below(mode=mode), getf=getf, G=self.cfg.G(), **kwargs)
+        return adiabatic_tidal_iteration(self._define_f0_of_jl(component=component), rho, m, phi, tide=self.tide, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), **kwargs)
 
 class AdiabaticResultProfile(RadialProfile):
     def __init__(self, result, f_of_rp_ra, f0_j_l=None, config : Config | None = None):
