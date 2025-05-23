@@ -126,12 +126,12 @@ class NFWProfile(RadialProfile):
         conc, m200c = rhoc_rs_to_conc_m200c(rhoc_msol_ov_mpc3, rs_mpc, h=h)
         return cls(conc, m200c=m200c,  h=h, config=config, **kwargs)
 
-    def density(self, r):
+    def density(self, r, component="total"):
         a = r/self.rs
 
         return self.rhoc/(a * (1 + a)**2 )
     
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         x = np.array(r) / self.rs
         M0 = 4.*np.pi*self.rs**3*self.rhoc
         
@@ -142,7 +142,7 @@ class NFWProfile(RadialProfile):
         
         return m
     
-    def potential(self, r, zero_at_zero=True):
+    def potential(self, r, zero_at_zero=True, component="total"):
         phi = np.zeros_like(r)
         x = np.array(r) / self.rs
         sel = x > 1e-3
@@ -154,7 +154,7 @@ class NFWProfile(RadialProfile):
             phi[~sel] = self.phi0 * (1. - x[~sel]/2. + x[~sel]**2/3.)
         return phi
     
-    def daccdr(self, r):
+    def daccdr(self, r, component="total"):
         """The normal expression leads to cancellation for r**-1 profile,
         so we use an expansion at small radii
         """
@@ -194,10 +194,10 @@ class EinastoProfile(RadialProfile):
         self.rm2 = rm2
         self.alpha = alpha
 
-    def density(self, r):
+    def density(self, r, component="total"):
         return self.rhom2*np.exp(- 2./self.alpha * ((r/self.rm2)**self.alpha - 1.))
 
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         N = self.rhom2 * np.exp(2./self.alpha)
         A = self.rm2**(-self.alpha) / self.alpha
         alpha = self.alpha
@@ -211,7 +211,7 @@ class EinastoProfile(RadialProfile):
         
         return m_indef(r) - m_indef(self.r0()*1e-15)
     
-    def potential(self, r, zero_at_zero=False):
+    def potential(self, r, zero_at_zero=False, component="total"):
         raise NotImplementedError("Potential of Einasto profile is not implemented yet")
     
     def __str__(self):
@@ -273,13 +273,13 @@ class PowerlawProfile(RadialProfile):
         
         return cls(alpha=alpha, anisotropy=anisotropy, rhoc=rhoc)
 
-    def density(self, r):
+    def density(self, r, component="total"):
         return self.rhoc*r**(-self.alpha)
     
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         return 4.*np.pi * self.rhoc / (3. - self.alpha) * r**(3.-self.alpha)
     
-    def potential(self, r, zero_at_zero=True):
+    def potential(self, r, zero_at_zero=True, component="total"):
         return self.phic * r**(2.-self.alpha)
 
     def to_dict(self):
@@ -306,14 +306,14 @@ class IsothermalSphere(RadialProfile):
         self.rad0 = r0
         self.v0 = np.sqrt(4.*np.pi*self.rho0*self.rad0**2*self.G)
 
-    def density(self, r):
+    def density(self, r, component="total"):
         return self.rho0 * (r/self.rad0)**-2
     
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         """The mass contained inside radius r"""
         return 4.*np.pi*self.rho0*self.rad0**2 * r
     
-    def potential(self, r, zero_at_zero=False):
+    def potential(self, r, zero_at_zero=False, component="total"):
         return self.v0**2 * np.log(r/self.rad0)
     
     def __str__(self):
@@ -342,13 +342,13 @@ class PlummerProfile(RadialProfile):
 
         self.set_phase_space(AnalyticPhaseSpace(f_of_e=f_of_e, anisotropy=0.))
 
-    def density(self, r):
+    def density(self, r, component="total"):
         return 3*self.M/(4*np.pi) * (1 + (r/self.a)**2)**-2.5
     
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         return r**3 / (r**2 + self.a**2)**1.5 * self.M
 
-    def potential(self, r, zero_at_zero=True):
+    def potential(self, r, zero_at_zero=True, component="total"):
         phi = - self.G * self.M / np.sqrt(r**2 + self.a**2)
 
         if zero_at_zero:
@@ -376,13 +376,13 @@ class RadialTidalProfile(RadialProfile):
         
         self.tide = tide
         
-    def density(self, r):
+    def density(self, r, component="total"):
         return (- 3.* self.tide / (4.*np.pi*self.G)) * np.ones_like(r)
     
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         return - self.tide/self.G * r**3
     
-    def potential(self, r, zero_at_zero=True):
+    def potential(self, r, zero_at_zero=True, component="total"):
         return - 0.5 * self.tide* r**2
 
     def __str__(self):

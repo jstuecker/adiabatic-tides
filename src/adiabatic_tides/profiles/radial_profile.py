@@ -40,15 +40,15 @@ class RadialProfile():
     #----------- Abstract methods  --------------#
     # These methods have to be implemented by any subclass
 
-    def density(self, r):
+    def density(self, r, component="total"):
         """Abstract: The density profile"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         """Abstract: The mass contained inside radius r"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
 
-    def potential(self, r, zero_at_zero=False):
+    def potential(self, r, zero_at_zero=False, component="total"):
         """Abstract: The gravitational potential. By default normed to 0 at infinity"""
         raise NotImplementedError("This is an abstract class, please implement a subclass")
     
@@ -63,10 +63,10 @@ class RadialProfile():
     # ------------------ Geometrical Scales ------------------ #
 
     # Numerical scales that are defined by the configuration
-    def rmin(self):
+    def rmin(self, component="total"):
         return self.cfg.general.rmin
     
-    def rmax(self):
+    def rmax(self, component="total"):
         return self.cfg.general.rmax
     
     # Scales that depend on the potential structure
@@ -80,11 +80,11 @@ class RadialProfile():
         opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)*r, (self.rmin(), self.rapo_max()))
         return opt.x
     
-    def rmax_vmax(self):
+    def rmax_vmax(self, component="total"):
         """Radius and velocity where the circular velocity is maximal"""
-        rmax = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)/r, (self.rmin(), self.rmax())).x
+        rmax = numerics.search.maximize_scalar(lambda r: self.m_of_r(r, component=component)/r, (self.rmin(), self.rmax())).x
         if(np.isfinite(rmax)):
-            return rmax, self.vcirc(rmax)
+            return rmax, self.vcirc(rmax, component=component)
         else:
             return np.inf, np.inf
         
@@ -106,41 +106,41 @@ class RadialProfile():
     # These functions follow directly from the ones above and do not
     # need to be implemented by subclasses
 
-    def accr(self, r):
+    def accr(self, r, component="total"):
         """Radial Acceleration (negative means pull towards center)"""
-        return  -self.G * self.m_of_r(r) / r**2
+        return  -self.G * self.m_of_r(r, component=component) / r**2
 
-    def daccdr(self, r):
+    def daccdr(self, r, component="total"):
         """ accr = -G m(r) / r^2
         daccr/dr = 2 G m(r) / r^3 - G m'(r) / r^2 = -2 G accr(r) / r - G rho(r) 4 pi
         """
-        return -2 * self.accr(r) / r - 4.*np.pi * self.density(r) * self.G
+        return -2 * self.accr(r, component=component) / r - 4.*np.pi * self.density(r, component=component) * self.G
     
-    def tdyn(self, r):
+    def tdyn(self, r, component="total"):
         """Dynamical Time-scale r / vcirc(r)"""
-        return r / self.vcirc(r)
+        return r / self.vcirc(r, component=component)
     
-    def tcirc(self, r, inyears=False):
+    def tcirc(self, r, inyears=False, component="total"):
         """Time needed for a circular orbit at radius r in code-units
         
         inyears : transform to years
         """
         if inyears:
-            return time_in_years(2.*np.pi*r / self.vcirc(r), self.cfg.units)
+            return time_in_years(2.*np.pi*r / self.vcirc(r, component=component), self.cfg.units)
         else:
-            return 2.*np.pi*r / self.vcirc(r)
+            return 2.*np.pi*r / self.vcirc(r, component=component)
     
-    def vcirc(self, r):
+    def vcirc(self, r, component="total"):
         """Circular velocity at radius r"""
-        return np.sqrt(np.clip(-self.accr(r) * r, 0., None))
+        return np.sqrt(np.clip(-self.accr(r, component=component) * r, 0., None))
 
-    def tidal_tensor(self, x, x0=(0.,0.,0.)):
+    def tidal_tensor(self, x, x0=(0.,0.,0.), component="total"):
         """The Tidal Tensor Tij = - d2phi/(dxi dxy)"""
         dx = x-np.array(x0)
         r = np.sqrt(np.sum(dx**2, axis=-1))
         
-        accr = self.accr(r)
-        daccr_drr = self.daccdr(r)
+        accr = self.accr(r, component=component)
+        daccr_drr = self.daccdr(r, component=component)
         
         tid = np.zeros(x.shape[:-1] + (3,3))
 
@@ -156,10 +156,10 @@ class RadialProfile():
 
         return tid
 
-    def tidal_eigval(self, r):
+    def tidal_eigval(self, r, component="total"):
         """Eigenvalues of the Tidal tensor"""
-        accr = self.accr(r)
-        daccr_drr = self.daccdr(r)
+        accr = self.accr(r, component=component)
+        daccr_drr = self.daccdr(r, component=component)
         
         lam_r = daccr_drr
         lam_phi = accr / r
@@ -194,9 +194,9 @@ class RadialProfile():
 
         return numerics.search.ridders_method(f, rlow, rup, mode="positive", niter=niter, logspace=logspace, invalid_val=invalid_val)
     
-    def r_of_potential(self, phi):
+    def r_of_potential(self, phi, component="total"):
         "Find radius where the potential is phi (if non-monotoneous considering only ascending part)"
-        return self._search_radius(lambda r: self.potential(r) - phi, rup=self.rapo_max())
+        return self._search_radius(lambda r: self.potential(r, component=component) - phi, rup=self.rapo_max())
 
     def r_of_ecirc(self, ecirc, region="asc"):
         "Find radius where the circular energy is ecirc (if non-monotoneous region can be 'asc' or 'desc')"
@@ -227,19 +227,19 @@ class RadialProfile():
         else:
             raise ValueError("Unknown mode %s" % region)
 
-    def radius_of_f(self, f, l=1., rlow=None, rup=None):
+    def radius_of_f(self, f, l=1., rlow=None, rup=None, component="total"):
         "Radius where the phase space density f(phi(r), l) = f"
-        def func(r): return np.log(self.f_of_el(self.potential(r), l)/f)
+        def func(r): return np.log(self.f_of_el(self.potential(r, component=component), l, component=component)/f)
         return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
     
-    def radius_of_pot(self, phi, rlow=None, rup=None):
+    def radius_of_pot(self, phi, rlow=None, rup=None, component="total"):
         "Radius where potential(r) = phi"
-        def func(r): return self.potential(r) - phi
+        def func(r): return self.potential(r, component=component) - phi
         return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
     
     def rperi_rapo_of_r_e_l(self, r, e, l, search_method=None, rlow=None, rup=None, niter=None, return_err=False, exceptions=True, invalid_val=None):
         def energy_permitted(r):
-            return e - 0.5*l**2/r**2 - self.potential(r)
+            return e - 0.5*l**2/r**2 - self.potential(r, component="total")
 
         if niter is None: niter = self.cfg.actions.niter_pa
         if rlow is None: rlow = self.rmin()
@@ -273,11 +273,11 @@ class RadialProfile():
         else:
             self.anisotropy = anisotropy
 
-    def f_of_e(self, e):
+    def f_of_e(self, e, component="self"):
         assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_e(e)
     
-    def f_of_el(self, e, l, r=None):
+    def f_of_el(self, e, l, r=None, component="self"):
         """Phase space distribution function of energy and angular momentum f(e,l).
         
         Providing r may be necessary if the function is defined implicity through f(rp,ra)
@@ -286,15 +286,15 @@ class RadialProfile():
         assert self.phase_space is not None, "No phase space defined"
         return self.phase_space.f_of_el(e, l)
     
-    def f_of_rperi_rapo(self, rp, ra):
+    def f_of_rperi_rapo(self, rp, ra, component="self"):
         e, l = self.e_l_of_rperi_rapo(rp, ra)
-        return self.f_of_el(e, l)
+        return self.f_of_el(e, l, component=component)
     
-    def f_of_jl(self, j, l):
+    def f_of_jl(self, j, l, component="self"):
         rp,ra = self.action_map.rp_ra_of_jl(j, l)
-        return self.f_of_rperi_rapo(rp, ra)
+        return self.f_of_rperi_rapo(rp, ra, component=component)
     
-    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None):
+    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None, component="self"):
         """A general wrapper for the phase space distribution function
         
         Orbits can be characterized uniquely by (e,l), (j,l) or (rp,ra)
@@ -308,22 +308,22 @@ class RadialProfile():
         For isotropic profiles passing just e is enough
         """
         if rp is not None and ra is not None:
-            return self.f_of_rperi_rapo(rp, ra)
+            return self.f_of_rperi_rapo(rp, ra, component=component)
         elif e is not None and l is not None:
-            return self.f_of_el(e, l, r=r)
+            return self.f_of_el(e, l, r=r, component=component)
         elif j is not None and l is not None:
-            return self.f_of_jl(j,l)
+            return self.f_of_jl(j,l, component=component)
         elif e is not None:
-            return self.f_of_e(e)
+            return self.f_of_e(e, component=component)
         else:
             raise ValueError("Unknown combination of variables")
     
     def g_of_e(self, e, nintegrate=100):
         """Density of states g(E) associated with some energy. dm/de = g(E) * f(E)"""
         def integrand(r):
-            return r**2 * np.sqrt(2.*(e[...,np.newaxis] - self.potential(r)))
+            return r**2 * np.sqrt(2.*(e[...,np.newaxis] - self.potential(r, component="total")))
         
-        rmax = self.radius_of_pot(e)
+        rmax = self.radius_of_pot(e, component="total")
 
         return (4.*np.pi)**2 * numerics.integrate.integrate_exp_tanh_a_b(integrand, self.rmin(), rmax, N=nintegrate)
 
@@ -333,7 +333,7 @@ class RadialProfile():
         if np.isfinite(self.rtid()):
             raise NotImplementedError("Not implemented for profiles with boundary")
         else:
-            return e - l**2/(2.*self.rmax()**2) - self.potential(self.rmax()) < 0. # may not have apo-center beyond rmax
+            return e - l**2/(2.*self.rmax()**2) - self.potential(self.rmax(), component="total") < 0. # may not have apo-center beyond rmax
 
     def radial_action_of_r_e_l(self, r, e, l):
         """Numerically infer the radial action Jr as in Binney and Tremaine (2008) eq 3.224"""
@@ -364,7 +364,7 @@ class RadialProfile():
     
     #----------- Integrals and Moments --------------#
 
-    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None):
+    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None, component="self"):
         """Integrates a function over velocity-space through peri-apo-space discretization
         f_of_rp_ra : the phase space density (dM/d3x/d3v) with peri and apo centers as arguments
         """
@@ -373,9 +373,8 @@ class RadialProfile():
         else:
             ramax = min(self.rapo_max(), ramax)
 
-
         if f_of_rp_ra is None:
-            f_of_rp_ra = self.f_of_rperi_rapo
+            f_of_rp_ra = functools.partial(self.f_of_rperi_rapo, component=component)
 
         is_limited = numerics.search.profile_is_limited(self.accr, rpmin=self.rmin())
         if is_limited:
@@ -388,22 +387,22 @@ class RadialProfile():
                                                       rperirange=rperirange, raporange=raporange, 
                                                       vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment)
     
-    def compute_vr2_vt2(self, r, nintegrate=40):
+    def compute_vr2_vt2(self, r, nintegrate=40, component="self"):
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
-        rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate)
-        rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate)
-        rho = self.compute_pa_space_integral(r, nintegrate=nintegrate)
+        rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate, component=component)
+        rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate, component=component)
+        rho = self.compute_pa_space_integral(r, nintegrate=nintegrate, component=component)
 
         return rho_x_vr2/rho, rho_x_vt2/rho
     
-    def compute_line_of_sight_vdisp2_and_dens(self, R, nintegrate=40, ninterp=100):
+    def compute_line_of_sight_vdisp2_and_dens(self, R, nintegrate=40, ninterp=100, component="self"):
         """computes the line of sight velocity dispersion and the column density at projected radius R"""
 
         rip = np.geomspace(self.rmin(), self.rmax(), ninterp+2)[1:-1]
-        rho_x_vr2 = self.compute_pa_space_integral(rip, vrmoment=2, nintegrate=nintegrate)
-        rho_x_vt2 = self.compute_pa_space_integral(rip, vtmoment=2, nintegrate=nintegrate)
+        rho_x_vr2 = self.compute_pa_space_integral(rip, vrmoment=2, nintegrate=nintegrate, component=component)
+        rho_x_vt2 = self.compute_pa_space_integral(rip, vtmoment=2, nintegrate=nintegrate, component=component)
         # We also integrate the density numerically to inherit the same discreteness error
-        rho = self.compute_pa_space_integral(rip, nintegrate=nintegrate) 
+        rho = self.compute_pa_space_integral(rip, nintegrate=nintegrate, component=component)
 
         # Zero-densities can cause some errors with log-interpolation, let's remopve them and set the right boundary to zero
         rip, rho, rho_x_vr2, rho_x_vt2 = rip[rho > 0], rho[rho > 0], rho_x_vr2[rho > 0], rho_x_vt2[rho > 0]
@@ -414,11 +413,11 @@ class RadialProfile():
         
         return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(ip_rho, ip_rho_x_vr2, ip_rho_x_vt2, R, nintegrate=nintegrate)
     
-    def integral_density_squared(self, rmin=None, rmax=None, nintegrate=100):
+    def integral_density_squared(self, rmin=None, rmax=None, nintegrate=100, component="self"):
         if rmin is None: rmin = self.rmin()
         if rmax is None: rmax = self.rmax()
 
-        def integrand(r):  return self.density(r)**2 * 4*np.pi*r**2
+        def integrand(r):  return self.density(r, component=component)**2 * 4*np.pi*r**2
         
         if np.min(rmin) == 0.:
             return numerics.integrate.integrate_double_exponential_a_b(integrand, rmin, rmax, N=nintegrate)
@@ -494,7 +493,7 @@ class RadialProfile():
     
     #----------- Sampling Methods --------------#
 
-    def sample_particles(self, ntot=10000, result="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None):
+    def sample_particles(self, ntot=10000, result="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None, component="self"):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -570,7 +569,7 @@ class RadialProfile():
                 res.append(p[key])
             return res
         
-    def sample_particles_new(self, ntot=10000, result="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, f=None):
+    def sample_particles_new(self, ntot=10000, result="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, f=None, component="self"):
         """ 
         result : a string with the keys to be returned, separated by "_". May contain 
                "rp", "ra", "r", "e", "l", "j", "vr", "pos", "vel", "m"
@@ -597,7 +596,7 @@ class RadialProfile():
         ninterp = ninterp or self.cfg.sampling.ninterp
         nsteps_metropolis = nsteps_metropolis or self.cfg.sampling.nsteps_metropolis
 
-        f = f or self.f
+        f = f or functools.partial(self.f, component=component)
 
         def orbit_valid(rp, ra):
             return (rp > rpmin) & (ra > ramin) & (ra < ramax) & (rp < rpmax)
@@ -708,7 +707,7 @@ class RadialProfile():
         e, l = self.e_l_of_rperi_rapo(rperi, rapo)
 
         rcirc = self.r_of_ecirc(np.atleast_1d(e))
-        lcirc = self.vcirc(rcirc)*rcirc
+        lcirc = self.vcirc(rcirc, component="total")*rcirc
 
         return rcirc.reshape(np.shape(rperi)), (l/lcirc).reshape(np.shape(rperi))
     
@@ -718,19 +717,19 @@ class RadialProfile():
         of a corresponding orbit
         
         useful for translating results to DASH simulations"""
-        E = self.potential(rcirc) + 0.5*self.vcirc(rcirc)**2
-        l = rcirc*self.vcirc(rcirc)*eta
+        E = self.potential(rcirc, component="total") + 0.5*self.vcirc(rcirc, component="total")**2
+        l = rcirc*self.vcirc(rcirc, component="total")*eta
 
         rperi, rapo = self.rperi((rcirc,E,l)), self.rapo((rcirc,E,l))
         return rperi, rapo
 
-    def effective_pericenter_tidal_eigval(self, r, vcirc_fac=1.):
+    def effective_pericenter_tidal_eigval(self, r, vcirc_fac=1., component="total"):
         """Eigenvalues of the effective tidal tensor at peri-center, when the
         effect of the centrifugal force is included"""
         
         assert np.min(vcirc_fac) >= 1., "vcirc_fac is the ratio between pericenter velocity and circular velocity, has to be >= 1."
         
-        lam = self.tidal_eigval(r)
+        lam = self.tidal_eigval(r, component=component)
         omega = 2.*np.pi / self.tcirc(r)
         lam[0] += omega**2/vcirc_fac**2
         

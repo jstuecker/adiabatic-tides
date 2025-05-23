@@ -54,13 +54,13 @@ class NumericalProfile(RadialProfile):
         self.cfg.general.rmin = ri[0]
         self.cfg.general.rmax = ri[-1]
 
-    def density(self, r):
+    def density(self, r, component="total"):
         return self.ip_rho(r)
     
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         return self.ip_m(r)
 
-    def potential(self, r, zero_at_zero=True):
+    def potential(self, r, zero_at_zero=True, component="total"):
         return self.ip_phi(r)
 
     def to_dict(self):

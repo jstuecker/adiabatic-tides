@@ -78,6 +78,7 @@ class CompositeProfile(RadialProfile):
     def density(self, r, component="total"):
         return self._combine_profiles(self.profiles, 'density', component, r)
 
+    # Became unnecessary (delete soon)
     def drhodr(self, r, component="total"):
         return self._combine_profiles(self.profiles, 'drhodr', component, r)
 
@@ -87,16 +88,20 @@ class CompositeProfile(RadialProfile):
     def potential(self, r, zero_at_zero=True, component="total"):
         return self._combine_profiles(self.profiles, 'potential', component, r, zero_at_zero=zero_at_zero)
 
+    # Became unnecessary (delete soon)
     def daccdr(self, r, component="total"):
         return self._combine_profiles(self.profiles, 'daccdr', component, r)
     
+    # Became unnecessary (delete soon)
     def vcirc(self, r, component="total"):
         return np.sqrt(np.clip(-self.accr(r, component=component) * r, 0., None))
     
+    # Became unnecessary (delete soon)
     def accr(self, r, component="total"):
         """Radial Acceleration (negative means pull towards center)"""
         return  -self.G * self.m_of_r(r, component=component) / r**2
 
+    # Became unnecessary (delete soon)
     def rmax_vmax(self, component="total"):
         """Radius and velocity where the circular velocity is maximal"""
         opt = maximize_scalar(lambda r: self.m_of_r(r, component=component)/r, (self.rmin(), self.rmax()))
@@ -159,7 +164,7 @@ class CompositeProfile(RadialProfile):
         # Create a dictionary that includes all phase spaces
         fs = {}
         for label in self.profiles:
-            fs[label] = partial(self.compute_pa_space_integral, f_of_rp_ra=partial(self.f_of_rperi_rapo, mode=label))
+            fs[label] = partial(self.compute_pa_space_integral, f_of_rp_ra=partial(self.f_of_rperi_rapo, component=label))
         
         return combine_functions(fs, component, self.internal, self.external, r, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate, ramax=ramax)
     

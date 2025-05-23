@@ -228,32 +228,32 @@ class AdiabaticResultProfile(RadialProfile):
         self.ip = dict(rho=rho, m=m, phi=phi, f_of_rp_ra=f_of_rp_ra)
         self.f0_j_l = f0_j_l
 
-    def density(self, r):
+    def density(self, r, component="total"):
         return self.ip["rho"](r)
-    def m_of_r(self, r):
+    def m_of_r(self, r, component="total"):
         return self.ip["m"](r)
-    def potential(self, r, zero_at_zero=True):
+    def potential(self, r, zero_at_zero=True, component="total"):
         return self.ip["phi"](r)
-    def f_of_rperi_rapo(self, rp, ra):
+    def f_of_rperi_rapo(self, rp, ra, component="self"):
         return self.ip["f_of_rp_ra"](rp, ra)
-    def f_of_e(self, e):
+    def f_of_e(self, e, component="self"):
         raise NotImplementedError("f_of_e is not meaningful for Adiabatic Remnants")
-    def f_of_el(self, e, l, r=None):
+    def f_of_el(self, e, l, r=None, component="self"):
         rp,ra = self.rperi_rapo_of_r_e_l(r, e, l, invalid_val=np.nan)
         return self.f_of_rperi_rapo(rp, ra)
-    def f_of_jl(self, j, l):
+    def f_of_jl(self, j, l, component="self"):
         return self.f0_j_l(j, l)
     
-    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None):
+    def f(self, e=None, l=None, j=None, r=None, rp=None, ra=None, component="self"):
         # For adiabatic profile we prioritize f(j,l) since it is defined most directly
         if j is not None and l is not None:
-            return self.f_of_jl(j,l)
+            return self.f_of_jl(j,l, component=component)
         elif rp is not None and ra is not None:
-            return self.f_of_rperi_rapo(rp, ra)
+            return self.f_of_rperi_rapo(rp, ra, component=component)
         elif e is not None and l is not None:
-            return self.f_of_el(e, l, r=r)
+            return self.f_of_el(e, l, r=r, component=component)
         elif e is not None:
-            return self.f_of_e(e)
+            return self.f_of_e(e, component=component)
         else:
             raise ValueError("Unknown combination of variables")
     
