@@ -198,34 +198,34 @@ class RadialProfile():
         "Find radius where the potential is phi (if non-monotoneous considering only ascending part)"
         return self._search_radius(lambda r: self.potential(r) - phi, rup=self.rapo_max())
 
-    def r_of_ecirc(self, ecirc, mode="asc"):
-        "Find radius where the circular energy is ecirc (if non-monotoneous mode can be 'asc' or 'desc')"
+    def r_of_ecirc(self, ecirc, region="asc"):
+        "Find radius where the circular energy is ecirc (if non-monotoneous region can be 'asc' or 'desc')"
         def f(r): return self.potential(r) + 0.5*self.vcirc(r)**2 - ecirc
         rlmax = self.rlmax() # radius where circular energy is maximal
 
-        if mode == "asc":
+        if region == "asc":
             rup = min(self.rmax(), rlmax)
             return self._search_radius(f, rup=rup)
-        elif mode == "desc":
+        elif region == "desc":
             if not np.isfinite(rlmax):
                 raise ValueError("Cannot search for descending part, as there is no maximum")
             return self._search_radius(f, rlow=rlmax)
         else:
-            raise ValueError("Unknown mode %s" % mode)
+            raise ValueError("Unknown mode %s" % region)
         
-    def r_of_lcirc(self, lcirc, mode="asc"):
+    def r_of_lcirc(self, lcirc, region="asc"):
         def f(r): return self.vcirc(r)*r - lcirc
         rlmax = self.rlmax() # radius where circular angular momentum is maximal
 
-        if mode == "asc":
+        if region == "asc":
             rup = min(self.rmax(), rlmax)
             return self._search_radius(f, rup=rup)
-        elif mode == "desc":
+        elif region == "desc":
             if not np.isfinite(rlmax):
                 raise ValueError("Cannot search for descending part, as there is no maximum")
             return self._search_radius(f, rlow=rlmax, rup=self.rtid())
         else:
-            raise ValueError("Unknown mode %s" % mode)
+            raise ValueError("Unknown mode %s" % region)
 
     def radius_of_f(self, f, l=1., rlow=None, rup=None):
         "Radius where the phase space density f(phi(r), l) = f"
@@ -494,7 +494,7 @@ class RadialProfile():
     
     #----------- Sampling Methods --------------#
 
-    def sample_particles(self, ntot=10000, mode="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None):
+    def sample_particles(self, ntot=10000, result="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -553,29 +553,29 @@ class RadialProfile():
         p["rrho"] = ri
         p["rho"] = rho
 
-        if ("pos" in mode) or ("vel" in mode):
+        if ("pos" in result) or ("vel" in result):
             p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
-            if "vel" in mode:
+            if "vel" in result:
                 vr = p["pos"] * (p["vr"] / p["r"])[...,np.newaxis]
                 vt_xy = numerics.sample.random_direction(ntot, ndim=2) * (p["l"]/p["r"])[...,np.newaxis]
                 e1, e2 = numerics.sample.orthogonal_vectors(vr)
                 p["vel"] = vr + e1 * vt_xy[...,0,np.newaxis] + e2 * vt_xy[...,1,np.newaxis]
 
-        if "dict" in mode:
+        if "dict" in result:
             return p
         else:
             res = []
-            for key in mode.split("_"):
+            for key in result.split("_"):
                 assert key in p, "Unknown key %s" % key
                 res.append(p[key])
             return res
         
-    def sample_particles_new(self, ntot=10000, mode="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None):
+    def sample_particles_new(self, ntot=10000, result="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, f=None):
         """ 
-        mode : a string with the keys to be returned, separated by "_". May contain 
+        result : a string with the keys to be returned, separated by "_". May contain 
                "rp", "ra", "r", "e", "l", "j", "vr", "pos", "vel", "m"
                Returns a list of the requested keys in the order they are given.
-               If mode contains "dict", a dictionary with all keys is returned.
+               If result contains "dict", a dictionary with all keys is returned.
                Examples: "pos_vel_m", "r_e_l_vr_m", "j_l_m", "dict", "dict_pos_vel"
         rpmin, rpmax : minimal and maximal peri-center radius
         ramin, ramax : minimal and maximal apo-center radius
@@ -585,6 +585,8 @@ class RadialProfile():
                 w(rp, ra, **kwargs), w(e, l, **kwargs), w(j, l, **kwargs)
                 The larger w, the more particles (of lower mass) on those orbits. The normalization is irrelevant
                 Also supported is weighted="nice" which uses weights so that the density profile is optimally resolved
+        f :     Provide to use a different phase space distribution function (defaults to self.f)
+                May have same signatures as weighted
         """
         rpmin = rpmin or self.rmin()
         ramin = max(ramin or self.rmin(), rpmin)
@@ -594,6 +596,8 @@ class RadialProfile():
         nintegrate = nintegrate or self.cfg.sampling.nintegrate
         ninterp = ninterp or self.cfg.sampling.ninterp
         nsteps_metropolis = nsteps_metropolis or self.cfg.sampling.nsteps_metropolis
+
+        f = f or self.f
 
         def orbit_valid(rp, ra):
             return (rp > rpmin) & (ra > ramin) & (ra < ramax) & (rp < rpmax)
@@ -613,9 +617,9 @@ class RadialProfile():
             
             assert callable(weighted)
 
-        def f(j=None, l=None, rp=None, ra=None):
+        def fweighted(j=None, l=None, rp=None, ra=None):
             e,_ = self.e_l_of_rperi_rapo(rp, ra)
-            return self.f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e) * orbit_valid(rp, ra)
+            return f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e) * orbit_valid(rp, ra)
         
         # def jl_of_rp_ra(rp, ra):
         #     j = self.radial_action_of_rp_ra(rp, ra)
@@ -630,7 +634,7 @@ class RadialProfile():
 
         p = {}
         # msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=remesh, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
-        msamp, p["j"], p["l"], p["rp"], p["ra"] = self.action_map.sample_jl(nsamp=ntot, get_rp_ra=True, f=f, nf=self.cfg.sampling.nf)
+        msamp, p["j"], p["l"], p["rp"], p["ra"] = self.action_map.sample_jl(nsamp=ntot, get_rp_ra=True, f=fweighted, nf=self.cfg.sampling.nf)
 
         p["e"] = self.e_l_of_rperi_rapo(p["rp"], p["ra"])[0]
 
@@ -639,31 +643,31 @@ class RadialProfile():
         assert np.min(p["m"]) > 0, "Something went wrong with the sampling, negative masses (Maybe your weights are negative?)"
 
         # Remember to correct the following line, it handles "r" wrongly
-        if any(var in mode for var in ("r_", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
+        if any(var in result for var in ("r_", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
             assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
 
             p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)
             
             p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])[2]
 
-            if ("pos" in mode) or ("vel" in mode):
+            if ("pos" in result) or ("vel" in result):
                 p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
-                if "vel" in mode:
+                if "vel" in result:
                     vr = p["pos"] * (p["vr"] / p["r"])[...,np.newaxis]
                     vt_xy = numerics.sample.random_direction(ntot, ndim=2) * (p["l"]/p["r"])[...,np.newaxis]
                     e1, e2 = numerics.sample.orthogonal_vectors(vr)
                     p["vel"] = vr + e1 * vt_xy[...,0,np.newaxis] + e2 * vt_xy[...,1,np.newaxis]
 
-        if "dict" in mode:
+        if "dict" in result:
             return p
         else:
             res = []
-            for key in mode.split("_"):
+            for key in result.split("_"):
                 assert key in p, "Unknown key %s" % key
                 res.append(p[key])
             return res
 
-    def sample_particles_perisplits(self, size_per_split=10000, rpsplits=(None, None), mode="r_e_l_vr_m", rmax=None, flat=True, **kwargs):
+    def sample_particles_perisplits(self, size_per_split=10000, rpsplits=(None, None), result="r_e_l_vr_m", rmax=None, flat=True, **kwargs):
         """See sample_r_E_L_vr_m_metropolis for a detailed description of optional keyword parameters
 
         size_per_split : number of particles in each split
@@ -674,10 +678,10 @@ class RadialProfile():
         res = []
 
         for i in range(len(rpsplits)-1):
-            res.append(self.sample_particles(size_per_split, mode=mode, rpmin=rpsplits[i], rpmax=rpsplits[i+1], rmax=rmax, **kwargs))
+            res.append(self.sample_particles(size_per_split, result=result, rpmin=rpsplits[i], rpmax=rpsplits[i+1], rmax=rmax, **kwargs))
 
         outputs = []
-        if "dict" in mode:
+        if "dict" in result:
             out = {}
             for key in res[0]:
                 out[key] = np.stack([r[key] for r in res], axis=0)

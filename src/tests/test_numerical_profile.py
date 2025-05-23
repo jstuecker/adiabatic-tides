@@ -210,10 +210,10 @@ def test_rcirc_finding_nonmonotoneous(profile, embed_plot):
             
             lcirc = cprof.vcirc(r)*r
             for mode in "asc", "desc":
-                rlcirc = cprof.r_of_lcirc(lcirc, mode=mode)
+                rlcirc = cprof.r_of_lcirc(lcirc, region=mode)
                 tc.check_max_relative_error(cprof.vcirc(rlcirc)*rlcirc, lcirc, 1e-5)
 
-                recirc = cprof.r_of_ecirc(ecirc, mode=mode)
+                recirc = cprof.r_of_ecirc(ecirc, region=mode)
                 tc.check_max_relative_error(0.5*cprof.vcirc(recirc)**2 + cprof.potential(recirc), ecirc, 1e-5)
 
 
@@ -231,7 +231,7 @@ def test_string_repr():
     nprofb = at.profiles.NumericalProfile(r, nfw.density(r))
 
     # pprof
-    part = ppow.sample_particles(1000, mode="dict", rmax=1.)
+    part = ppow.sample_particles(1000, result="dict", rmax=1.)
     pprof = at.profiles.ParticleProfile(part, rbins=r)
 
     # Mimic result of adiabatic calculation

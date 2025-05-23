@@ -86,7 +86,7 @@ def test_sample_and_integrate(profile, embed_plot):
 
     prof = standard_profiles(profile)
 
-    rs,rps,Ls,vrs,ms,ri,rhoi = prof.sample_particles(10000, mode="r_rp_l_vr_m_rrho_rho", rpmin=1, rpmax=50., rmax=5e2)
+    rs,rps,Ls,vrs,ms,ri,rhoi = prof.sample_particles(10000, result="r_rp_l_vr_m_rrho_rho", rpmin=1, rpmax=50., rmax=5e2)
 
     rbins = np.logspace(-0.2, 2, 40)
     rtest = np.sqrt(rbins[1:] * rbins[:-1])
