@@ -3,6 +3,7 @@ from ..phasespace import PhaseSpace, EddingtonPhaseSpace, AnalyticPhaseSpace, Ac
 from ..config import Config, time_in_years
 from .. import numerics
 import functools
+from functools import partial
 import copy
 
 def deprecated(func):
@@ -72,12 +73,12 @@ class RadialProfile():
     # Scales that depend on the potential structure
     def rtid(self):
         """Tidal radius corresponding to the maximum of the potential"""
-        opt = numerics.search.maximize_scalar(lambda r: self.potential(r), (self.rmin(), self.rmax()))
+        opt = numerics.search.maximize_scalar(lambda r: self.potential(r, component="total"), (self.rmin(), self.rmax()))
         return opt.x
     
     def rlmax(self):
         """Radius with the maximum possible angular momentum"""
-        opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r)*r, (self.rmin(), self.rapo_max()))
+        opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r, component="total")*r, (self.rmin(), self.rapo_max()))
         return opt.x
     
     def rmax_vmax(self, component="total"):
@@ -140,7 +141,7 @@ class RadialProfile():
         r = np.sqrt(np.sum(dx**2, axis=-1))
         
         accr = self.accr(r, component=component)
-        daccr_drr = self.daccdr(r, component=component)
+        daccr_dr = self.daccdr(r, component=component)
         
         tid = np.zeros(x.shape[:-1] + (3,3))
 
@@ -152,7 +153,7 @@ class RadialProfile():
                 else:
                     der_xr = -x[...,i]*x[...,j]/r**3
 
-                tid[...,i,j] = accr * der_xr + daccr_drr * (x[...,i]/r * x[...,j]/r)
+                tid[...,i,j] = accr * der_xr + daccr_dr * (x[...,i]/r * x[...,j]/r)
 
         return tid
 
@@ -168,7 +169,8 @@ class RadialProfile():
     
     def e_l_of_rperi_rapo(self, rperi, rapo):
         "Maps peri- and apo-center radii to energy and angular-momentum"
-        return numerics.utility.e_l_of_rp_ra(self.potential, rperi, rapo, accr=self.accr, eps_circ=self.cfg.actions.eps_circ)
+        return numerics.utility.e_l_of_rp_ra(lambda r: self.potential(r, component="total"), rperi, rapo, 
+                                             accr=lambda r: self.accr(r, component="total"), eps_circ=self.cfg.actions.eps_circ)
     
     def posvel_to_rEL(self, pos, vel):
         """Calculates the radius, energy and angular momentum of particles
@@ -179,7 +181,7 @@ class RadialProfile():
         returns : (r, E, L)  with  the radius, energy and angular momentum
         """
         r = np.sqrt(np.sum(pos**2, axis=-1))
-        E = self.potential(r) + 0.5*np.sum(vel**2, axis=-1)
+        E = self.potential(r, component="total") + 0.5*np.sum(vel**2, axis=-1)
         L = np.sqrt(np.sum(np.cross(pos, vel)**2, axis=-1))
         
         return r, E, L
@@ -200,7 +202,7 @@ class RadialProfile():
 
     def r_of_ecirc(self, ecirc, region="asc"):
         "Find radius where the circular energy is ecirc (if non-monotoneous region can be 'asc' or 'desc')"
-        def f(r): return self.potential(r) + 0.5*self.vcirc(r)**2 - ecirc
+        def f(r): return self.potential(r, component="total") + 0.5*self.vcirc(r, component="total")**2 - ecirc
         rlmax = self.rlmax() # radius where circular energy is maximal
 
         if region == "asc":
@@ -214,7 +216,7 @@ class RadialProfile():
             raise ValueError("Unknown mode %s" % region)
         
     def r_of_lcirc(self, lcirc, region="asc"):
-        def f(r): return self.vcirc(r)*r - lcirc
+        def f(r): return self.vcirc(r, component="total")*r - lcirc
         rlmax = self.rlmax() # radius where circular angular momentum is maximal
 
         if region == "asc":
@@ -229,7 +231,7 @@ class RadialProfile():
 
     def radius_of_f(self, f, l=1., rlow=None, rup=None, component="total"):
         "Radius where the phase space density f(phi(r), l) = f"
-        def func(r): return np.log(self.f_of_el(self.potential(r, component=component), l, component=component)/f)
+        def func(r): return np.log(self.f_of_el(self.potential(r, component="total"), l, component=component)/f)
         return self._search_radius(func, rlow=rlow or self.rmin()*2, rup=rup or self.rmax()/2)
     
     def radius_of_pot(self, phi, rlow=None, rup=None, component="total"):
@@ -264,7 +266,7 @@ class RadialProfile():
             if anisotropy is None:
                 self.phase_space = None
             else:
-                self.phase_space = EddingtonPhaseSpace(self.density, self.potential, self.cfg.general, self.cfg.eddington, anisotropy=anisotropy)
+                self.phase_space = EddingtonPhaseSpace(lambda r: self.density(r, component="self"), lambda r: self.potential(r, component="total"), self.cfg.general, self.cfg.eddington, anisotropy=anisotropy)
         else:
             self.phase_space = phase_space
         
@@ -353,13 +355,19 @@ class RadialProfile():
         """
         nintegrate = nintegrate or self.cfg.actions.nintegrate
         eps_circ = eps_circ or self.cfg.actions.eps_circ
-        return numerics.integrate.calculate_radial_action_tanh_peri_apo(self.potential, rp, ra, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr, eps_circ=eps_circ)
+        pot = lambda r: self.potential(r, component="total")
+        accr = lambda r: self.accr(r, component="total")
+        daccdr = lambda r: self.daccdr(r, component="total")
+        return numerics.integrate.calculate_radial_action_tanh_peri_apo(pot, rp, ra, nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
 
     def radial_period_of_rp_ra(self, rperi, rapo, nintegrate=None, eps_circ=None):
         """Numerically infer the radial orbital period time"""
         nintegrate = nintegrate or self.cfg.actions.nintegrate
         eps_circ = eps_circ or self.cfg.actions.eps_circ
-        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(self.potential, rperi, rapo, nintegrate=nintegrate, accr=self.accr, daccdr=self.daccdr, eps_circ=eps_circ)
+        pot = lambda r: self.potential(r, component="total")
+        accr = lambda r: self.accr(r, component="total")
+        daccdr = lambda r: self.daccdr(r, component="total")
+        djde = numerics.integrate.calculate_dj_de_tanh_peri_apo(pot, rperi, rapo, nintegrate=nintegrate, accr=accr, daccdr=daccdr, eps_circ=eps_circ)
         return djde*2.*np.pi
     
     #----------- Integrals and Moments --------------#
@@ -375,15 +383,19 @@ class RadialProfile():
 
         if f_of_rp_ra is None:
             f_of_rp_ra = functools.partial(self.f_of_rperi_rapo, component=component)
+        
+        pot = lambda r: self.potential(r, component="total")
+        accr = lambda r: self.accr(r, component="total")
+        daccdr = lambda r: self.daccdr(r, component="total")
 
-        is_limited = numerics.search.profile_is_limited(self.accr, rpmin=self.rmin())
+        is_limited = numerics.search.profile_is_limited(accr, rpmin=self.rmin())
         if is_limited:
-            rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
+            rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(pot, accr, daccdr, rpmin=self.rmin(), rmax=self.rmax())
             rperirange, raporange = (self.rmin(), rlmax), (self.rmin(), ramax_of_rp)
         else:
             rperirange, raporange = (self.rmin(), ramax), (self.rmin(), ramax)
 
-        return numerics.integrate.integrate_f_paspace(f_of_rp_ra, self.potential, self.accr, r, N=nintegrate, N2=nintegrate,
+        return numerics.integrate.integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=nintegrate, N2=nintegrate,
                                                       rperirange=rperirange, raporange=raporange, 
                                                       vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment)
     
@@ -470,11 +482,11 @@ class RadialProfile():
             
         if density is None:
             def density(r):
-                return self.density(r)
+                return self.density(r, component="self")
 
         def drhosigr2_dlogr(logr, sigr2=0.):
             r = np.exp(logr)
-            return (density(r) * self.accr(r) - 2.*density(r) / r * sigr2 * faniso(r)) * r
+            return (density(r) * self.accr(r, component="total") - 2.*density(r) / r * sigr2 * faniso(r)) * r
 
         if logr is None:
             logr = np.linspace(np.log(self.rmax()*1e3),np.log(self.rmin()), 10000)
@@ -534,18 +546,21 @@ class RadialProfile():
         elif (type(weight_rp_ra) == str) and (weight_rp_ra == "equal_logr"):
             def weight_rp_ra(rp, ra): # choose so that we have equal uncertainty in log-r bins
                 rm = np.sqrt(rp*ra)
-                return 1./(4.*np.pi*rm**3* self.density(rm))
+                return 1./(4.*np.pi*rm**3* self.density(rm, component="self"))
         else:
             assert callable(weight_rp_ra)
         
         def fpa(rp, ra):
-            return self.f_of_rperi_rapo(rp, ra) * weight_rp_ra(rp, ra)
+            return self.f_of_rperi_rapo(rp, ra, component=component) * weight_rp_ra(rp, ra)
+        
+        pot = lambda r: self.potential(r, component="total")
+        accr = lambda r: self.accr(r, component="total")
 
-        rho = numerics.integrate.integrate_f_paspace(fpa, self.potential, self.accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
+        rho = numerics.integrate.integrate_f_paspace(fpa, pot, accr, ri, N=nintegrate, rperirange=(rpmin, rpmax))
         p["r"],p["m"] = numerics.sample.sample_rimi_from_density(ri, rho, ntot)
 
-        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(fpa, self.potential, self.accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
-        p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])
+        p["rp"], p["ra"] = numerics.sample.sample_rp_ra_given_r_metropolis_perisplit(fpa, pot, accr, p["r"], rperirange=(rpmin, rpmax), nsteps_chain=nsteps_metropolis)
+        p["e"],p["l"],p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(pot, p["rp"], p["r"], p["ra"])
 
         p["m"] /= weight_rp_ra(p["rp"], p["ra"] )
 
@@ -608,11 +623,11 @@ class RadialProfile():
                 # Choose weights so that we have roughly equal uncertainty in log-r bins
                 # To avoid problems for profiles that approach 0 density, we
                 # limit the density to be above the mean density at the maximal radius
-                rhomean_min = self.m_of_r(ramax) / (4.*np.pi/3.*ramax**3)
+                rhomean_min = self.m_of_r(ramax, component=component) / (4.*np.pi/3.*ramax**3)
 
                 def weighted(rp, ra, **kwargs):
                     rgeom = np.sqrt(rp*ra)
-                    return 1./(4.*np.pi*rgeom**3* np.clip(self.density(rgeom),rhomean_min,None))
+                    return 1./(4.*np.pi*rgeom**3* np.clip(self.density(rgeom, component=component),rhomean_min,None))
             
             assert callable(weighted)
 
@@ -645,9 +660,10 @@ class RadialProfile():
         if any(var in result for var in ("r_", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
             assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
 
-            p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(self.potential, p["rp"], p["ra"], nsteps=nsteps_metropolis)
+            pot = lambda r: self.potential(r, component="total")
+            p["r"] = numerics.sample.sample_r_given_rp_ra_metropolis(pot, p["rp"], p["ra"], nsteps=nsteps_metropolis)
             
-            p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(self.potential, p["rp"], p["r"], p["ra"])[2]
+            p["vr"] = numerics.sample.E_L_vr_from_rp_r_ra(pot, p["rp"], p["r"], p["ra"])[2]
 
             if ("pos" in result) or ("vel" in result):
                 p["pos"] = numerics.sample.random_direction(ntot, ndim=3) * p["r"][...,np.newaxis]
@@ -723,19 +739,19 @@ class RadialProfile():
         rperi, rapo = self.rperi((rcirc,E,l)), self.rapo((rcirc,E,l))
         return rperi, rapo
 
-    def effective_pericenter_tidal_eigval(self, r, vcirc_fac=1., component="total"):
+    def effective_pericenter_tidal_eigval(self, r, vcirc_fac=1.):
         """Eigenvalues of the effective tidal tensor at peri-center, when the
         effect of the centrifugal force is included"""
         
         assert np.min(vcirc_fac) >= 1., "vcirc_fac is the ratio between pericenter velocity and circular velocity, has to be >= 1."
         
-        lam = self.tidal_eigval(r, component=component)
-        omega = 2.*np.pi / self.tcirc(r)
+        lam = self.tidal_eigval(r, component="total")
+        omega = 2.*np.pi / self.tcirc(r, component="total")
         lam[0] += omega**2/vcirc_fac**2
         
         return lam
 
-    def two_body_relaxation_time(self, r, N, modeN="Ntot", lam=None, rsoft=None, rmax=None, rnorm=None):
+    def two_body_relaxation_time(self, r, N, modeN="Ntot", lam=None, rsoft=None, rmax=None, rnorm=None, component="self"):
         """An estimate of the two-body relaxation at a given radius
         
         r : radius
@@ -755,13 +771,13 @@ class RadialProfile():
             lam = rmax/rsoft
         
         if modeN == "Ntot":
-            Nr = self.m_of_r(r) / self.m_of_r(rnorm) * N
+            Nr = self.m_of_r(r, component=component) / self.m_of_r(rnorm, component=component) * N
         elif modeN == "Nr":
             Nr = N
         else:
             raise ValueError("Unknown modeN = ", modeN)
         
-        tdyn = self.tdyn(r)
+        tdyn = self.tdyn(r, component="total")
         
         return 0.1 * Nr / np.log(lam) * tdyn
     

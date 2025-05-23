@@ -132,7 +132,7 @@ class CompositeProfile(RadialProfile):
         if self.phase_space_mode == "children":
             return self._combine_profiles(self.profiles, 'f', component, e=e, l=l, j=j, r=r, rp=rp, ra=ra)
         else:
-            raise ValueError("This case not handled properly")
+            super().f(e=e, l=l, j=j, r=r, rp=rp, ra=ra, component=component)
 
     def __str__(self):
         s = "CompositeProfile:"

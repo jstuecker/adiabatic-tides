@@ -100,40 +100,34 @@ class AdiabaticTransformation():
 
         r0 = np.geomspace(prof_initial.rmin(), prof_initial.rmax(), self.cfg.adiabatic.nr)
 
-        if isinstance(prof_initial_density, CompositeProfile):
-            if len(prof_initial.external) > 0:
-                print("Note: we are ignoring the external components of the initial profile", prof_initial.external)
-            self.history = [(r0, prof_initial_density.density(r0, component="self"), partial(prof_initial_density.density, component="self"), partial(prof_initial_density.m_of_r, component="self"), partial(prof_initial_density.potential, component="self"))]
-        else:
-            self.history = [(r0, prof_initial_density.density(r0), prof_initial_density.density, prof_initial_density.m_of_r, prof_initial_density.potential)]
+        # The history corresponds to  discrete radii, discrete densities, and 3 functions for density, mass and potential
+        self.history = [(r0, prof_initial_density.density(r0, component="self"), 
+                         partial(prof_initial_density.density, component="self"), 
+                         partial(prof_initial_density.m_of_r, component="self"), 
+                         partial(prof_initial_density.potential, component="self"))]
 
-    def _define_fpa_below(self, component=None):
+    def _define_fpa_below(self, component="self"):
         if self.cfg.adiabatic.lower_boundary == "initial":
-            fpa_below = self.prof_initial.f_of_rperi_rapo
-            if component is not None:
-                fpa_below = partial(fpa_below, component=component)
+            fpa_below = partial(self.prof_initial.f_of_rperi_rapo, component=component)
         else:
             fpa_below = None
         return fpa_below
     
-    def _define_f0_of_jl(self, component=None):
-        f0_of_jl = self.prof_initial.f_of_jl
-        if component is not None:
-            f0_of_jl = partial(f0_of_jl, component=component)
-        return f0_of_jl
+    def _define_f0_of_jl(self, component="self"):
+        return partial(self.prof_initial.f_of_jl, component=component)
 
-    def integrate_phasespace(self, rho, m, phi, component=None, getf=False):
+    def integrate_phasespace(self, rho, m, phi, component="self", getf=False):
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
         return adiabatic_iteration(self._define_f0_of_jl(component=component), rho, m, phi, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), **kwargs)
 
-    def solve_poisson(self, ri, rhoi, component=None):
+    def solve_poisson(self, ri, rhoi, component="self"):
         lb = self.cfg.adiabatic.lower_boundary
         if lb == "initial":
-            lb = self.prof_initial.density, self.prof_initial.m_of_r, self.prof_initial.potential
-            if component is not None: # pass mode to each function
-                lb = tuple(partial(lbi, component=component) for lbi in lb)
+            lb = (partial(self.prof_initial.density, component=component), 
+                  partial(self.prof_initial.m_of_r, component=component), 
+                  partial(self.prof_initial.potential, component=component))
         
         rho, m, phi = numerics.integrate.solve_poisson_via_spline_with_smart_boundaries(
             ri, np.clip(rhoi, 0, None), lower_boundary=lb, upper_boundary="vacuum", G=self.cfg.G())
@@ -168,7 +162,7 @@ class AdiabaticTransformation():
     def assemble_single_profile(self, component=None, iter=-1):
         """Assemble the final profile, perturbation not included -- may be a sub-population"""
         assert iter < len(self.history)
-        if iter % len(self.history) == 0:
+        if iter == 0:
             print("i=0 -> returning initial profile")
             if component is None:
                 return self.prof_initial
@@ -213,7 +207,7 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
 
         return cp
 
-    def integrate_phasespace(self, rho, m, phi, component=None, getf=False):
+    def integrate_phasespace(self, rho, m, phi, component="self", getf=False):
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())

@@ -103,19 +103,22 @@ class InterpolatorActionMap(ActionMap):
 
         # Define boundaries of the orbit space
         rmin, rmax = self.profile.rmin(), self.profile.rmax()
-        rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.profile.potential, self.profile.accr, self.profile.daccdr, rpmin=rmin, rmax=rmax)
+        pot = lambda r: self.profile.potential(r, component="total")
+        accr = lambda r: self.profile.accr(r, component="total")
+        daccdr = lambda r: self.profile.daccdr(r, component="total")
+        rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(pot, accr, daccdr, rpmin=rmin, rmax=rmax)
 
         jmax = self.profile.radial_action_of_rp_ra(rperi, rapo)
         ei, li = self.profile.e_l_of_rperi_rapo(rperi, rapo)
 
-        self.q["lmax"] = self.profile.vcirc(rlmax) * rlmax
+        self.q["lmax"] = self.profile.vcirc(rlmax, component="total") * rlmax
 
         self.ip["ramax_of_rp"] = ramax_of_rp
         self.ip["jmax_of_l"] = lambda l: np.interp(l, li, jmax)
 
         table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=ramax_of_rp, rpmin=rmin, rlmax=rlmax, nbins=cfg_act.nbins_l, nbins_apo=cfg_act.nbins_pa)
 
-        self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl_new(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, accr=self.profile.accr, daccdr=self.profile.daccdr, eps_circ=self.cfg_act.eps_circ)
+        self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl_new(pot, table, nsteps_newton=cfg_act.nsteps_newton, accr=accr, daccdr=daccdr, eps_circ=self.cfg_act.eps_circ)
 
     def orbit_valid_jl(self, j, l):
         self.setup_rp_ra_of_jl()
@@ -163,7 +166,10 @@ class ActionMapThroughLLines(ActionMap):
         # Define boundaries of the orbit space
         # (These may be complicated for tidally truncated profiles)
         rmin, rmax = self.profile.rmin(), self.profile.rmax()
-        rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.profile.potential, self.profile.accr, self.profile.daccdr, rpmin=rmin, rmax=rmax)
+        pot = lambda r: self.profile.potential(r, component="total")
+        accr = lambda r: self.profile.accr(r, component="total")
+        daccdr = lambda r: self.profile.daccdr(r, component="total")
+        rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(pot, accr, daccdr, rpmin=rmin, rmax=rmax)
 
         prof = self.profile
 
@@ -172,7 +178,7 @@ class ActionMapThroughLLines(ActionMap):
             return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
 
         rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nbins_l, tmax=3))
-        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1.02, prof.accr, nsteps=nbins_pa, substeps=substeps_pa, eps_circ=self.cfg_act.eps_circ)
+        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc, component="total") * rc)*1.02, accr, nsteps=nbins_pa, substeps=substeps_pa, eps_circ=self.cfg_act.eps_circ)
         rp_ev[-1], ra_ev[-1] = rlmax, rlmax
         li =  prof.e_l_of_rperi_rapo(rp_ev[:,0], ra_ev[:,0])[1]
 
