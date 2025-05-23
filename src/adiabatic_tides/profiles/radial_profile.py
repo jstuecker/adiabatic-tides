@@ -602,9 +602,14 @@ class RadialProfile():
             def weighted(rp, ra, **kwargs): return 1.
         else:
             if (type(weighted) == str) and (weighted == "nice"):
+                # Choose weights so that we have roughly equal uncertainty in log-r bins
+                # To avoid problems for profiles that approach 0 density, we
+                # limit the density to be above the mean density at the maximal radius
+                rhomean_min = self.m_of_r(ramax) / (4.*np.pi/3.*ramax**3)
+
                 def weighted(rp, ra, **kwargs):
                     rgeom = np.sqrt(rp*ra)
-                    return 1./(4.*np.pi*rgeom**3* np.clip(self.density(rgeom),0,None))
+                    return 1./(4.*np.pi*rgeom**3* np.clip(self.density(rgeom),rhomean_min,None))
             
             assert callable(weighted)
 
