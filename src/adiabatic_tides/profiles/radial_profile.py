@@ -613,6 +613,8 @@ class RadialProfile():
 
         f = f or functools.partial(self.f, component=component)
 
+        result_vars = result.split("_")
+
         def orbit_valid(rp, ra):
             return (rp > rpmin) & (ra > ramin) & (ra < ramax) & (rp < rpmax)
 
@@ -656,8 +658,7 @@ class RadialProfile():
 
         assert np.min(p["m"]) > 0, "Something went wrong with the sampling, negative masses (Maybe your weights are negative?)"
 
-        # Remember to correct the following line, it handles "r" wrongly
-        if any(var in result for var in ("r_", "vr", "pos", "vel")): # Sampling radius is expensive, so avoid it if not asked for
+        if set(result_vars).intersection(("r", "vr", "pos", "vel", "dict")): # Sampling radii is expensive, so avoid it if not asked for
             assert np.all((p["j"] > 0) & (p["l"] > 0)), "Something went wrong here!"
 
             pot = lambda r: self.potential(r, component="total")
@@ -677,7 +678,7 @@ class RadialProfile():
             return p
         else:
             res = []
-            for key in result.split("_"):
+            for key in result_vars:
                 assert key in p, "Unknown key %s" % key
                 res.append(p[key])
             return res
