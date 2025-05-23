@@ -78,34 +78,11 @@ class CompositeProfile(RadialProfile):
     def density(self, r, component="total"):
         return self._combine_profiles(self.profiles, 'density', component, r)
 
-    # Became unnecessary (delete soon)
-    def drhodr(self, r, component="total"):
-        return self._combine_profiles(self.profiles, 'drhodr', component, r)
-
     def m_of_r(self, r, component="total"):
         return self._combine_profiles(self.profiles, 'm_of_r', component, r)
 
     def potential(self, r, zero_at_zero=True, component="total"):
         return self._combine_profiles(self.profiles, 'potential', component, r, zero_at_zero=zero_at_zero)
-
-    # Became unnecessary (delete soon)
-    def daccdr(self, r, component="total"):
-        return self._combine_profiles(self.profiles, 'daccdr', component, r)
-    
-    # Became unnecessary (delete soon)
-    def vcirc(self, r, component="total"):
-        return np.sqrt(np.clip(-self.accr(r, component=component) * r, 0., None))
-    
-    # Became unnecessary (delete soon)
-    def accr(self, r, component="total"):
-        """Radial Acceleration (negative means pull towards center)"""
-        return  -self.G * self.m_of_r(r, component=component) / r**2
-
-    # Became unnecessary (delete soon)
-    def rmax_vmax(self, component="total"):
-        """Radius and velocity where the circular velocity is maximal"""
-        opt = maximize_scalar(lambda r: self.m_of_r(r, component=component)/r, (self.rmin(), self.rmax()))
-        return opt.x, self.vcirc(opt.x, component=component)
     
     def _initialize_phasespace(self):
         if self._phase_space_initialized:
@@ -156,49 +133,7 @@ class CompositeProfile(RadialProfile):
             return self._combine_profiles(self.profiles, 'f', component, e=e, l=l, j=j, r=r, rp=rp, ra=ra)
         else:
             raise ValueError("This case not handled properly")
-    
-    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None, component="self"):
-        if f_of_rp_ra is not None: # In this case it doesn't make sense to speak of separate components
-            return super().compute_pa_space_integral(r, f_of_rp_ra=f_of_rp_ra, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate, ramax=ramax)
-        
-        # Create a dictionary that includes all phase spaces
-        fs = {}
-        for label in self.profiles:
-            fs[label] = partial(self.compute_pa_space_integral, f_of_rp_ra=partial(self.f_of_rperi_rapo, component=label))
-        
-        return combine_functions(fs, component, self.internal, self.external, r, vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment, nintegrate=nintegrate, ramax=ramax)
-    
-    def compute_vr2_vt2(self, r, component="self", nintegrate=40):
-        """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
-        rho_x_vr2 = self.compute_pa_space_integral(r, vrmoment=2, nintegrate=nintegrate, component=component)
-        rho_x_vt2 = self.compute_pa_space_integral(r, vtmoment=2, nintegrate=nintegrate, component=component)
 
-        rho = self.compute_pa_space_integral(r, component=component, nintegrate=nintegrate)
-
-        if isinstance(rho, dict):
-            return {key: rho_x_vr2[key] / rho[key] for key in rho}, {rho_x_vt2[key] / rho[key] for key in rho}
-        else:
-            return rho_x_vr2 / rho, rho_x_vt2 / rho
-        
-    def compute_line_of_sight_vdisp2_and_dens(self, R, component="self", nintegrate=40, ninterp=100):
-        """computes the line of sight velocity dispersion and the column density at projected radius R"""
-        assert not "dict" in component, "This function does not support dict mode"
-
-        rip = np.geomspace(self.rmin(), self.rmax(), ninterp+2)[1:-1]
-        rho_x_vr2 = self.compute_pa_space_integral(rip, vrmoment=2, nintegrate=nintegrate, component=component)
-        rho_x_vt2 = self.compute_pa_space_integral(rip, vtmoment=2, nintegrate=nintegrate, component=component)
-        # We also integrate the density numerically to inherit the same discreteness error
-        rho = self.compute_pa_space_integral(rip, nintegrate=nintegrate, component=component) 
-
-        # Zero-densities can cause some errors with log-interpolation, let's remopve them and set the right boundary to zero
-        rip, rho, rho_x_vr2, rho_x_vt2 = rip[rho > 0], rho[rho > 0], rho_x_vr2[rho > 0], rho_x_vt2[rho > 0]
-
-        def ip_rho(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho), right=-np.inf))
-        def ip_rho_x_vr2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vr2), right=-np.inf))
-        def ip_rho_x_vt2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vt2), right=-np.inf))
-        
-        return numerics.integrate.integrate_line_of_sight_vdisp2_and_dens(ip_rho, ip_rho_x_vr2, ip_rho_x_vt2, R, nintegrate=nintegrate)
-        
     def __str__(self):
         s = "CompositeProfile:"
         for k, v in self.profiles.items():
