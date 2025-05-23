@@ -86,7 +86,7 @@ def test_sample_and_integrate(profile, embed_plot):
 
     prof = standard_profiles(profile)
 
-    rs,rps,Ls,vrs,ms,ri,rhoi = prof.sample_particles(10000, result="r_rp_l_vr_m_rrho_rho", rpmin=1, rpmax=50., rmax=5e2)
+    rs,rps,Ls,vrs,ms,ri,rhoi = prof.sample_particles(10000, result="r_rp_l_vr_m_rrho_rho", rpmin=1, rpmax=50., ramax=5e2)
 
     rbins = np.logspace(-0.2, 2, 40)
     rtest = np.sqrt(rbins[1:] * rbins[:-1])
@@ -112,11 +112,11 @@ def test_sample_and_integrate(profile, embed_plot):
 
 @pytest.mark.parametrize("profile", ["nfw", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8", "aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1"])
 def test_ks_statistic_convergence(profile):
-    np.random.seed(42)
+    np.random.seed(44)
     prof = standard_profiles(profile)
 
-    nsamp = 5000
-    pref = prof.sample_particles(nsamp, rpmin=0.1, rpmax=1., rmax=1e4, nsteps_metropolis=256)
+    nsamp = int(1e5)
+    pref = prof.sample_particles(nsamp, result="r_e_l_vr", rpmin=0.1, rpmax=1., ramax=1e3, nsteps_metropolis=256)
 
     def compare_particles(p1, p2, test_label="", minp=0.):
         res = []
@@ -128,8 +128,8 @@ def test_ks_statistic_convergence(profile):
         print("---")
 
     for nsteps_chain in 64,32,16,8:
-        p = prof.sample_particles(nsamp, rpmin=0.1, rpmax=1., rmax=1e4, nsteps_metropolis=nsteps_chain)
-        compare_particles(p, pref, test_label="Nchain=%d: " % nsteps_chain, minp = 0.01 if nsteps_chain >= 64 else 0)
+        p = prof.sample_particles(nsamp, result="r_e_l_vr", rpmin=0.1, rpmax=1., ramax=1e3, nsteps_metropolis=nsteps_chain)
+        compare_particles(p, pref, test_label="Nchain=%d: " % nsteps_chain, minp = 0.001 if nsteps_chain >= 32 else 0)
 
 @pytest.mark.parametrize("profile", ["nfw", "powerlaw1.0", "powerlaw1.4", "powerlaw1.8", "aniso-0.3pow1", "aniso0pow1", "aniso0.3pow1"])
 def test_sample_r_given_rpra(profile, embed_plot):

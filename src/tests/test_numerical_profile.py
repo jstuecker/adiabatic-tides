@@ -231,7 +231,7 @@ def test_string_repr():
     nprofb = at.profiles.NumericalProfile(r, nfw.density(r))
 
     # pprof
-    part = ppow.sample_particles(1000, result="dict", rmax=1.)
+    part = ppow.sample_particles(1000, result="dict", ramax=1.)
     pprof = at.profiles.ParticleProfile(part, rbins=r)
 
     # Mimic result of adiabatic calculation

@@ -504,8 +504,8 @@ class RadialProfile():
         return np.exp(logr[::-1]), (rhosigr2/density(np.exp(logr)))[::-1]
     
     #----------- Sampling Methods --------------#
-
-    def sample_particles(self, ntot=10000, result="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None, component="self"):
+    @deprecated
+    def sample_particles_old(self, ntot=10000, result="r_e_l_vr_m", rmax=None, rpmin=None, rpmax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weight_rp_ra=None, component="self"):
         """ Samples particles radii, energies, angular momenta, radial velocities and masses
         using a metropolis algorithm for the (E,L | r) sampling. This is not the fastest
         possibility, but it is very robust and works for every profile, including anisotropic
@@ -584,7 +584,7 @@ class RadialProfile():
                 res.append(p[key])
             return res
         
-    def sample_particles_new(self, ntot=10000, result="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, f=None, component="self"):
+    def sample_particles(self, ntot=10000, result="r_e_l_vr_m", rpmin=None, rpmax=None, ramin=None, ramax=None, ninterp=None, nintegrate=None, nsteps_metropolis=None, weighted=None, f=None, component="self"):
         """ 
         result : a string with the keys to be returned, separated by "_". May contain 
                "rp", "ra", "r", "e", "l", "j", "vr", "pos", "vel", "m"
