@@ -28,20 +28,26 @@ class EddingtonConfig:
 
 @dataclass
 class ActionsConfig:
-    # For finding peri/apocenter radii:
-    niter_pa : int = 30
-    search_method : str = "ridders"
     # For Action integral:
     nintegrate: int = 40
     # For mapping rp_ra(j, l) via an interpolation table
-    nbins_rp: int = 200
-    nbins_ra: int = 100 # zero means that it uses the same as rp
-    # Some newton iteration steps on top of that. These are very expensive
-    # but quickly get the error down to 0. If you need more speed it may
-    # be worth to use 0 here:
+    nbins_l: int = 600
+    nbins_pa: int = 400 # zero means that it uses the same as rp
+    substes_pa: int = 4 # extra steps to determine the rp,ra at fixed lcurves (total steps = nbins_pa*substeps_pa)
+
+    # Less relevant parameters
+    eps_circ: float = 1e-3 # sets when close-to-circular approximations are used. Usually you should not modify this
+    j0fac: float = 1e-5 # Action interpolation behaves linear below j ~ l*j0
+    nj : int = 2000 # Number of j values used for inverting rp(j | l). Is cheap, so keep it large
+
+    # Parameters for finding peri/apocenter radii:
+    # The core code does not need this -- they are used in some niece functions
+    niter_pa : int = 30
+    search_method : str = "ridders"
+
+    # These parameters are outdated
     nsteps_newton: int = 1
     rafac_max: float = 1e10
-    eps_circ: float = 1e-3 # sets when close-to-circular approximations are used. Usually you should not modify this
 
 @dataclass
 class AdiabaticConfig:
@@ -58,9 +64,14 @@ class AdiabaticConfig:
 
 @dataclass
 class SamplingConfig:
-    nintegrate: int = 40 # Outdated/Irrelevant, will be removed
+    # Important
+    nsteps_metropolis : int = 30 # In my experience ~ 20 works already well, but keep a bit higher for safety
+    # Less Important
+    nf : int = 1000 # Number of points to discretize the inverse distribution function (cheap, keep large)
+
+    # Outdated parameters that will be removed soon
+    nintegrate: int = 40
     ninterp : int = 200
-    nsteps_metropolis : int = 40
 
 class Config():
     def __init__(self,
@@ -171,8 +182,8 @@ class Config():
         
         self.actions.niter_pa = int(self.actions.niter_pa * scale)
         self.actions.nintegrate = int(self.actions.nintegrate * scale)
-        self.actions.nbins_rp = int(self.actions.nbins_rp * scale)
-        self.actions.nbins_ra = int(self.actions.nbins_ra * scale)
+        self.actions.nbins_l = int(self.actions.nbins_l * scale)
+        self.actions.nbins_pa = int(self.actions.nbins_pa * scale)
         self.actions.nsteps_newton = int(self.actions.nsteps_newton * scale)
         
         self.adiabatic.nr = int(self.adiabatic.nr * scale)

@@ -15,13 +15,25 @@ eddington:
   nr: 2000
 
 actions:
-  niter_pa: 30
-  search_method: "ridders"
-  nintegrate: 40
-  nbins_rp: 200
-  nbins_ra: 100
-  nsteps_newton: 1
-  eps_circ: 1e-3
+    # For Action integral:
+    nintegrate: 40
+    # For mapping rp_ra(j, l) via an interpolation table
+    nbins_l: 600
+    nbins_pa: 400 # zero means that it uses the same as rp
+    substes_pa: 4 # extra steps to determine the rp,ra at fixed lcurves (total steps = nbins_pa*substeps_pa)
+
+    # Less relevant parameters
+    eps_circ: 1e-3 # sets when close-to-circular approximations are used. Usually you should not modify this
+    j0fac: 1e-5 # Action interpolation behaves linear below j ~ l*j0
+    nj : 2000 # Number of j values used for inverting rp(j | l). Is cheap, so keep it large
+
+    # Parameters for finding peri/apocenter radii:
+    # The core code does not need this -- they are used in some niece functions
+    niter_pa : 30
+    search_method : "ridders"
+    # These parameters are outdated
+    #nsteps_newton: int = 1
+    #rafac_max: float = 1e10
 
 adiabatic:
   nr: 200
@@ -33,6 +45,5 @@ adiabatic:
   eps_done: 1e-3
 
 sampling:
-  nintegrate: 40
-  ninterp: 1001
-  nsteps_metropolis: 64
+  nf: 1000
+  nsteps_metropolis: 30

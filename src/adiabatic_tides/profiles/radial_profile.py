@@ -630,7 +630,7 @@ class RadialProfile():
 
         p = {}
         # msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=remesh, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
-        msamp, p["j"], p["l"], p["rp"], p["ra"] = self.action_map.sample_jl(nsamp=ntot, get_rp_ra=True, f=f)
+        msamp, p["j"], p["l"], p["rp"], p["ra"] = self.action_map.sample_jl(nsamp=ntot, get_rp_ra=True, f=f, nf=self.cfg.sampling.nf)
 
         p["e"] = self.e_l_of_rperi_rapo(p["rp"], p["ra"])[0]
 

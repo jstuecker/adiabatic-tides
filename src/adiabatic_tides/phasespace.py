@@ -113,7 +113,7 @@ class InterpolatorActionMap(ActionMap):
         self.ip["ramax_of_rp"] = ramax_of_rp
         self.ip["jmax_of_l"] = lambda l: np.interp(l, li, jmax)
 
-        table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=ramax_of_rp, rpmin=rmin, rlmax=rlmax, nbins=cfg_act.nbins_rp, nbins_apo=cfg_act.nbins_ra)
+        table = numerics.interpolate.define_limited_peri_apo_table(ramax_of_rp=ramax_of_rp, rpmin=rmin, rlmax=rlmax, nbins=cfg_act.nbins_l, nbins_apo=cfg_act.nbins_pa)
 
         self.ip["rp_ra_of_jl"] = numerics.interpolate.setup_rperi_rapo_of_jl_new(self.profile.potential, table, nsteps_newton=cfg_act.nsteps_newton, accr=self.profile.accr, daccdr=self.profile.daccdr, eps_circ=self.cfg_act.eps_circ)
 
@@ -153,11 +153,15 @@ class ActionMapThroughLLines(ActionMap):
         self.ip = {}
 
     @only_on_change(attributes=("cfg_gen","cfg_act")) 
-    def setup_rp_ra_of_jl(self, nl=600, ninvertj=400, nsteps_int=4, nj=2000, j0=1e-5):
+    def setup_rp_ra_of_jl(self):
         cfg_gen : GeneralConfig = self.cfg_gen
         cfg_act : ActionsConfig = self.cfg_act
+        
+        nbins_l, nbins_pa, substeps_pa = cfg_act.nbins_l, cfg_act.nbins_pa, cfg_act.substes_pa
+        nj, j0fac = cfg_act.nj, cfg_act.j0fac
 
         # Define boundaries of the orbit space
+        # (These may be complicated for tidally truncated profiles)
         rmin, rmax = self.profile.rmin(), self.profile.rmax()
         rperi, rapo, rlmax, rtid, ramax_of_rp = numerics.interpolate.define_paspace_boundaries(self.profile.potential, self.profile.accr, self.profile.daccdr, rpmin=rmin, rmax=rmax)
 
@@ -167,8 +171,8 @@ class ActionMapThroughLLines(ActionMap):
         def ra_max_of_l(l):
             return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
 
-        rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nl, tmax=3))
-        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1.01, prof.accr, nsteps=ninvertj, substeps=nsteps_int)
+        rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nbins_l, tmax=3))
+        rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc) * rc)*1.02, prof.accr, nsteps=nbins_pa, substeps=substeps_pa, eps_circ=self.cfg_act.eps_circ)
         rp_ev[-1], ra_ev[-1] = rlmax, rlmax
         li =  prof.e_l_of_rperi_rapo(rp_ev[:,0], ra_ev[:,0])[1]
 
@@ -176,7 +180,7 @@ class ActionMapThroughLLines(ActionMap):
         jmax_of_li = prof.radial_action_of_rp_ra(rpmin_li, ramax_li)
 
         self.li = li
-        self.jmin_of_l = lambda l: j0 * l
+        self.jmin_of_l = lambda l: j0fac * l
         self.jmax_of_l = lambda l: np.interp(l, li, jmax_of_li)
 
         self.ramax_of_rp = lambda rp: np.interp(rp, rpmin_li, ramax_li)
@@ -254,22 +258,11 @@ class ActionMapThroughLLines(ActionMap):
 
         return rp, ra
     
-    def sample_jl(self, nsamp=1000, nf=1000, get_rp_ra=False, f=None):
+    def sample_jl(self, nsamp=1000, get_rp_ra=False, f=None, nf=1000):
         self.setup_rp_ra_of_jl()
         
         if f is None:
             f = self.profile.f
-
-        # fgrid = f(j=self.jgrid, l=self.li[:,np.newaxis], rp=self.rpgrid, ra=self.ragrid)
-
-        # fcumj_givenl = np.clip(cumulative_simpson((2.*np.pi)**3*fgrid, x=self.jgrid, axis=1, initial=0), 0, None)
-
-        # Save some debug outputs
-        # self.fgrid = fgrid
-
-        # print(self.fgrid.shape, np.min(self.fgrid), np.max(self.fgrid))
-
-        
 
         # A grid used for getting j given the cumulative distribution function at fixed l
         ftarget = np.linspace(0, 1, nf)
