@@ -637,19 +637,7 @@ class RadialProfile():
             e,_ = self.e_l_of_rperi_rapo(rp, ra)
             return f(rp=rp, ra=ra, j=j, l=l, e=e) * weighted(rp=rp, ra=ra, j=j, l=l, e=e) * orbit_valid(rp, ra)
         
-        # def jl_of_rp_ra(rp, ra):
-        #     j = self.radial_action_of_rp_ra(rp, ra)
-        #     e,l = self.e_l_of_rperi_rapo(rp, ra)
-        #     return j, l
-        
-        # rperi, rapo, rlmax, rtid, ramax_of_rp =  numerics.interpolate.define_paspace_boundaries(self.potential, self.accr, self.daccdr, rpmin=self.rmin(), rmax=self.rmax())
-        # rpmax = min(rpmax, rlmax)
-        # ramax_func = lambda rp: np.minimum(ramax_of_rp(rp), ramax)
-
-        # lmintot, lmaxtot, jmin_jmax_of_l = numerics.interpolate.jl_from_paspace_boundaries(jl_of_rp_ra, rpmin, rpmax, ramin, ramax_func)
-
         p = {}
-        # msamp, p["j"], p["l"], p["rp"], p["ra"] = numerics.sample.sample_jl(f, lmintot, lmaxtot, jmin_jmax_of_l, nsamp=ntot, remesh=remesh, rp_ra_of_jl=self.action_map.rp_ra_of_jl, nl=ninterp, nj=ninterp)
         msamp, p["j"], p["l"], p["rp"], p["ra"] = self.action_map.sample_jl(nsamp=ntot, get_rp_ra=True, f=fweighted, nf=self.cfg.sampling.nf)
 
         p["e"] = self.e_l_of_rperi_rapo(p["rp"], p["ra"])[0]
