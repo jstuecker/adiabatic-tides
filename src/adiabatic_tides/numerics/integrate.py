@@ -606,7 +606,7 @@ def integrate_fofel_adaptive_rperi_lim(f_of_el, phi, r, rp1=1e-10, rp2=1e10, N=1
     
     return rho
 
-def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, np.inf), raporange=(0, np.inf), vrmoment=0, vtmoment=0, vmoment=0):
+def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, np.inf), raporange=(0, np.inf), vrmoment=0, vtmoment=0, vmoment=0, c_spacing=0.5):
     """Integrates a distribution function, discretizing the integral in "paspace"
     paspace is the space of possible peri- and apocenter radii and maps one to one
     to (E,L) space
@@ -655,12 +655,12 @@ def integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=32, N2=None, rperirange=(0, 
         if np.max(raporange[1]) == np.inf:
             I = integrate_double_exponential_a_inf(integrand, a=a, N=N2,c=1, tmax=4., xscale=a)
         else: # We have a finite upper limit
-            I = integrate_exp_double_exp_a_b(integrand, a, b, N=N2)
+            I = integrate_exp_double_exp_a_b(integrand, a, b, N=N2, c=c_spacing)
 
         return I
     
     a,b = np.clip(rperirange[0], 0, r), np.clip(rperirange[1], 0, r)
-    I = integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4)
+    I = integrate_double_exponential_a_b(integrate_ra_given_rp, a, b, N=N, tmax=4, c=c_spacing)
     return 4.*np.pi*I  / r**2
 
 def integrate_line_of_sight(f, R, Rmax=np.inf, nintegrate=100):

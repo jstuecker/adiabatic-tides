@@ -53,8 +53,9 @@ class ActionsConfig:
 class AdiabaticConfig:
     # Performance critical parameters
     nr : int = 200
-    ninterp : int = 50 
-    nintegrate : int = 32
+    ninterp : int = 120
+    nintegrate : int = 40
+    c_spacing : float = 0.5 # in (0...pi/2) -- Affects how biased integration points are towards the boundaries -- See Numerical Recipes eq. (4.5.7)
     # how to deal with contributions from radii < rmin
     lower_boundary : str = "initial" # "initial", "powerlaw" or "constant"
     rminfac : float = 1e2 # offset minimal reconstruction radius a little to avoid numerical issues

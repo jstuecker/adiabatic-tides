@@ -8,7 +8,7 @@ from functools import partial
 
 # === pure functions ===
 
-def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10):
+def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10, c_spacing=0.3):
     def accr(r): return -G * m(r) / r**2
     def daccdr(r): return 2 * G * m(r) / r**3 - 4.*np.pi * rho(r) * G
 
@@ -17,7 +17,7 @@ def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=20
     f_of_rperi_rapo = numerics.interpolate.setup_adiabatic_f_of_rperi_rapo(f_of_jl, phi, table, fpa_below=fpa_below, accr=accr, daccdr=daccdr)
     rnew = np.geomspace(rpmin,rtid,nr)
 
-    rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi, accr, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp))
+    rhonew = numerics.integrate.integrate_f_paspace(f_of_rperi_rapo, phi, accr, rnew, N=nintegrate, rperirange=(0, rlmax), raporange=(0, ramax_of_rp), c_spacing=c_spacing)
 
     assert np.all(~np.isnan(rhonew))
 
@@ -26,14 +26,14 @@ def adiabatic_iteration(f_of_jl, rho, m, phi, fpa_below=None, rpmin=1e-11, nr=20
     else:
         return rnew, rhonew
 
-def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10):
+def adiabatic_tidal_iteration(f_of_jl, rho, m, phi, tide, fpa_below=None, rpmin=1e-11, nr=200, ninterp=50, nintegrate=32, G=43.0071057317063e-10, getf=False, rmax=1e10, c_spacing=0.3):
     assert tide >= 0, "Tide must be positive"
     
     def m_tot(r): return m(r) - tide/G * r**3
     def rho_tot(r): return rho(r) - 3.* tide / (4.*np.pi*G)
     def phi_tot(r): return phi(r) - 0.5 * tide* r**2
     
-    return adiabatic_iteration(f_of_jl, rho_tot, m_tot, phi_tot, fpa_below=fpa_below, rpmin=rpmin, nr=nr, ninterp=ninterp, nintegrate=nintegrate, G=G, getf=getf, rmax=rmax)
+    return adiabatic_iteration(f_of_jl, rho_tot, m_tot, phi_tot, fpa_below=fpa_below, rpmin=rpmin, nr=nr, ninterp=ninterp, nintegrate=nintegrate, G=G, getf=getf, rmax=rmax, c_spacing=c_spacing)
 
 def adiabatic_tidal_reconstruction(prof, tide, iter_max=200, eps=1e-3, rpmin=1e-20, rpmin2=None, get_all=False, verbose=1, nbins_fini=100, nintegrate=32, nr=200, ninterp=50, lower_boundary="initial", G=43.0071057317063e-10, eps_circ=1e-4, rmax=1e10):
     #Define Initial profile phase space
@@ -120,7 +120,7 @@ class AdiabaticTransformation():
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
-        return adiabatic_iteration(self._define_f0_of_jl(component=component), rho, m, phi, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), **kwargs)
+        return adiabatic_iteration(self._define_f0_of_jl(component=component), rho, m, phi, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), c_spacing=cfg.c_spacing, **kwargs)
 
     def solve_poisson(self, ri, rhoi, component="self"):
         lb = self.cfg.adiabatic.lower_boundary
@@ -211,7 +211,7 @@ class AdiabaticTidalTransformation(AdiabaticTransformation):
         cfg = self.cfg.adiabatic
 
         kwargs = dict(rpmin=self.prof_initial.rmin()*cfg.rminfac, nr=int(cfg.nr), ninterp=int(cfg.ninterp), nintegrate=int(cfg.nintegrate), rmax=self.prof_initial.rmax())
-        return adiabatic_tidal_iteration(self._define_f0_of_jl(component=component), rho, m, phi, tide=self.tide, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), **kwargs)
+        return adiabatic_tidal_iteration(self._define_f0_of_jl(component=component), rho, m, phi, tide=self.tide, fpa_below=self._define_fpa_below(component=component), getf=getf, G=self.cfg.G(), c_spacing=cfg.c_spacing, **kwargs)
 
 class AdiabaticResultProfile(RadialProfile):
     def __init__(self, result, f_of_rp_ra, f0_j_l=None, config : Config | None = None):

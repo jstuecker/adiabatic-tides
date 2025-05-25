@@ -37,12 +37,13 @@ actions:
 
 adiabatic:
   nr: 200
-  ninterp: 50
-  nintegrate: 32
+  ninterp: 120
+  nintegrate: 40
   lower_boundary: "initial"
   rminfac: 1e2
   nitermax: 100
   eps_done: 1e-3
+  c_spacing: 0.5
 
 sampling:
   nf: 1000

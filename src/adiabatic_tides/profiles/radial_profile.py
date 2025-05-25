@@ -372,7 +372,7 @@ class RadialProfile():
     
     #----------- Integrals and Moments --------------#
 
-    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None, component="self"):
+    def compute_pa_space_integral(self, r, f_of_rp_ra=None, vrmoment=0, vtmoment=0, vmoment=0, nintegrate=40, ramax=None, component="self", c_spacing=0.5):
         """Integrates a function over velocity-space through peri-apo-space discretization
         f_of_rp_ra : the phase space density (dM/d3x/d3v) with peri and apo centers as arguments
         """
@@ -397,7 +397,8 @@ class RadialProfile():
 
         return numerics.integrate.integrate_f_paspace(f_of_rp_ra, pot, accr, r, N=nintegrate, N2=nintegrate,
                                                       rperirange=rperirange, raporange=raporange, 
-                                                      vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment)
+                                                      vrmoment=vrmoment, vtmoment=vtmoment, vmoment=vmoment,
+                                                      c_spacing=c_spacing)
     
     def compute_vr2_vt2(self, r, nintegrate=40, component="self"):
         """Returns the velocity dispersions vr2 and vt2 as a function of radius"""
