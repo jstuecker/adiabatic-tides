@@ -416,8 +416,9 @@ class RadialProfile():
         # We also integrate the density numerically to inherit the same discreteness error
         rho = self.compute_pa_space_integral(rip, nintegrate=nintegrate, component=component)
 
-        # Zero-densities can cause some errors with log-interpolation, let's remopve them and set the right boundary to zero
-        rip, rho, rho_x_vr2, rho_x_vt2 = rip[rho > 0], rho[rho > 0], rho_x_vr2[rho > 0], rho_x_vt2[rho > 0]
+        # Zero-densities can cause some errors with log-interpolation, let's remove them and set the right boundary to zero
+        sel = (rho > 0) & (rho_x_vr2 > 0) & (rho_x_vt2 > 0)
+        rip, rho, rho_x_vr2, rho_x_vt2 = rip[sel], rho[sel], rho_x_vr2[sel], rho_x_vt2[sel]
 
         def ip_rho(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho), right=-np.inf))
         def ip_rho_x_vr2(r): return np.exp(np.interp(np.log(r), np.log(rip), np.log(rho_x_vr2), right=-np.inf))
