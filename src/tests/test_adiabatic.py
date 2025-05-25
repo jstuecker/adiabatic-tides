@@ -138,3 +138,30 @@ def test_tide_reduction():
     print(m2, p2.rtid())
     
     assert np.allclose(m1, m2, rtol=1e-2)
+
+@pytest.mark.slow
+def test_weak_tide_composite():
+    def rho_star(r, rho0=10**5.96812, r0=10**0.430947, g0=0.353178, e0=1.77581):
+        return rho0/(r/r0)**g0*np.exp(-(r/r0)**e0)
+
+    def rho_dm(r, rhos=4658528.667075668, rs=8.095178925237535, gs=0.25333):
+        return rhos/(r/rs)**gs*(1+r/rs)**(gs-3)
+
+    ri = np.geomspace(1e-10, 1e8, num=2000)
+
+    starprof = at.profiles.NumericalProfile(ri=ri, rho=rho_star(ri), anisotropy=0.1637)
+    dmprof = at.profiles.NumericalProfile(ri=ri, rho=rho_dm(ri))
+    cprof = at.profiles.CompositeProfile(star=starprof, dm=dmprof)
+
+
+    cprof = at.profiles.CompositeProfile(star=starprof, dm=dmprof)
+    tprof = at.adiabatic.AdiabaticTidalTransformation(cprof, tide=1e-4, verbose=1).run().assemble_total_profile()
+
+    rdm = np.logspace(-4, 2, 100)
+    rstar = np.logspace(-4, 0.8, 100)
+
+    rhodm1, rhodm2 = cprof.density(rdm, component="dm"), tprof.density(rdm, component="dm")
+    rhostar1, rhostar2 = cprof.density(rstar, component="star"), tprof.density(rstar, component="star")
+
+    check_max_relative_error(rhodm1, rhodm2, 5e-2)
+    check_max_relative_error(rhostar1, rhostar2, 5e-2)
