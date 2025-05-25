@@ -3,7 +3,7 @@ from ..phasespace import EddingtonPhaseSpace
 import numpy as np
 from functools import partial
 from .. import numerics
-from ..numerics.search import maximize_scalar
+from ..numerics.search import maximize_scalar_logspace
 from ..config import Config
 
 def combine_functions(f, component, internal, external, *args, func_combine=np.sum, **kwargs):

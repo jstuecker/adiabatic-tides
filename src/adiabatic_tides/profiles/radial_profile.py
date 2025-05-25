@@ -73,17 +73,17 @@ class RadialProfile():
     # Scales that depend on the potential structure
     def rtid(self):
         """Tidal radius corresponding to the maximum of the potential"""
-        opt = numerics.search.maximize_scalar(lambda r: self.potential(r, component="total"), (self.rmin(), self.rmax()))
+        opt = numerics.search.maximize_scalar_logspace(lambda r: self.potential(r, component="total"), (self.rmin(), self.rmax()))
         return opt.x
     
     def rlmax(self):
         """Radius with the maximum possible angular momentum"""
-        opt = numerics.search.maximize_scalar(lambda r: self.m_of_r(r, component="total")*r, (self.rmin(), self.rapo_max()))
+        opt = numerics.search.maximize_scalar_logspace(lambda r: self.m_of_r(r, component="total")*r, (self.rmin(), self.rapo_max()))
         return opt.x
     
     def rmax_vmax(self, component="total"):
         """Radius and velocity where the circular velocity is maximal"""
-        rmax = numerics.search.maximize_scalar(lambda r: self.m_of_r(r, component=component)/r, (self.rmin(), self.rmax())).x
+        rmax = numerics.search.maximize_scalar_logspace(lambda r: self.m_of_r(r, component=component)/r, (self.rmin(), self.rmax())).x
         if(np.isfinite(rmax)):
             return rmax, self.vcirc(rmax, component=component)
         else:
@@ -225,7 +225,7 @@ class RadialProfile():
         elif region == "desc":
             if not np.isfinite(rlmax):
                 raise ValueError("Cannot search for descending part, as there is no maximum")
-            return self._search_radius(f, rlow=rlmax, rup=self.rtid())
+            return self._search_radius(f, rlow=rlmax, rup=self.rtid()*1.0001)
         else:
             raise ValueError("Unknown mode %s" % region)
 

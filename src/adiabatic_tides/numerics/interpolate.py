@@ -276,10 +276,15 @@ def define_limited_peri_apo_table(ramax_of_rp, rpmin, rlmax, nbins=200, nbins_ap
 
 def define_paspace_boundaries(pot, accr, daccdr, rpmin=1e-10, nbins=1000, eps=1e-6, rmax=1e10):
     rlmax, rtid = search.find_rlmax(accr, rmin=rpmin, rmax=rmax), search.find_rphimax(pot, rmin=rpmin, rmax=rmax)
+    assert rlmax <= rtid, "This boundary does not make sense..."
     if np.isfinite(rlmax) and np.isfinite(rtid):
         rperi = np.geomspace(rpmin, rlmax, nbins)
         rapo = np.append(search.find_rapo_max_of_rperi(pot, accr, rperi[:-1], rlmax, rtid), rlmax)
         rperi, rapo = rperi[~np.isnan(rapo)], rapo[~np.isnan(rapo)]
+
+        assert np.all(rapo <= rtid*1.01) and np.all(rperi <= rapo*1.01), "Something went wrong here..."
+        rapo = np.clip(rapo, None, rtid)
+        rperi = np.clip(rperi, None, rapo)
         
         def ramax_of_rp(rp):
             return np.interp(rp, rperi, rapo)

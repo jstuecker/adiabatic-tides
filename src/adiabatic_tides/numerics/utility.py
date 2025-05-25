@@ -97,7 +97,7 @@ def e_l_of_rp_ra(pot, rp, ra, accr=None, eps_circ=1e-4, get_de=False):
     def el(rp, ra): 
         phip, phia = pot(rp), pot(ra)
         de = (phia - phip)*ra**2 / (ra**2 - rp**2)
-        l = np.sqrt(np.clip(2. * (phia - phip) / (rp**-2 - ra**-2), 0, None))
+        l = np.sqrt(2. * (phia - phip) / (rp**-2 - ra**-2))
         return de + facphip*phip,l
     
     if accr is None:

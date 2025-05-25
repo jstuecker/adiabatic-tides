@@ -194,11 +194,11 @@ def find_single_root(acc, r0=1., maxiter=100, eps=1e-8, warning=True, mode="nega
 # =============== Functions for finding special roots ====================== #
 
 def find_rlmax(accr,  rmin=1e-10, rmax=1e10, boundary_eps=0.5):
-    return maximize_scalar(lambda r: -accr(r)*r**3, (rmin, rmax), boundary_eps=boundary_eps).x
+    return maximize_scalar_logspace(lambda r: -accr(r)*r**3, (rmin, rmax), boundary_eps=boundary_eps).x
 
 def find_rphimax(pot, r0=1., rmin=1e-10, rmax=1e10, boundary_eps=0.5):
     #return find_single_root(accr, r0, eps=1e-10, mode="negative", warning=False)
-    return maximize_scalar(pot, (rmin, rmax), boundary_eps=boundary_eps).x
+    return maximize_scalar_logspace(pot, (rmin, rmax), boundary_eps=boundary_eps).x
 
 def rperi_rapo_valid(pot, accr, rperi, rapo):
     """To have a valid apo-center we need to fulfill two conditions
@@ -249,9 +249,10 @@ def profile_is_limited(accr, rpmin=1e-10):
     rtid = find_single_root(accr, rpmin, warning=False)
     return (rtid < np.inf)
 
-def maximize_scalar(f, bounds, boundary_eps=1e-1):
-    opt = minimize_scalar(lambda x: -f(x), bounds=bounds)
+def maximize_scalar_logspace(f, bounds, boundary_eps=1e-1):
+    opt = minimize_scalar(lambda x: -f(10**x), bounds=np.log10(bounds))
     opt.fun = -opt.fun
+    opt.x = 10**opt.x
 
     if not opt.success:
         pass
