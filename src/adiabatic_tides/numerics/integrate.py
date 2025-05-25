@@ -874,7 +874,7 @@ def describe_upper_boundary(rho, m, phi, ri, mode="exp", G=43.0071057317063e-10)
     if mode =="vacuum":
         def rho(r): return 0.*r
         def m(r): return mmax + 0.*r
-        def phi(r): return phimax + G * mmax * (1./np.clip(r, rmax, None) - 1./np.clip(r, rmax, None))
+        def phi(r): return phimax + G * mmax * (1./rmax - 1./np.clip(r, rmax, None))
     elif mode =="exp":
         def rho(r): return rhomax*np.exp((-r + rmax)/rmax)
         def m(r): return mmax + 20*np.pi*rhomax*rmax**3 + (-4*np.pi*r**2*rhomax*rmax - 8*np.pi*r*rhomax*rmax**2 - 8*np.pi*rhomax*rmax**3)*np.exp((-r + rmax)/rmax)
