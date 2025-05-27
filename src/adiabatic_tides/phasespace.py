@@ -171,7 +171,7 @@ class ActionMapThroughLLines(ActionMap):
         self.ip = {}
 
     @only_on_change(attributes=("cfg_gen","cfg_act")) 
-    def setup_rp_ra_of_jl(self):
+    def setup_interpolators(self):
         cfg_gen : GeneralConfig = self.cfg_gen
         cfg_act : ActionsConfig = self.cfg_act
         
@@ -192,52 +192,62 @@ class ActionMapThroughLLines(ActionMap):
         def ra_max_of_l(l):
             return np.exp(np.interp(np.log(l), np.log(lmaxes), np.log(rapo)))
 
+        # Find peri and apo-center lines of constant angular momentum
         rc = np.exp(numerics.utility.tanh_space(np.log(rmin), np.log(rlmax), nbins_l, tmax=3))
         rp_ev, ra_ev = numerics.integrate.rp_ra_with_rlcirc(rc, ra_max_of_l(prof.vcirc(rc, component="total") * rc)*1.02, accr, nsteps=nbins_pa, substeps=substeps_pa, eps_circ=self.cfg_act.eps_circ)
         rp_ev[-1], ra_ev[-1] = rlmax, rlmax
-        li =  prof.e_l_of_rperi_rapo(rp_ev[:,0], ra_ev[:,0])[1]
+        ecirc, li =  prof.e_l_of_rperi_rapo(rp_ev[:,0], ra_ev[:,0])
 
         ramax_li, rpmin_li = np.nanmax(ra_ev, axis=1), np.nanmin(rp_ev, axis=1)
         jmax_of_li = prof.radial_action_of_rp_ra(rpmin_li, ramax_li)
+        emax_of_li = prof.e_l_of_rperi_rapo(rpmin_li, ramax_li)[0]
 
         self.li = li
         self.jmin_of_l = lambda l: j0fac * l
         self.jmax_of_l = lambda l: np.interp(l, li, jmax_of_li)
+        self.emin_of_l = lambda l: np.interp(l, li, ecirc)
+        self.emax_of_l = lambda l: np.interp(l, li, emax_of_li)
 
         self.ramax_of_rp = lambda rp: np.interp(rp, rpmin_li, ramax_li)
         self.ramax_of_rp_v2 = ramax_of_rp
 
         jmin, jmax = self.jmin_of_l(li), self.jmax_of_l(li)
-        uj = np.linspace(0., 1., nj)
-        jgrid = np.sinh(uj*np.arcsinh(jmax/jmin)[:,np.newaxis])*jmin[:,np.newaxis]
+        u = np.linspace(0., 1., nj)
+        jgrid = np.sinh(u*np.arcsinh(jmax/jmin)[:,np.newaxis])*jmin[:,np.newaxis]
+        emin, emax = self.emin_of_l(li)[:,np.newaxis], self.emax_of_l(li)[:,np.newaxis]
+        egrid = np.exp(np.log(emin) + u*np.log(emax/emin))
 
         assert np.all(~np.isnan(jgrid[:-1,:]))
 
         # Invert  rp <-> j and ra <-> j for each l-column individually
-        rpgrid, ragrid = np.zeros_like(jgrid), np.zeros_like(jgrid)
+        rpgridj, ragridj = np.zeros_like(jgrid), np.zeros_like(jgrid)
+        jgride = np.zeros_like(jgrid)
         for i in range(0, jgrid.shape[0]-1):
             ji = prof.radial_action_of_rp_ra(rp_ev[i], ra_ev[i])
+            ei = prof.e_l_of_rperi_rapo(rp_ev[i], ra_ev[i])[0]
             sel = (~np.isnan(rp_ev[i])) & (~np.isnan(ra_ev[i])) & (~np.isnan(ji))
+            sel = sel & numerics.utility.monotoneous_mask(np.nan_to_num(ji, 0), mode=">")
 
-            # tiny numerical errors may break monotonicity, this does not matter, but it makes the interpolator
-            sel[1:] &= (ji[1:] > np.maximum.accumulate(np.nan_to_num(ji[:-1], 0)))
-            
-            rpgrid[i] = np.clip(PchipInterpolator(ji[sel], rp_ev[i,sel])(jgrid[i]), np.min(rp_ev[i,sel]), np.max(rp_ev[i,sel]))
-            ragrid[i] = np.clip(PchipInterpolator(ji[sel], ra_ev[i,sel])(jgrid[i]), np.min(ra_ev[i,sel]), np.max(ra_ev[i,sel]))
+            rpgridj[i] = np.clip(PchipInterpolator(ji[sel], rp_ev[i,sel])(jgrid[i]), np.min(rp_ev[i,sel]), np.max(rp_ev[i,sel]))
+            ragridj[i] = np.clip(PchipInterpolator(ji[sel], ra_ev[i,sel])(jgrid[i]), np.min(ra_ev[i,sel]), np.max(ra_ev[i,sel]))
 
-        rpgrid[-1], ragrid[-1] = rlmax, rlmax
+            sel &= numerics.utility.monotoneous_mask(ei, mode=">")
+            jgride[i] = np.clip(PchipInterpolator(ei[sel], ji[sel])(egrid[i]), np.min(ji), np.max(ji))
 
-        assert np.all((rpgrid > 0) & (ragrid > 0))
+        rpgridj[-1], ragridj[-1], jgride[-1] = rlmax, rlmax, 0.
 
-        assert (np.sum(np.isnan(rpgrid)) == 0) and (np.sum(np.isnan(ragrid)) == 0), f"Found nans: rpgrid {np.sum(np.isnan(rpgrid))} ragrid {np.sum(np.isnan(ragrid))}"
+        assert np.all((rpgridj > 0) & (ragridj > 0))
 
-        self.ip_rp = RectBivariateSpline(np.log(li), uj, np.log(rpgrid), kx=3, ky=3)
-        self.ip_ra = RectBivariateSpline(np.log(li), uj, np.log(ragrid), kx=3, ky=3)
+        assert (np.sum(np.isnan(rpgridj)) == 0) and (np.sum(np.isnan(ragridj)) == 0), f"Found nans: rpgrid {np.sum(np.isnan(rpgridj))} ragrid {np.sum(np.isnan(ragridj))}"
 
-        self.jgrid, self.rpgrid, self.ragrid = jgrid, rpgrid, ragrid
+        self.ip_rp = RectBivariateSpline(np.log(li), u, np.log(rpgridj), kx=3, ky=3)
+        self.ip_ra = RectBivariateSpline(np.log(li), u, np.log(ragridj), kx=3, ky=3)
+        self.ip_j_of_e = RectBivariateSpline(np.log(li), u, np.log(jgride+1e-10), kx=3, ky=3)
+
+        self.jgrid, self.rpgrid, self.ragrid = jgrid, rpgridj, ragridj
 
     def orbit_valid_jl(self, j, l):
-        self.setup_rp_ra_of_jl()
+        self.setup_interpolators()
 
         valid = (l >= np.min(self.li)) & (l <= np.max(self.li))
         valid &= (j >= self.jmin_of_l(l)) & (j <= self.jmax_of_l(l))
@@ -245,12 +255,12 @@ class ActionMapThroughLLines(ActionMap):
         return valid
 
     def orbit_valid_rp_ra(self, rp, ra):
-        self.setup_rp_ra_of_jl()
+        self.setup_interpolators()
 
         return (ra >= rp) & (ra <= self.ramax_of_rp(rp))
 
     def rp_ra_of_jl(self, j, l):
-        self.setup_rp_ra_of_jl()
+        self.setup_interpolators()
 
         # print("lmax", np.max(l), np.max(self.li))
         if np.max(l) > np.max(self.li):
@@ -279,8 +289,21 @@ class ActionMapThroughLLines(ActionMap):
 
         return rp, ra
     
+    def j_of_e_l(self, e, l):
+        self.setup_interpolators()
+
+        emin, emax = self.emin_of_l(l), self.emax_of_l(l)
+
+        u = np.log(e/emin) / np.log(emax/emin)
+
+        if (np.min(u) < 0) | (np.max(u) > 1):
+            print("Warning: Got u out of bounds: umax:", np.max(u), "umin:", np.min(u))
+            u[(u < 0) | (u > 1)] = np.nan
+
+        return np.clip(np.exp(self.ip_j_of_e(np.log(l), u, grid=False)) - 1e-10, 0, None)
+    
     def sample_jl(self, nsamp=1000, get_rp_ra=False, f=None, nf=1000):
-        self.setup_rp_ra_of_jl()
+        self.setup_interpolators()
         
         if f is None:
             f = self.profile.f

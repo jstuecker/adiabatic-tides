@@ -81,7 +81,7 @@ def test_action_inversion(profile, embed_plot):
 
     # Setup interpolator
     t0 = time.time()
-    prof.action_map.setup_rp_ra_of_jl()
+    prof.action_map.setup_interpolators()
     print(f"Setup time {time.time()-t0:.2f}s")
 
     # Test against actual values
