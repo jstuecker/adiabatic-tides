@@ -301,8 +301,9 @@ class ActionMapThroughLLines(ActionMap):
 
             assert fcum_of_j_givenl[-1] > 0
 
-            sel = np.ones_like(fcum_of_j_givenl, dtype=bool)
-            sel[1:] = fcum_of_j_givenl[1:] > np.maximum.accumulate(fcum_of_j_givenl[:-1])
+            # Make the arrray strictly monotoneous -- otherwise the interpolator will complain
+            # (Physically this should be the case, but numerically some equal cases may happen)
+            sel = numerics.utility.monotoneous_mask(fcum_of_j_givenl, mode=">")
 
             j_of_fc_grid.append(PchipInterpolator(fcum_of_j_givenl[sel]/fcum_of_j_givenl[-1], self.jgrid[i,sel])(ftarget))
             if get_rp_ra:
@@ -324,7 +325,8 @@ class ActionMapThroughLLines(ActionMap):
         
         msamp = fcum_l[-1] / nsamp * np.ones(nsamp)
 
-        lsamp = PchipInterpolator(fcum_l/fcum_l[-1], l)(usamp)
+        mask = numerics.utility.monotoneous_mask(fcum_l, mode=">")
+        lsamp = PchipInterpolator(fcum_l[mask]/fcum_l[-1], l[mask])(usamp)
         jsamp = RectBivariateSpline(np.log(l), ftarget, j_of_fc_grid, kx=1, ky=1)(np.log(lsamp), vsamp, grid=False)
 
         assert np.all(jsamp >= 0)

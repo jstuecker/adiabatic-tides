@@ -14,6 +14,18 @@ def tanh_space(lrmin, lrmax, n=50, tmax=4):
     t = np.linspace(-tmax*np.ones_like(lrmin),tmax*np.ones_like(lrmax), n)
     return lrmin + 0.5*(1 + np.tanh(t)/np.tanh(tmax)) * (lrmax-lrmin)
 
+def monotoneous_mask(y, axis=0, mode=">="):
+    """Returns a mask that if applied to y creates a monotoneous array"""
+    if mode == ">=":
+        def fmon(y): return np.insert(y[1:] >= np.maximum.accumulate(y[:-1], axis=0), 0, True, axis=0)
+    elif mode ==">":
+        def fmon(y): return np.insert(y[1:] > np.maximum.accumulate(y[:-1], axis=0), 0, True, axis=0)
+    elif mode == "<=":
+        def fmon(y): return np.insert(y[1:] <= np.minimum.accumulate(y[:-1], axis=0), 0, True, axis=0)
+    elif mode == "<":
+        def fmon(y): return np.insert(y[1:] < np.minimum.accumulate(y[:-1], axis=0), 0, True, axis=0)
+
+    return np.apply_along_axis(fmon, axis, y)
 # ===================== Differentiation functions ========================== #
 
 def second_deriv(f, x):
