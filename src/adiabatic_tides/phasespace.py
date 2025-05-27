@@ -54,11 +54,26 @@ class EddingtonPhaseSpace(PhaseSpace):
     def _setup_f(self):
         ri = np.geomspace(self.cfg_gen.rmin, self.cfg_gen.rmax, int(self.cfg_ed.nr))
         phi = self.potential(ri)
-        
         sel = np.roll(phi, -1) != phi # cancellation can lead to some energies being identical, let's avoid this
-        
-        e,f1 = numerics.integrate.anisotropic_inversion(ri[sel], self.density(ri[sel]), phi[sel], beta=self.anisotropy, nintegrate=self.cfg_ed.nintegrate)
-        self.q["phasespace_r"] = ri[sel]
+        ri, phi = ri[sel], phi[sel]
+
+        e,f1 = numerics.integrate.anisotropic_inversion(ri, self.density(ri), phi, beta=self.anisotropy, nintegrate=self.cfg_ed.nintegrate)
+
+        if np.any(f1 < 0):
+            neg = f1 < 0.
+            print(f"Warning, the Eddington inversion returned a distribution function with {np.sum(neg):d}/{len(neg):d} negative values")
+            print(f"-- min/max negative energy ({np.min(e[neg]):.3e}, {np.max(e[neg]):.3e})")
+            print(f"-- min/max negative radii ({np.min(ri[neg]):.3e}, {np.max(ri[neg]):.3e})")
+            print("-- This may happen due to round-off errors for cored profiles at small radii")
+            print("-- Please consider giving the profile a small slope -- e.g. r**-0.01")
+            print("-- I will discard the negative values, but no warranties!")
+
+            ri, e, f1 = ri[~neg], e[~neg], f1[~neg]
+
+
+        # assert np.all(self.q["phasespace_f"] >= 0)
+
+        self.q["phasespace_r"] = ri
         self.q["phasespace_e"] = e
         self.q["phasespace_f"] = f1
 
