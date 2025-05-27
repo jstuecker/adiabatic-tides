@@ -829,7 +829,8 @@ def solve_poisson_via_spline(ri, rhoi, spline_class=PchipInterpolator, mbelow=0.
     you might improve convergence, e.g. with something like scipy.interpolate.UnivariateSpline, k=5,
     but I do not recommend this as it may fail catastrophically for some cases
     """
-    spl_dm_dr = spline_class(ri, 4*np.pi*rhoi*ri**2, **kwargs)
+    with np.errstate(over="ignore"):
+        spl_dm_dr = spline_class(ri, 4*np.pi*rhoi*ri**2, **kwargs)
     spl_m = spl_dm_dr.antiderivative()
 
     spl_dphdir = spline_class(ri, G * (spl_m(ri)+mbelow) / ri**2, **kwargs)

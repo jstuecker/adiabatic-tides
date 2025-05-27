@@ -303,7 +303,7 @@ class ActionMapThroughLLines(ActionMap):
 
             # Make the arrray strictly monotoneous -- otherwise the interpolator will complain
             # (Physically this should be the case, but numerically some equal cases may happen)
-            sel = numerics.utility.monotoneous_mask(fcum_of_j_givenl, mode=">")
+            sel = numerics.utility.monotoneous_mask(fcum_of_j_givenl/fcum_of_j_givenl[-1], mode=">")
 
             j_of_fc_grid.append(PchipInterpolator(fcum_of_j_givenl[sel]/fcum_of_j_givenl[-1], self.jgrid[i,sel])(ftarget))
             if get_rp_ra:
