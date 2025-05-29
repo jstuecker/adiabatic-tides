@@ -233,6 +233,7 @@ class AdiabaticResultProfile(RadialProfile):
     def f_of_e(self, e, component="self"):
         raise NotImplementedError("f_of_e is not meaningful for Adiabatic Remnants")
     def f_of_el(self, e, l, r=None, component="self"):
+        assert 0, "This is wrong in some scenarios, have to access the potential profile"
         rp,ra = self.rperi_rapo_of_r_e_l(r, e, l, invalid_val=np.nan)
         return self.f_of_rperi_rapo(rp, ra)
     def f_of_jl(self, j, l, component="self"):

@@ -255,15 +255,17 @@ def only_on_change(attributes: Iterable[str] = ()):
             
             if not hasattr(self, f'_{method.__name__}_last_vars'):
                 # If it's the first call, execute the method and store the configs
+                val = method(self, *args, **kwargs)
                 setattr(self, f'_{method.__name__}_last_vars', current_var)
-                return method(self, *args, **kwargs)
+                return val
             
             last_vars = getattr(self, f'_{method.__name__}_last_vars')
 
             # Check if any of the groups have changed
             if any(getattr(self, var) != last_vars[var] for var in attributes):
+                val = method(self, *args, **kwargs)
                 setattr(self, f'_{method.__name__}_last_vars', current_var)
-                return method(self, *args, **kwargs)
+                return val
 
             return None  # No changes, so no execution
         

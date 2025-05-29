@@ -231,8 +231,10 @@ class ActionMapThroughLLines(ActionMap):
             rpgridj[i] = np.clip(PchipInterpolator(ji[sel], rp_ev[i,sel])(jgrid[i]), np.min(rp_ev[i,sel]), np.max(rp_ev[i,sel]))
             ragridj[i] = np.clip(PchipInterpolator(ji[sel], ra_ev[i,sel])(jgrid[i]), np.min(ra_ev[i,sel]), np.max(ra_ev[i,sel]))
 
-            sel &= numerics.utility.monotoneous_mask(ei, mode=">")
-            jgride[i] = np.clip(PchipInterpolator(ei[sel], ji[sel])(egrid[i]), np.min(ji), np.max(ji))
+            # Have to fix this later
+            # mode = ">" if np.nanargmax(ei) >= np.nanargmin(ei) else "<"
+            # sel &= numerics.utility.monotoneous_mask(np.nan_to_num(ei,0), mode=mode)
+            # jgride[i] = np.clip(PchipInterpolator(ei[sel], ji[sel])(egrid[i]), np.min(ji), np.max(ji))
 
         rpgridj[-1], ragridj[-1], jgride[-1] = rlmax, rlmax, 0.
 
@@ -242,7 +244,7 @@ class ActionMapThroughLLines(ActionMap):
 
         self.ip_rp = RectBivariateSpline(np.log(li), u, np.log(rpgridj), kx=3, ky=3)
         self.ip_ra = RectBivariateSpline(np.log(li), u, np.log(ragridj), kx=3, ky=3)
-        self.ip_j_of_e = RectBivariateSpline(np.log(li), u, np.log(jgride+1e-10), kx=3, ky=3)
+        # self.ip_j_of_e = RectBivariateSpline(np.log(li), u, np.log(jgride+1e-10), kx=3, ky=3)
 
         self.jgrid, self.rpgrid, self.ragrid = jgrid, rpgridj, ragridj
 
@@ -290,6 +292,8 @@ class ActionMapThroughLLines(ActionMap):
         return rp, ra
     
     def j_of_e_l(self, e, l):
+        raise NotImplementedError("This is not working properly yet!")
+
         self.setup_interpolators()
 
         emin, emax = self.emin_of_l(l), self.emax_of_l(l)
